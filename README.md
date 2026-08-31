@@ -83,3 +83,18 @@ exactly what you want.
 - `node:sqlite` prints an "experimental" warning on start. It is safe to ignore.
 - Failed logins from one address are limited to 8 a minute.
 - Never commit `.env` — it is in `.gitignore`.
+
+## Live
+
+- App: https://kanban-production-e69e.up.railway.app
+- Railway project: `kanban` (workspace DevTeam), service `kanban`,
+  volume `kanban-volume` mounted at `/data`.
+
+Your password is in `.env` in this folder. Open that file to read it —
+it was never printed to a terminal.
+
+### A note on `railway.json`
+
+Railway now prefers `.railway/railway.ts` and warns that `railway.json`
+is deprecated. The current file keeps working until 2026-12-01. Run
+`railway config migrate` when you want to switch.

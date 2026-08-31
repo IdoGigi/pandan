@@ -13,10 +13,10 @@ Authorization: Bearer YOUR_PASSWORD
 The browser UI uses a signed cookie instead, but an agent should always use the header.
 Without it, every `/api/*` route returns `401 {"error":"unauthorized"}`.
 
-Base URL: `https://YOUR-APP.up.railway.app/api`
+Base URL: `https://kanban-production-e69e.up.railway.app/api`
 
 ```bash
-export KB=https://YOUR-APP.up.railway.app/api
+export KB=https://kanban-production-e69e.up.railway.app/api
 export KEY="Authorization: Bearer YOUR_PASSWORD"
 ```
 
