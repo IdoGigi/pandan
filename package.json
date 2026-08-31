@@ -1,0 +1,18 @@
+{
+  "name": "kanban",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "build": "npm --prefix web ci --no-audit --no-fund && npm --prefix web run build",
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "check": "node --check server/index.js && node --check server/db.js && node --check server/auth.js && node --check server/routes.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
