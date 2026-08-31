@@ -322,3 +322,27 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .login-card p { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
 .error { color: var(--flag); font-size: 12.5px; margin-top: 10px; }
 .center-note { padding: 40px; text-align: center; color: var(--muted); }
+
+/* ---------------- small dialog (replaces window.prompt / confirm) ---------------- */
+
+.modal-sm { width: min(400px, 100%); }
+.modal-sm .input { margin-top: 2px; }
+
+.dialog-msg {
+  margin: -6px 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.btn-danger-solid {
+  background: var(--flag);
+  border-color: var(--flag);
+  color: #fff;
+}
+.btn-danger-solid:hover { background: #c72f23; border-color: #c72f23; }
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

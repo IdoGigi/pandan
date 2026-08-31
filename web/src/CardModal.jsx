@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { CARD_COLORS } from './Card.jsx';
 import { COLUMN_LABELS } from './Board.jsx';
+import { Dialog } from './Dialog.jsx';
 
 const SWATCH = {
   plain: '#eaebed', lime: '#c3d117', sky: '#4bb3d4',
@@ -12,6 +13,7 @@ export function CardModal({ cardId, projects, onClose, onSaved, onDeleted }) {
   const [card, setCard] = useState(null);
   const [checks, setChecks] = useState([]);
   const [newCheck, setNewCheck] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -27,10 +29,14 @@ export function CardModal({ cardId, projects, onClose, onSaved, onDeleted }) {
   }, [cardId]);
 
   useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose();
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (confirmDelete) setConfirmDelete(false);
+      else onClose();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, confirmDelete]);
 
   if (!card) {
     return (
@@ -179,14 +185,7 @@ export function CardModal({ cardId, projects, onClose, onSaved, onDeleted }) {
         {error && <div className="error">{error}</div>}
 
         <div className="modal-actions">
-          <button
-            className="btn btn-danger"
-            onClick={async () => {
-              await api.deleteCard(card.id);
-              onDeleted();
-              onClose();
-            }}
-          >
+          <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
             Delete
           </button>
           <span className="spacer" />
@@ -194,6 +193,27 @@ export function CardModal({ cardId, projects, onClose, onSaved, onDeleted }) {
           <button className="btn btn-primary" onClick={save}>Save</button>
         </div>
       </div>
+
+      {confirmDelete && (
+        <Dialog
+          kind="confirm"
+          title="Delete this card?"
+          message={card.title}
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={async () => {
+            setConfirmDelete(false);
+            try {
+              await api.deleteCard(card.id);
+              onDeleted();
+              onClose();
+            } catch (e) {
+              setError(e.message);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

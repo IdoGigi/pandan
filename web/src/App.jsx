@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { Board } from './Board.jsx';
 import { CardModal } from './CardModal.jsx';
 import { Login } from './Login.jsx';
+import { Dialog } from './Dialog.jsx';
 
 const PROJECT_COLORS = ['#c3d117', '#4bb3d4', '#f0b429', '#e2725b', '#9b8ec4', '#57a773'];
 
@@ -12,6 +13,7 @@ export function App() {
   const [cards, setCards] = useState([]);
   const [focus, setFocus] = useState('all');
   const [openCardId, setOpenCardId] = useState(null);
+  const [dialog, setDialog] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -81,24 +83,50 @@ export function App() {
   }
 
   function addProject() {
-    const name = window.prompt('New project name');
-    if (!name?.trim()) return;
-    const color = PROJECT_COLORS[projects.length % PROJECT_COLORS.length];
-    commit(() => api.createProject({ name: name.trim(), color }));
+    setDialog({
+      kind: 'prompt',
+      title: 'New project',
+      placeholder: 'Project name',
+      confirmLabel: 'Add project',
+      onConfirm: (name) => {
+        setDialog(null);
+        const color = PROJECT_COLORS[projects.length % PROJECT_COLORS.length];
+        commit(() => api.createProject({ name, color }));
+      },
+    });
   }
 
   function renameProject(project) {
-    const name = window.prompt('Project name', project.name);
-    if (!name?.trim() || name === project.name) return;
-    const before = projects;
-    setProjects((list) => list.map((p) => (p.id === project.id ? { ...p, name: name.trim() } : p)));
-    commit(() => api.updateProject(project.id, { name: name.trim() }), () => setProjects(before));
+    setDialog({
+      kind: 'prompt',
+      title: 'Rename project',
+      initialValue: project.name,
+      confirmLabel: 'Save',
+      onConfirm: (name) => {
+        setDialog(null);
+        if (name === project.name) return;
+        const before = projects;
+        setProjects((list) => list.map((p) => (p.id === project.id ? { ...p, name } : p)));
+        commit(() => api.updateProject(project.id, { name }), () => setProjects(before));
+      },
+    });
   }
 
   function deleteProject(project) {
     const count = cards.filter((c) => c.project_id === project.id).length;
-    if (!window.confirm(`Delete "${project.name}" and its ${count} card(s)?`)) return;
-    commit(() => api.deleteProject(project.id));
+    setDialog({
+      kind: 'confirm',
+      title: `Delete "${project.name}"?`,
+      message: count === 0
+        ? 'This project has no cards.'
+        : `This also deletes ${count} card${count === 1 ? '' : 's'}. You cannot undo this.`,
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: () => {
+        setDialog(null);
+        commit(() => api.deleteProject(project.id));
+      },
+    });
   }
 
   if (authed === null) return <div className="center-note">Loading…</div>;
@@ -141,6 +169,8 @@ export function App() {
           />
         )}
       </div>
+
+      {dialog && <Dialog {...dialog} onCancel={() => setDialog(null)} />}
 
       {openCardId && (
         <CardModal

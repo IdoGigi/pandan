@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "smoke": "node smoke.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -13,6 +14,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^29.1.1",
     "vite": "^6.0.7"
   },
   "comment-overrides": "This dev machine blocks rollup's native .node binary (Windows Application Control), so we build with the rollup team's WASM build everywhere. Same output, one code path, a little slower.",
