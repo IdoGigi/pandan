@@ -871,3 +871,57 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .label-row { display: flex; align-items: center; gap: 9px; }
 .label-row .swatch { flex: 0 0 auto; }
 .label-row .input { flex: 1; }
+
+/* ---------------- settings ---------------- */
+
+.settings { width: min(440px, 100%); }
+.settings h3 {
+  margin: 0 0 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.set-block {
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.set-block:first-of-type { border-top: none; padding-top: 4px; }
+
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+  font-size: 13px;
+}
+.set-row + .set-row { margin-top: 8px; }
+.set-row input[type='range'] { width: 150px; accent-color: var(--sky); }
+.set-row b { font-variant-numeric: tabular-nums; }
+.set-actions { display: flex; gap: 6px; }
+
+.set-hint {
+  margin: 7px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* a two-button switch */
+.seg { display: flex; border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; }
+.seg button {
+  border: none;
+  background: var(--panel);
+  padding: 5px 11px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.seg button + button { border-left: 1px solid var(--line-strong); }
+.seg button:hover { background: var(--hover); }
+.seg button.on { background: #2f3437; color: #fff; }
+:root[data-theme='dark'] .seg button.on { background: var(--sky); color: #10232b; }
+
+.settings-btn { font-size: 15px; padding: 4px 8px; }

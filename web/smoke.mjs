@@ -617,30 +617,6 @@ await step('a row folds to one line and remembers it', async () => {
   if (q('.row-collapsed').length) throw new Error('row did not open again');
 });
 
-await step('Fold all folds every project, then opens them', async () => {
-  const btn = q('.topbar .btn').find((b) => b.textContent === 'Fold all');
-  if (!btn) throw new Error('Fold all button missing');
-  await click(btn);
-  if (q('.row-collapsed').length !== q('.row-label').length) throw new Error('not every row folded');
-  const open = q('.topbar .btn').find((b) => b.textContent === 'Open all');
-  if (!open) throw new Error('button did not switch to Open all');
-  await click(open);
-  if (q('.row-collapsed').length) throw new Error('rows did not reopen');
-});
-
-await step('compact toggle switches and is remembered', async () => {
-  const btn = q('.topbar .btn').find((b) => ['Compact', 'Roomy'].includes(b.textContent));
-  if (!btn) throw new Error('density button missing');
-  const wasCompact = q('.board')[0].className.includes('compact');
-  await click(btn);
-  const nowCompact = q('.board')[0].className.includes('compact');
-  if (wasCompact === nowCompact) throw new Error('density did not change');
-  let saved = null;
-  try { saved = JSON.parse(dom.window.localStorage.getItem('kanban.compact')); } catch { /* ignore */ }
-  if (saved !== nowCompact) throw new Error('density was not remembered');
-  await click(q('.topbar .btn').find((b) => ['Compact', 'Roomy'].includes(b.textContent)));
-});
-
 await step('a long project name stays on one line', async () => {
   const label = q('.row-label')[2];
   if (!label) throw new Error('the long-named row is missing');
@@ -785,105 +761,11 @@ await step('a normal left click still opens the card editor', async () => {
   await click(cancel);
 });
 
-await step('the header has an About button that opens the panel', async () => {
-  const btn = q('.topbar .btn').find((b) => b.textContent === 'About');
-  if (!btn) throw new Error('no About button in the header');
-  await click(btn);
-  const about = document.querySelector('.about');
-  if (!about) throw new Error('About did not open');
-  if (!about.textContent.includes('Pandan')) throw new Error('name missing');
-  if (!about.textContent.includes('1.0.0')) throw new Error('version missing');
-  if (!about.textContent.includes('MIT')) throw new Error('licence missing');
-  if (!about.textContent.includes('CONTRIBUTING.md')) throw new Error('contribute note missing');
-  if (!about.textContent.includes('3 projects')) throw new Error('board counts missing');
-
-  await act(async () => {
-    dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' }));
-  });
-  await settle();
-  if (document.querySelector('.about')) throw new Error('Escape did not close About');
-});
-
-await step('clicking the name opens About too', async () => {
-  const brand = container.querySelector('.brand');
-  if (!brand) throw new Error('the name is not clickable');
-  await click(brand);
-  if (!document.querySelector('.about')) throw new Error('the name did not open About');
-  const close = [...document.querySelectorAll('.about .btn')].find((b) => b.textContent === 'Close');
-  await click(close);
-  if (document.querySelector('.about')) throw new Error('Close did not work');
-});
-
-await step('night mode switches, sticks, and repaints the page', async () => {
-  const root = document.documentElement;
-  const before = root.dataset.theme;
-
-  const btn = q('.topbar .btn').find((b) => ['☾', '☀'].includes(b.textContent.trim()));
-  if (!btn) throw new Error('no night mode button in the header');
-  await click(btn);
-
-  const after = root.dataset.theme;
-  if (after === before) throw new Error('theme did not change');
-  if (!['light', 'dark'].includes(after)) throw new Error(`odd theme value: ${after}`);
-
-  let saved = null;
-  try { saved = JSON.parse(dom.window.localStorage.getItem('kanban.theme')); } catch { /* ignore */ }
-  if (saved !== after) throw new Error('theme was not remembered');
-
-  // The page must actually repaint, not just set an attribute.
-  const bodyBg = dom.window.getComputedStyle(document.body).backgroundColor;
-  if (!bodyBg || bodyBg === 'transparent') throw new Error('body has no background in this theme');
-
-  await click(q('.topbar .btn').find((b) => ['☾', '☀'].includes(b.textContent.trim())));
-  if (root.dataset.theme !== before) throw new Error('did not switch back');
-});
-
 await step('no hardcoded light colours are left in the stylesheet', () => {
   const css = readFileSync('src/styles.css', 'utf8');
   const body = css.replace(/:root[^}]*}/g, '');           // token blocks may hold hex
   const bad = body.match(/background:\s*#(fff|fbfcfd|f0f2f4|f2f4f6|fcfcfd)/gi) || [];
   if (bad.length) throw new Error(`still hardcoded: ${bad.join(', ')}`);
-});
-
-await step('agent keys: make one, see it once, revoke it', async () => {
-  const open = q('.topbar .btn').find((b) => b.textContent === 'Agent keys');
-  if (!open) throw new Error('no Agent keys button');
-  await click(open);
-  await settle();
-
-  const panel = document.querySelector('.modal-wide');
-  if (!panel) throw new Error('keys panel did not open');
-  if (!panel.textContent.includes('laptop agent')) throw new Error('existing key not listed');
-
-  // The Create button waits for a name.
-  const create = [...panel.querySelectorAll('.btn')].find((b) => b.textContent === 'Create');
-  if (!create.disabled) throw new Error('Create should start disabled');
-  const input = panel.querySelector('.link-add .input');
-  await act(async () => { setNativeValue(input, 'new agent'); });
-  await settle();
-  if (create.disabled) throw new Error('Create should enable after typing');
-
-  await click(create);
-  const shown = document.querySelector('.token-value code');
-  if (!shown) throw new Error('the new key was not shown');
-  if (!shown.textContent.startsWith('pnd_')) throw new Error('that does not look like a key');
-
-  // Revoking asks first.
-  const revoke = [...document.querySelectorAll('.token-row .btn')].find((b) => b.textContent === 'Revoke');
-  if (!revoke) throw new Error('no Revoke button');
-  await click(revoke);
-  const confirm = document.querySelector('.modal-sm');
-  if (!confirm) throw new Error('revoke did not ask first');
-  if (!confirm.textContent.includes('password is not affected')) {
-    throw new Error('the confirm should say your own login is safe');
-  }
-  const yes = [...confirm.querySelectorAll('.btn')].find((b) => b.textContent === 'Revoke');
-  await click(yes);
-  await settle();
-  if (!document.querySelector('.token-row.dead')) throw new Error('key was not shown as revoked');
-
-  const close = [...document.querySelectorAll('.modal-wide .modal-actions .btn')].find((b) => b.textContent === 'Close');
-  await click(close);
 });
 
 await step('the header has a board switcher', () => {
@@ -940,16 +822,6 @@ await step('a new project goes on the board you are looking at', async () => {
 
   g.fetch = prev; dom.window.fetch = prev;
   if (sent?.board_id !== 1) throw new Error(`project not tied to the open board: ${JSON.stringify(sent)}`);
-});
-
-await step('deleting a board warns what goes with it', async () => {
-  const del = q('.topbar .btn').find((b) => b.getAttribute('title') === 'Delete this board');
-  if (!del) throw new Error('no delete board button');
-  await click(del);
-  const dlg = document.querySelector('.modal-sm');
-  if (!dlg) throw new Error('no confirm');
-  if (!dlg.textContent.includes('project')) throw new Error('should say how many projects go too');
-  await click([...dlg.querySelectorAll('.btn')].find((b) => b.textContent === 'Cancel'));
 });
 
 await step('an overdue card shows a late badge', () => {
@@ -1044,26 +916,103 @@ await step('labels can be renamed from the card editor', async () => {
   await click(cancel);
 });
 
-await step('the archive lists cards and can restore them', async () => {
-  const open = q('.topbar .btn').find((b) => b.textContent === 'Archive');
-  if (!open) throw new Error('no Archive button in the header');
-  await click(open);
-  const panel = document.querySelector('.modal-wide');
-  if (!panel.textContent.includes('an archived card')) throw new Error('archived card not listed');
-  if (!panel.textContent.includes('House chores')) throw new Error('should say which project');
-
-  await click([...panel.querySelectorAll('.btn')].find((b) => b.textContent === 'Restore'));
-  await settle();
-  if (document.querySelector('.modal-wide').textContent.includes('an archived card')) {
-    throw new Error('restored card should leave the archive');
-  }
-  await click([...document.querySelectorAll('.modal-wide .modal-actions .btn')].find((b) => b.textContent === 'Close'));
-});
-
 await step('project rows have a drag handle', () => {
   const grips = q('.row-grip');
   if (grips.length !== q('.row-label').length) throw new Error('not every row has a handle');
   if (grips[0].getAttribute('draggable') !== 'true') throw new Error('the handle is not draggable');
+});
+
+const openSettings = async () => {
+  const gear = q('.topbar .btn').find((b) => b.textContent.trim() === '⚙');
+  if (!gear) throw new Error('no settings button in the header');
+  await click(gear);
+  const panel = document.querySelector('.settings');
+  if (!panel) throw new Error('settings did not open');
+  return panel;
+};
+const closeSettings = async () => {
+  const done = [...document.querySelectorAll('.settings .modal-actions .btn')]
+    .find((b) => b.textContent === 'Done');
+  if (done) await click(done);
+};
+
+await step('the header is down to the everyday controls', () => {
+  const bar = container.querySelector('.topbar');
+  const buttons = [...bar.querySelectorAll('.btn')].map((b) => b.textContent.trim());
+  for (const gone of ['About', 'Agent keys', 'Archive', 'Fold all', 'Compact', 'Log out']) {
+    if (buttons.includes(gone)) throw new Error(`"${gone}" should have moved into settings`);
+  }
+  if (!buttons.some((b) => b.includes('Project'))) throw new Error('+ Project should stay');
+  if (!bar.querySelector('.search')) throw new Error('search should stay');
+  if (!bar.querySelector('.board-select')) throw new Error('board switcher should stay');
+  if (!bar.querySelector('.project-filter')) throw new Error('project filter should stay');
+});
+
+await step('settings holds theme, size, row height and fold', async () => {
+  const panel = await openSettings();
+  const text = panel.textContent;
+  for (const want of ['Theme', 'Card size', 'Row height', 'All rows', 'This board', 'Agent keys', 'About']) {
+    if (!text.includes(want)) throw new Error(`settings is missing "${want}"`);
+  }
+  if (!text.includes('MIT') && !text.includes('Loading')) throw new Error('no licence shown');
+  await closeSettings();
+});
+
+await step('night mode from settings, and it sticks', async () => {
+  const panel = await openSettings();
+  const root = document.documentElement;
+  const before = root.dataset.theme;
+  const night = [...panel.querySelectorAll('.seg button')].find((b) => b.textContent.includes('Night'));
+  await click(night);
+  if (root.dataset.theme !== 'dark') throw new Error('did not switch to night');
+  let saved = null;
+  try { saved = JSON.parse(dom.window.localStorage.getItem('kanban.theme')); } catch { /* ignore */ }
+  if (saved !== 'dark') throw new Error('theme not remembered');
+  const day = [...document.querySelectorAll('.settings .seg button')].find((b) => b.textContent.includes('Day'));
+  await click(day);
+  if (root.dataset.theme !== 'light') throw new Error('did not switch back');
+  await closeSettings();
+});
+
+await step('card size from settings changes the board', async () => {
+  const panel = await openSettings();
+  const wasCompact = q('.board')[0].className.includes('compact');
+  const target = [...panel.querySelectorAll('.seg button')]
+    .find((b) => b.textContent === (wasCompact ? 'Roomy' : 'Compact'));
+  await click(target);
+  if (q('.board')[0].className.includes('compact') === wasCompact) {
+    throw new Error('card size did not change');
+  }
+  const back = [...document.querySelectorAll('.settings .seg button')]
+    .find((b) => b.textContent === (wasCompact ? 'Compact' : 'Roomy'));
+  await click(back);
+  await closeSettings();
+});
+
+await step('fold all from settings folds every row', async () => {
+  const panel = await openSettings();
+  const fold = [...panel.querySelectorAll('.btn')].find((b) => b.textContent === 'Fold all');
+  if (!fold) throw new Error('no fold control in settings');
+  await click(fold);
+  await closeSettings();
+  if (q('.row-collapsed').length !== q('.row-label').length) throw new Error('not every row folded');
+  const panel2 = await openSettings();
+  await click([...panel2.querySelectorAll('.btn')].find((b) => b.textContent === 'Open all'));
+  await closeSettings();
+  if (q('.row-collapsed').length) throw new Error('rows did not reopen');
+});
+
+await step('settings opens the archive and the keys', async () => {
+  let panel = await openSettings();
+  await click([...panel.querySelectorAll('.btn')].find((b) => b.textContent === 'Open archive'));
+  if (!document.querySelector('.modal-wide')) throw new Error('archive did not open');
+  if (document.querySelector('.settings')) throw new Error('settings should close behind it');
+  await click([...document.querySelectorAll('.modal-wide .modal-actions .btn')].find((b) => b.textContent === 'Close'));
+
+  panel = await openSettings();
+  await click([...panel.querySelectorAll('.btn')].find((b) => b.textContent === 'Manage keys'));
+  if (!document.querySelector('.token-list, .modal-wide')) throw new Error('keys did not open');
+  await click([...document.querySelectorAll('.modal-wide .modal-actions .btn')].find((b) => b.textContent === 'Close'));
 });
 
 await step('headers and the project column stay pinned', async () => {

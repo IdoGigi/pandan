@@ -7,7 +7,7 @@ import { Login } from './Login.jsx';
 import { Dialog } from './Dialog.jsx';
 import { CardMenu } from './ContextMenu.jsx';
 import { Logo } from './Logo.jsx';
-import { AboutModal } from './AboutModal.jsx';
+import { SettingsModal } from './SettingsModal.jsx';
 import { TokensModal } from './TokensModal.jsx';
 import { ArchiveModal } from './ArchiveModal.jsx';
 
@@ -41,7 +41,7 @@ export function App() {
   const [openProjectId, setOpenProjectId] = useState(null);
   const [dialog, setDialog] = useState(null);
   const [menu, setMenu] = useState(null);
-  const [about, setAbout] = useState(false);
+  const [settings, setSettings] = useState(false);
   const [tokens, setTokens] = useState(false);
   const [archive, setArchive] = useState(false);
   const [labels, setLabels] = useState({});
@@ -300,9 +300,10 @@ export function App() {
   return (
     <div className="app">
       <div className="topbar">
-        <button className="brand" onClick={() => setAbout(true)} title="About Pandan">
+        <button className="brand" onClick={() => setSettings(true)} title="Settings and about">
           <Logo /> Pandan
         </button>
+
         <select
           className="filter-select board-select"
           value={boardId ?? ''}
@@ -319,9 +320,7 @@ export function App() {
           ))}
           <option value="__new">+ New board…</option>
         </select>
-        <button className="btn btn-ghost" onClick={renameBoard} title="Rename this board">✎</button>
-        <button className="btn btn-ghost" onClick={deleteBoard} title="Delete this board">×</button>
-        <span className="topbar-sep" />
+
         <select
           className="filter-select project-filter"
           value={focus}
@@ -330,7 +329,9 @@ export function App() {
           <option value="all">All projects</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
+
         <button className="btn" onClick={addProject}>+ Project</button>
+
         <input
           className="search"
           value={search}
@@ -339,52 +340,21 @@ export function App() {
           onKeyDown={(e) => e.key === 'Escape' && setSearch('')}
         />
         {needleCount !== null && <span className="search-count">{needleCount}</span>}
-        <button
-          className="btn"
-          onClick={() => setCompact((c) => !c)}
-          title="Switch between tight rows and roomy ones"
-        >
-          {compact ? 'Compact' : 'Roomy'}
-        </button>
-        <label className="cap">
-          rows
-          <input
-            type="range"
-            min="120" max="640" step="40"
-            value={rowCap}
-            onChange={(e) => setRowCap(Number(e.target.value))}
-            title="How tall a row can grow before it scrolls"
-          />
-        </label>
-        <button
-          className="btn btn-ghost"
-          onClick={() => setCollapsed((prev) =>
-            prev.size === projects.length ? new Set() : new Set(projects.map((p) => p.id)))}
-        >
-          {collapsed.size === projects.length && projects.length > 0 ? 'Open all' : 'Fold all'}
-        </button>
+
         <span className={`saving${busy ? ' on' : ''}`}>Saving…</span>
+        {error && <span className="error" style={{ margin: 0 }}>{error}</span>}
+
+        <span className="spacer" />
         <span className={`live${live ? ' on' : ''}`} title={live ? 'Updating live' : 'Reconnecting…'}>
           <i /> {live ? 'live' : 'offline'}
         </span>
-        {error && <span className="error" style={{ margin: 0 }}>{error}</span>}
-        <span className="spacer" />
         <button
-          className="btn btn-ghost"
-          onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-          title={theme === 'dark' ? 'Switch to day mode' : 'Switch to night mode'}
-          aria-label={theme === 'dark' ? 'Switch to day mode' : 'Switch to night mode'}
+          className="btn btn-ghost settings-btn"
+          onClick={() => setSettings(true)}
+          title="Settings"
+          aria-label="Settings"
         >
-          {theme === 'dark' ? '☀' : '☾'}
-        </button>
-        <button className="btn btn-ghost" onClick={() => setArchive(true)}>Archive</button>
-        <button className="btn btn-ghost" onClick={() => setTokens(true)}>Agent keys</button>
-        <button className="btn btn-ghost" onClick={() => setAbout(true)}>About</button>
-        <button
-          className="btn btn-ghost"
-          onClick={async () => { await api.logout(); setAuthed(false); }}
-        >
-          Log out
+          ⚙
         </button>
       </div>
 
@@ -425,7 +395,29 @@ export function App() {
         />
       )}
 
-      {about && <AboutModal onClose={() => setAbout(false)} />}
+
+
+      {settings && (
+        <SettingsModal
+          theme={theme}
+          setTheme={setTheme}
+          compact={compact}
+          setCompact={setCompact}
+          rowCap={rowCap}
+          setRowCap={setRowCap}
+          allFolded={projects.length > 0 && collapsed.size === projects.length}
+          onFoldAll={() => setCollapsed((prev) =>
+            prev.size === projects.length ? new Set() : new Set(projects.map((p) => p.id)))}
+          board={boards.find((b) => b.id === boardId)}
+          boardCount={boards.length}
+          onRenameBoard={() => { setSettings(false); renameBoard(); }}
+          onDeleteBoard={() => { setSettings(false); deleteBoard(); }}
+          onOpenArchive={() => { setSettings(false); setArchive(true); }}
+          onOpenKeys={() => { setSettings(false); setTokens(true); }}
+          onLogout={async () => { await api.logout(); setAuthed(false); }}
+          onClose={() => setSettings(false)}
+        />
+      )}
 
       {tokens && <TokensModal onClose={() => setTokens(false)} />}
 
