@@ -1,3 +1,5 @@
+import { Bot } from './Icons.jsx';
+
 export const CARD_COLORS = ['plain', 'lime', 'sky', 'amber', 'rose', 'violet'];
 
 /** Late, today, or just upcoming — that is all the detail a glance needs. */
@@ -32,7 +34,9 @@ export function Card({ card, dragging, onOpen, onMenu, onDragStart, onDragEnd })
     >
       {card.flagged ? <span className="card-flag" /> : null}
       {card.last_actor_kind === 'agent' && (
-        <span className="by-agent" title={`Last changed by ${card.last_actor}`}>◆</span>
+        <span className="by-agent" title={`Last changed by ${card.last_actor}, an agent`}>
+          <Bot size={11} />
+        </span>
       )}
       <div className="card-title">{card.title}</div>
       {(total > 0 || due) && (

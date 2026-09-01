@@ -7,7 +7,7 @@ import { Login } from './Login.jsx';
 import { Dialog } from './Dialog.jsx';
 import { CardMenu } from './ContextMenu.jsx';
 import { Logo } from './Logo.jsx';
-import { Gear } from './Icons.jsx';
+import { Gear, Bot } from './Icons.jsx';
 import { SettingsModal } from './SettingsModal.jsx';
 import { TokensModal } from './TokensModal.jsx';
 import { ArchiveModal } from './ArchiveModal.jsx';
@@ -345,11 +345,17 @@ export function App() {
         <button
           className={`btn agent-filter${agentOnly ? ' on' : ''}`}
           onClick={() => setAgentOnly((v) => !v)}
-          title="Show only cards an agent last changed"
+          title={agentOnly
+            ? 'Showing only cards an agent changed — click to show all'
+            : 'Show only the cards an agent changed'}
         >
-          ◆ agent
+          <Bot size={14} /> Agent changes
         </button>
-        {needleCount !== null && <span className="search-count">{needleCount}</span>}
+        {needleCount !== null && (
+          <span className="search-count">
+            {agentOnly ? `${needleCount} changed by an agent` : needleCount}
+          </span>
+        )}
 
         <span className={`saving${busy ? ' on' : ''}`}>Saving…</span>
         {error && <span className="error" style={{ margin: 0 }}>{error}</span>}

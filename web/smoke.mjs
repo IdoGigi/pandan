@@ -1058,19 +1058,28 @@ await step('a card an agent changed is marked', () => {
   if (!marks[0].getAttribute('title').includes('Claude on laptop')) {
     throw new Error('the mark should name the agent');
   }
+  if (!marks[0].getAttribute('title').includes('an agent')) {
+    throw new Error('the mark should say it was an agent, not just a name');
+  }
+  if (!marks[0].querySelector('svg')) throw new Error('the mark should be a drawn icon, not a symbol');
 });
 
 await step('the agent filter shows only what an agent touched', async () => {
-  const btn = q('.topbar .btn').find((b) => b.textContent.includes('agent'));
-  if (!btn) throw new Error('no agent filter');
+  const btn = q('.topbar .btn').find((b) => b.textContent.includes('Agent changes'));
+  if (!btn) throw new Error('no agent filter, or it is not clearly labelled');
+  if (!btn.querySelector('svg')) throw new Error('the filter should carry the bot icon');
   await click(btn);
 
   const titles = q('.card-title').map((n) => n.textContent);
   if (!titles.includes('Written by an agent')) throw new Error('the agent card vanished');
   if (titles.includes('Buy milk')) throw new Error('a card you changed is still showing');
-  if (!container.querySelector('.search-count')) throw new Error('no count while filtering');
+  const count = container.querySelector('.search-count');
+  if (!count) throw new Error('no count while filtering');
+  if (!count.textContent.includes('changed by an agent')) {
+    throw new Error(`the count should say what it is showing, got "${count.textContent}"`);
+  }
 
-  await click(q('.topbar .btn').find((b) => b.textContent.includes('agent')));
+  await click(q('.topbar .btn').find((b) => b.textContent.includes('Agent changes')));
   if (q('.card-title').length < 3) throw new Error('turning the filter off did not restore the board');
 });
 

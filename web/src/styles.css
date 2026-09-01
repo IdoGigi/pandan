@@ -938,20 +938,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .by-agent {
   position: absolute;
-  bottom: 4px;
-  right: 6px;
-  font-size: 8px;
-  line-height: 1;
+  bottom: 3px;
+  right: 5px;
+  display: flex;
   color: var(--sky);
-  opacity: 0.8;
+  opacity: 0.85;
 }
-.card.sky .by-agent, .card.rose .by-agent, .card.violet .by-agent { color: #fff; }
+.card.sky .by-agent, .card.rose .by-agent, .card.violet .by-agent { color: #fff; opacity: 0.9; }
 
 .agent-filter {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   white-space: nowrap;
   color: var(--muted);
-  font-size: 12px;
-  padding: 5px 8px;
+  font-size: 12.5px;
+  padding: 5px 9px;
 }
 .agent-filter.on {
   background: var(--sky);
