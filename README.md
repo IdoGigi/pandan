@@ -8,6 +8,10 @@
   can see what your coding agents are actually doing.
 </p>
 
+<p align="center">
+  <img src="docs/demo.gif" width="820" alt="An agent adds a card to the board, it appears live, then moves itself to Review">
+</p>
+
 ---
 
 Agents do a lot of work you never see. Pandan gives them somewhere to write it
