@@ -20,6 +20,10 @@ const state = {
     { id: 2, name: 'Volunteering', color: '#4bb3d4', position: 2000, archived: 0 },
     { id: 3, name: 'smart-city-dashboard', color: '#e2725b', position: 3000, archived: 0 },
   ],
+  tokens: [
+    { id: 1, name: 'laptop agent', prefix: 'pnd_aaa111',
+      created_at: '2026-08-01 09:00', last_used_at: '2026-09-01 09:30', revoked_at: null },
+  ],
   cards: [
     { id: 10, project_id: 1, column_key: 'todo', title: 'Buy milk', notes: '', color: 'lime',
       flagged: 0, position: 1000, checks_total: 2, checks_done: 1 },
@@ -43,6 +47,18 @@ function fakeFetch(url, opts = {}) {
     columns: ['todo', 'next', 'doing', 'review', 'done'],
     counts: { projects: 3, cards: 3 },
   });
+  if (path === '/tokens' && method === 'GET') return json(state.tokens);
+  if (path === '/tokens' && method === 'POST') {
+    const row = { id: 9, name: body.name, prefix: 'pnd_abc123',
+      created_at: '2026-09-01 10:00', last_used_at: null, revoked_at: null };
+    state.tokens = [row, ...state.tokens];
+    return json({ ...row, token: 'pnd_thisisthesecretshownonce' }, 201);
+  }
+  if (path.startsWith('/tokens/') && method === 'DELETE') {
+    const id = Number(path.split('/')[2]);
+    state.tokens = state.tokens.map((t) => (t.id === id ? { ...t, revoked_at: '2026-09-01 11:00' } : t));
+    return json({ revoked: true });
+  }
   if (path === '/me') return json({ ok: true });
   if (path === '/login') return json({ ok: true });
   if (path === '/logout') return json({ ok: true });
@@ -782,6 +798,47 @@ await step('no hardcoded light colours are left in the stylesheet', () => {
   const body = css.replace(/:root[^}]*}/g, '');           // token blocks may hold hex
   const bad = body.match(/background:\s*#(fff|fbfcfd|f0f2f4|f2f4f6|fcfcfd)/gi) || [];
   if (bad.length) throw new Error(`still hardcoded: ${bad.join(', ')}`);
+});
+
+await step('agent keys: make one, see it once, revoke it', async () => {
+  const open = q('.topbar .btn').find((b) => b.textContent === 'Agent keys');
+  if (!open) throw new Error('no Agent keys button');
+  await click(open);
+  await settle();
+
+  const panel = document.querySelector('.modal-wide');
+  if (!panel) throw new Error('keys panel did not open');
+  if (!panel.textContent.includes('laptop agent')) throw new Error('existing key not listed');
+
+  // The Create button waits for a name.
+  const create = [...panel.querySelectorAll('.btn')].find((b) => b.textContent === 'Create');
+  if (!create.disabled) throw new Error('Create should start disabled');
+  const input = panel.querySelector('.link-add .input');
+  await act(async () => { setNativeValue(input, 'new agent'); });
+  await settle();
+  if (create.disabled) throw new Error('Create should enable after typing');
+
+  await click(create);
+  const shown = document.querySelector('.token-value code');
+  if (!shown) throw new Error('the new key was not shown');
+  if (!shown.textContent.startsWith('pnd_')) throw new Error('that does not look like a key');
+
+  // Revoking asks first.
+  const revoke = [...document.querySelectorAll('.token-row .btn')].find((b) => b.textContent === 'Revoke');
+  if (!revoke) throw new Error('no Revoke button');
+  await click(revoke);
+  const confirm = document.querySelector('.modal-sm');
+  if (!confirm) throw new Error('revoke did not ask first');
+  if (!confirm.textContent.includes('password is not affected')) {
+    throw new Error('the confirm should say your own login is safe');
+  }
+  const yes = [...confirm.querySelectorAll('.btn')].find((b) => b.textContent === 'Revoke');
+  await click(yes);
+  await settle();
+  if (!document.querySelector('.token-row.dead')) throw new Error('key was not shown as revoked');
+
+  const close = [...document.querySelectorAll('.modal-wide .modal-actions .btn')].find((b) => b.textContent === 'Close');
+  await click(close);
 });
 
 await step('headers and the project column stay pinned', async () => {

@@ -25,6 +25,11 @@ export const api = {
   logout: () => request('POST', '/logout'),
 
   about: () => request('GET', '/about'),
+
+  tokens: () => request('GET', '/tokens'),
+  createToken: (name) => request('POST', '/tokens', { name }),
+  revokeToken: (id) => request('DELETE', `/tokens/${id}`),
+
   board: () => request('GET', '/board'),
 
   getProject: (id) => request('GET', `/projects/${id}`),

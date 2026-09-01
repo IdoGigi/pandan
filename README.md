@@ -67,8 +67,11 @@ Same address. The database sits on a named volume, so it survives a rebuild.
 
 ## Connect an agent
 
-One password protects everything. The browser uses a cookie; an agent sends the
-same password as a Bearer token.
+Each agent gets its own key. Revoking one stops that agent and nothing else —
+your own password keeps working. A key can use the board, but it can never see,
+make or revoke keys, so a leaked key cannot protect itself.
+
+Make keys under **Agent keys** in the board, or let `npm run connect` do it.
 
 **Claude Code** — one command:
 
@@ -76,9 +79,10 @@ same password as a Bearer token.
 npm run connect
 ```
 
-It registers the MCP server and installs the `pandan` skill, reading the
-password from `.env` so it is never printed. Pass an address if the board is
-not local: `npm run connect https://board.example.com`.
+With the board running, that makes an agent key, registers the MCP server with
+it, and installs the `pandan` skill. Your board password is used once to make
+the key and never handed to the agent. Pass an address if the board is not
+local: `npm run connect https://board.example.com`.
 
 By hand instead:
 
@@ -96,7 +100,7 @@ variable, not in the file:
     "pandan": {
       "type": "http",
       "url": "http://localhost:3000/mcp",
-      "headers": { "Authorization": "Bearer ${PANDAN_PASSWORD}" }
+      "headers": { "Authorization": "Bearer ${PANDAN_KEY}" }
     }
   }
 }
@@ -120,13 +124,15 @@ a card at all. A board with six clear cards beats one with forty true ones.
 
 ## Security — read this before exposing it
 
-Pandan is built for **one person on one machine**. It has one password, and
-that password is both your login and your agent key.
+Pandan is built for **one person on one machine**. One password is your login.
 
+- Agents get their own keys, which you can revoke one at a time. Only a hash of
+  each key is stored, so a copy of the database does not hand them over.
+- A key cannot list, make or revoke keys. That needs your password.
 - Docker compose binds to `127.0.0.1` on purpose. It is not reachable from
   your network until you change that.
-- There are no user accounts, and no way to revoke an agent's access without
-  changing your own password too.
+- There are still no user accounts. Anyone with your **password** has full
+  control, including over the keys.
 - If you put it on the internet, put it behind something that does real auth,
   and use a long random password.
 

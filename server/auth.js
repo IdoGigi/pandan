@@ -1,4 +1,5 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, createHash, timingSafeEqual, randomBytes } from 'node:crypto';
+import { db } from './db.js';
 
 const PASSWORD = process.env.APP_PASSWORD || '';
 const COOKIE = 'kb_session';
@@ -41,6 +42,41 @@ export function checkPassword(candidate) {
   return safeEqual(candidate ?? '', PASSWORD);
 }
 
+/* ---------------- agent tokens ---------------- */
+
+export const TOKEN_PREFIX = 'pnd_';
+
+/** Only the hash is stored, so a copy of the database does not hand over the keys. */
+const hashToken = (token) => createHash('sha256').update(token).digest('hex');
+
+export function createToken(name) {
+  const token = TOKEN_PREFIX + randomBytes(24).toString('base64url');
+  const info = db
+    .prepare('INSERT INTO tokens (name, hash, prefix) VALUES (?, ?, ?)')
+    .run(name, hashToken(token), token.slice(0, TOKEN_PREFIX.length + 6));
+  // The only time the token itself exists outside the caller's hands.
+  return { id: Number(info.lastInsertRowid), token };
+}
+
+/** Returns the token row if it is real and still live, otherwise null. */
+function findToken(candidate) {
+  if (!candidate.startsWith(TOKEN_PREFIX)) return null;
+  const row = db
+    .prepare('SELECT id, name, revoked_at, last_used_at FROM tokens WHERE hash = ?')
+    .get(hashToken(candidate));
+  return row && !row.revoked_at ? row : null;
+}
+
+// "Last used" is for spotting a forgotten agent, not an audit log, so a write
+// once a minute per token is plenty and keeps the hot path cheap.
+const touched = new Map();
+function touch(id) {
+  const now = Date.now();
+  if (now - (touched.get(id) || 0) < 60000) return;
+  touched.set(id, now);
+  db.prepare("UPDATE tokens SET last_used_at = datetime('now') WHERE id = ?").run(id);
+}
+
 export function parseCookies(header = '') {
   const out = {};
   for (const part of header.split(';')) {
@@ -61,15 +97,42 @@ export function clearSessionCookie(res) {
   res.setHeader('Set-Cookie', `${COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
 }
 
-/** Browser sends a signed cookie; an agent sends `Authorization: Bearer <password>`. */
-export function requireAuth(req, res, next) {
+/** True when the caller is you: the browser cookie, or the board password. */
+function isOwner(req) {
   const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (bearer && checkPassword(bearer)) return next();
-
+  if (bearer && checkPassword(bearer)) return true;
   const cookie = parseCookies(req.headers.cookie || '')[COOKIE];
-  if (cookie && sessionValid(cookie)) return next();
+  return Boolean(cookie && sessionValid(cookie));
+}
+
+/**
+ * The board password, the browser cookie, or a live agent token all get in.
+ * `req.actor` says which, so routes can tell you apart from an agent.
+ */
+export function requireAuth(req, res, next) {
+  if (isOwner(req)) {
+    req.actor = { kind: 'owner', name: 'you' };
+    return next();
+  }
+
+  const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const token = bearer && findToken(bearer);
+  if (token) {
+    touch(token.id);
+    req.actor = { kind: 'agent', name: token.name, token_id: token.id };
+    return next();
+  }
 
   res.status(401).json({ error: 'unauthorized' });
+}
+
+/**
+ * For managing tokens. An agent token must never be able to mint or revoke
+ * tokens, or revoking one would mean nothing.
+ */
+export function requireOwner(req, res, next) {
+  if (isOwner(req)) return next();
+  res.status(403).json({ error: 'this needs the board password, not an agent token' });
 }
 
 /** Slows down password guessing from a single address. */

@@ -33,9 +33,34 @@ if (!password) {
   process.exit(1);
 }
 
-/* ---- 1. register the MCP server ---- */
+/* ---- 1. get a key for this agent ---- */
 
 console.log(`Connecting Claude Code to ${url}`);
+
+// Ask the running board for its own key, so the agent never holds the board
+// password. Revoking this key later stops the agent and nothing else.
+const label = `Claude Code on ${process.env.COMPUTERNAME || process.env.HOSTNAME || 'this machine'}`;
+let secret = password;
+let usingToken = false;
+
+try {
+  const res = await fetch(`${url}/api/tokens`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${password}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: label }),
+  });
+  if (res.ok) {
+    secret = (await res.json()).token;
+    usingToken = true;
+    console.log(`  Made an agent key named "${label}".`);
+  } else {
+    console.log('  Could not make an agent key, falling back to the board password.');
+  }
+} catch {
+  console.log('  The board is not running, so no agent key was made.');
+  console.log('  Falling back to the board password — start Pandan and run this again');
+  console.log('  to swap it for a key you can revoke on its own.');
+}
 
 const isWindows = process.platform === 'win32';
 const result = spawnSync(
@@ -44,7 +69,7 @@ const result = spawnSync(
     'mcp', 'add',
     '--transport', 'http',
     'pandan', `${url}/mcp`,
-    '--header', `Authorization: Bearer ${password}`,
+    '--header', `Authorization: Bearer ${secret}`,
   ],
   // Same reason as start.js: Windows needs a shell to run claude.cmd. The
   // arguments are passed as an array, so the password is never parsed by it.
@@ -58,9 +83,15 @@ if (result.error?.code === 'ENOENT') {
 }
 
 // Never print the CLI output as-is: it can echo the header back.
-const output = `${result.stdout || ''}${result.stderr || ''}`.replace(password, '<hidden>');
+const output = `${result.stdout || ''}${result.stderr || ''}`
+  .replaceAll(password, '<hidden>')
+  .replaceAll(secret, '<hidden>');
 if (result.status === 0) {
   console.log('  MCP server added as "pandan".');
+  if (usingToken) {
+    console.log('  It uses its own key, not your board password.');
+    console.log('  Revoke it any time from "Agent keys" in the board.');
+  }
 } else if (/already exists/i.test(output)) {
   console.log('  An MCP server named "pandan" is already there — left as it is.');
   console.log('  To point it somewhere else: claude mcp remove pandan, then run this again.');

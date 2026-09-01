@@ -8,6 +8,7 @@ import { Dialog } from './Dialog.jsx';
 import { CardMenu } from './ContextMenu.jsx';
 import { Logo } from './Logo.jsx';
 import { AboutModal } from './AboutModal.jsx';
+import { TokensModal } from './TokensModal.jsx';
 
 const PROJECT_COLORS = ['#c3d117', '#4bb3d4', '#f0b429', '#e2725b', '#9b8ec4', '#57a773'];
 
@@ -38,6 +39,7 @@ export function App() {
   const [dialog, setDialog] = useState(null);
   const [menu, setMenu] = useState(null);
   const [about, setAbout] = useState(false);
+  const [tokens, setTokens] = useState(false);
   // First visit follows the system setting; after that your choice sticks.
   const [theme, setTheme] = useState(() => readSetting(
     'theme',
@@ -235,6 +237,7 @@ export function App() {
         >
           {theme === 'dark' ? '☀' : '☾'}
         </button>
+        <button className="btn btn-ghost" onClick={() => setTokens(true)}>Agent keys</button>
         <button className="btn btn-ghost" onClick={() => setAbout(true)}>About</button>
         <button
           className="btn btn-ghost"
@@ -281,6 +284,8 @@ export function App() {
       )}
 
       {about && <AboutModal onClose={() => setAbout(false)} />}
+
+      {tokens && <TokensModal onClose={() => setTokens(false)} />}
 
       {dialog && <Dialog {...dialog} onCancel={() => setDialog(null)} />}
 

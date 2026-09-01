@@ -743,3 +743,45 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: 1px 4px;
   font-size: 11.5px;
 }
+
+/* ---------------- agent keys ---------------- */
+
+.token-new {
+  border: 1px solid var(--sky);
+  border-radius: var(--radius);
+  padding: 11px 12px;
+  margin-bottom: 16px;
+  background: color-mix(in srgb, var(--sky) 8%, var(--panel));
+}
+.token-new-head { font-size: 12.5px; margin-bottom: 8px; }
+
+.token-value { display: flex; gap: 7px; align-items: center; }
+.token-value code {
+  flex: 1;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 7px 9px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.token-done { margin-top: 8px; font-size: 12px; padding: 3px 6px; }
+
+.token-list { display: flex; flex-direction: column; gap: 5px; }
+
+.token-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--head-bg);
+  font-size: 12.5px;
+}
+.token-row.dead { opacity: 0.55; }
+.token-name { flex: 1; font-weight: 600; overflow-wrap: anywhere; }
+.token-prefix { color: var(--muted); font-size: 11.5px; }
+.token-when { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.token-row .btn { padding: 3px 8px; font-size: 12px; }

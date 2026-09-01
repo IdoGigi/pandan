@@ -57,10 +57,21 @@ db.exec(`
     created_at TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS tokens (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    name         TEXT    NOT NULL,
+    hash         TEXT    NOT NULL UNIQUE,
+    prefix       TEXT    NOT NULL,
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+    last_used_at TEXT,
+    revoked_at   TEXT
+  );
+
   CREATE INDEX IF NOT EXISTS idx_cards_project ON cards(project_id, column_key, position);
   CREATE INDEX IF NOT EXISTS idx_checks_card   ON checks(card_id, position);
   CREATE INDEX IF NOT EXISTS idx_links_project ON project_links(project_id, kind, position);
   CREATE INDEX IF NOT EXISTS idx_updates_project ON project_updates(project_id, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_tokens_hash ON tokens(hash);
 `);
 
 /**

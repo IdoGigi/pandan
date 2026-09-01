@@ -144,12 +144,27 @@ data: {"revision":4,"source":"POST /cards"}
 
 Reads and failed writes send nothing.
 
+## Agent keys
+
+Give each agent its own key rather than your password, so you can revoke one
+without changing your login. Make them under **Agent keys** in the board, or:
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/tokens` | List keys. Never returns the key itself |
+| POST | `/tokens` | `{ "name" }` — returns `token` **once** |
+| DELETE | `/tokens/:id` | Revoke. Takes effect on the next request |
+
+These three need the **board password or the browser cookie**. An agent key
+gets `403` — it can use the board, but never manage keys.
+
 ## Errors
 
 | Status | Meaning |
 | --- | --- |
 | 400 | Bad input. The body says what is wrong |
-| 401 | Missing or wrong password |
+| 401 | Missing, wrong, or revoked key |
+| 403 | A valid agent key tried to do something only the owner may do |
 | 404 | No such project, card, or check |
 | 429 | Too many failed logins from one address. Wait a minute |
 

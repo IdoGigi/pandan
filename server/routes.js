@@ -3,12 +3,41 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { db, COLUMNS, LINK_KINDS, nextPosition, safeUrl } from './db.js';
+import { createToken, requireOwner } from './auth.js';
 
 export const api = Router();
 
 const bad = (res, msg) => res.status(400).json({ error: msg });
 const clean = (v, max = 500) => String(v ?? '').trim().slice(0, max);
 const NOW = "datetime('now')";
+
+/* ---------------- agent tokens ---------------- */
+
+// requireOwner on every one of these: an agent token can use the board, but it
+// can never see, create or revoke tokens — including its own.
+api.get('/tokens', requireOwner, (req, res) => {
+  res.json(db.prepare(
+    `SELECT id, name, prefix, created_at, last_used_at, revoked_at
+       FROM tokens ORDER BY revoked_at IS NOT NULL, id DESC`
+  ).all());
+});
+
+api.post('/tokens', requireOwner, (req, res) => {
+  const name = clean(req.body?.name, 60);
+  if (!name) return bad(res, 'name is required');
+  const { id, token } = createToken(name);
+  const row = db.prepare('SELECT id, name, prefix, created_at FROM tokens WHERE id = ?').get(id);
+  // `token` is returned once and never again — only its hash is kept.
+  res.status(201).json({ ...row, token });
+});
+
+api.delete('/tokens/:id', requireOwner, (req, res) => {
+  const info = db
+    .prepare("UPDATE tokens SET revoked_at = datetime('now') WHERE id = ? AND revoked_at IS NULL")
+    .run(Number(req.params.id));
+  if (!info.changes) return res.status(404).json({ error: 'no live token with that id' });
+  res.json({ revoked: true });
+});
 
 /* ---------------- about ---------------- */
 
@@ -31,6 +60,7 @@ api.get('/about', (req, res) => {
     issues: published ? `${repo}/issues` : null,
     contributing: published ? `${repo}/blob/main/CONTRIBUTING.md` : null,
     columns: COLUMNS,
+    actor: req.actor || null,
     counts: {
       projects: db.prepare('SELECT COUNT(*) AS n FROM projects WHERE archived = 0').get().n,
       cards: db.prepare('SELECT COUNT(*) AS n FROM cards').get().n,
