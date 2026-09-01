@@ -1,0 +1,27 @@
+name: Idea
+description: Suggest something Pandan could do
+labels: [idea]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Pandan is deliberately small. Read the "Things that will not be merged"
+        section of CONTRIBUTING.md first — it will save you time.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is the problem
+      description: Describe what is awkward today, not the solution you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What could fix it
+    validations:
+      required: true
+  - type: textarea
+    id: small
+    attributes:
+      label: How would you keep it small
+      description: What is the least that would solve it?

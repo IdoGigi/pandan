@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix web ci --no-audit --no-fund
+
+      - name: Syntax check the server
+        run: npm run check
+
+      - name: Build the UI
+        run: npm --prefix web run build
+
+      - name: UI smoke test
+        run: npm run smoke
+
+      - name: Start it and check the API is locked
+        env:
+          APP_PASSWORD: ci-only-not-a-real-secret
+          DB_PATH: ./data/ci.db
+        run: |
+          node server/index.js &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/healthz > /dev/null && break
+            sleep 1
+          done
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/healthz)" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/board)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $APP_PASSWORD" http://localhost:3000/api/board)" = "200"
+          curl -s -X POST http://localhost:3000/mcp \
+            -H "Authorization: Bearer $APP_PASSWORD" \
+            -H "Accept: application/json, text/event-stream" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+            | grep -q '"get_board"'
+          echo "API locked, MCP tools listed."
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t pandan:ci .
+      - name: Run it
+        run: |
+          docker run -d --name pandan -p 3000:3000 \
+            -e APP_PASSWORD=ci-only-not-a-real-secret pandan:ci
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/healthz > /dev/null && break
+            sleep 2
+          done
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/healthz)" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/board)" = "401"
+          docker rm -f pandan

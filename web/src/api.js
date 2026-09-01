@@ -24,6 +24,7 @@ export const api = {
   login: (password) => request('POST', '/login', { password }),
   logout: () => request('POST', '/logout'),
 
+  about: () => request('GET', '/about'),
   board: () => request('GET', '/board'),
 
   getProject: (id) => request('GET', `/projects/${id}`),

@@ -7,6 +7,7 @@ import { Login } from './Login.jsx';
 import { Dialog } from './Dialog.jsx';
 import { CardMenu } from './ContextMenu.jsx';
 import { Logo } from './Logo.jsx';
+import { AboutModal } from './AboutModal.jsx';
 
 const PROJECT_COLORS = ['#c3d117', '#4bb3d4', '#f0b429', '#e2725b', '#9b8ec4', '#57a773'];
 
@@ -36,6 +37,7 @@ export function App() {
   const [openProjectId, setOpenProjectId] = useState(null);
   const [dialog, setDialog] = useState(null);
   const [menu, setMenu] = useState(null);
+  const [about, setAbout] = useState(false);
   const [compact, setCompact] = useState(() => readSetting('compact', true));
   const [rowCap, setRowCap] = useState(() => readSetting('rowCap', 240));
   const [collapsed, setCollapsed] = useState(() => new Set(readSetting('collapsed', [])));
@@ -177,7 +179,9 @@ export function App() {
   return (
     <div className="app">
       <div className="topbar">
-        <h1><Logo /> Pandan</h1>
+        <button className="brand" onClick={() => setAbout(true)} title="About Pandan">
+          <Logo /> Pandan
+        </button>
         <select className="filter-select" value={focus} onChange={(e) => setFocus(e.target.value)}>
           <option value="all">All projects</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -256,6 +260,8 @@ export function App() {
           }}
         />
       )}
+
+      {about && <AboutModal onClose={() => setAbout(false)} />}
 
       {dialog && <Dialog {...dialog} onCancel={() => setDialog(null)} />}
 

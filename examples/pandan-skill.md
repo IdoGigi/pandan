@@ -1,9 +1,9 @@
 ---
-name: kanban
+name: pandan
 description: Record what I am working on to my personal kanban board in one short line. Use when real work on a task starts, when it is finished, or when I say "log this", "update the kanban", "put this on the board", "what am I working on". Creates the project row if it is missing. Entries must be tiny — the board is for glancing at, not reading.
 ---
 
-# kanban
+# pandan
 
 > Save this as `~/.claude/skills/kanban/SKILL.md` (or your client's skill
 > folder) and change the URL and path to match your setup.

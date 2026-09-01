@@ -654,3 +654,55 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* the logo sits with the wordmark in the top bar */
 .topbar h1, .login-card h1 { display: flex; align-items: center; gap: 8px; }
 .topbar h1 svg, .login-card h1 svg { flex: 0 0 auto; }
+
+/* ---------------- about ---------------- */
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  margin-left: -4px;
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.brand:hover { background: #f0f2f4; }
+
+.about-head { display: flex; align-items: center; gap: 13px; margin-bottom: 14px; }
+.about-head h2 { margin: 0 0 2px; font-size: 17px; }
+.about-sub { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.about-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.about-rows > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  background: #fbfcfd;
+  font-size: 12.5px;
+}
+.about-rows span { color: var(--muted); }
+
+.about-links { display: flex; gap: 7px; flex-wrap: wrap; }
+.about-links .btn { text-decoration: none; }
+
+.about-foot { font-size: 11.5px; color: var(--muted); margin: 14px 0 0; line-height: 1.5; }
+.about code {
+  background: #f0f2f4;
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 11.5px;
+}

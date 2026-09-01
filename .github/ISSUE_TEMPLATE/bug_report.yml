@@ -1,0 +1,43 @@
+name: Bug report
+description: Something does not work the way it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, and what happened instead of what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce it
+      placeholder: |
+        1. Open the board
+        2. Right-click a card
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Pandan version
+      description: Click the name in the top bar to see it.
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      description: Output of `node --version`.
+  - type: dropdown
+    id: how
+    attributes:
+      label: How are you running it
+      options: [npm run serve, Docker, Something else]
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Console errors or server logs help. Never paste your password.

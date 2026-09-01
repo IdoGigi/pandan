@@ -1,4 +1,7 @@
 import { Router } from 'express';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { db, COLUMNS, LINK_KINDS, nextPosition, safeUrl } from './db.js';
 
 export const api = Router();
@@ -6,6 +9,34 @@ export const api = Router();
 const bad = (res, msg) => res.status(400).json({ error: msg });
 const clean = (v, max = 500) => String(v ?? '').trim().slice(0, max);
 const NOW = "datetime('now')";
+
+/* ---------------- about ---------------- */
+
+// Read once at start. The About panel shows this, so it cannot drift from
+// what is actually installed.
+const pkg = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8')
+);
+const repo = String(pkg.repository?.url || '').replace(/^git\+/, '').replace(/\.git$/, '');
+const published = repo && !repo.includes('YOUR-NAME');
+
+api.get('/about', (req, res) => {
+  res.json({
+    name: 'Pandan',
+    version: pkg.version,
+    description: pkg.description,
+    license: pkg.license,
+    node: process.version,
+    repo: published ? repo : null,
+    issues: published ? `${repo}/issues` : null,
+    contributing: published ? `${repo}/blob/main/CONTRIBUTING.md` : null,
+    columns: COLUMNS,
+    counts: {
+      projects: db.prepare('SELECT COUNT(*) AS n FROM projects WHERE archived = 0').get().n,
+      cards: db.prepare('SELECT COUNT(*) AS n FROM cards').get().n,
+    },
+  });
+});
 
 /* ---------------- board ---------------- */
 

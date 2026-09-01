@@ -65,7 +65,17 @@ Same address. The database sits on a named volume, so it survives a rebuild.
 One password protects everything. The browser uses a cookie; an agent sends the
 same password as a Bearer token.
 
-**Claude Code** — run this in your own terminal, with your real password:
+**Claude Code** — one command:
+
+```bash
+npm run connect
+```
+
+It registers the MCP server and installs the `pandan` skill, reading the
+password from `.env` so it is never printed. Pass an address if the board is
+not local: `npm run connect https://board.example.com`.
+
+By hand instead:
 
 ```bash
 claude mcp add --transport http pandan http://localhost:3000/mcp \
@@ -97,7 +107,7 @@ An agent will not log its work unless you tell it to, and left alone it writes
 far too much. [`examples/`](examples/) has the two pieces that fix that:
 
 - `examples/CLAUDE.md-snippet.md` — a short rule to paste into your `CLAUDE.md`
-- `examples/kanban-skill.md` — a Claude Code skill with the same rules in detail
+- `examples/pandan-skill.md` — a Claude Code skill with the same rules in detail
 
 Both are built around one idea: **the board is for glancing at.** Card titles
 are capped at 8 words, log entries at one sentence, and most work is not worth

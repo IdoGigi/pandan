@@ -9,7 +9,7 @@ the board filling with noise.
 
 I track my work on a board at http://localhost:3000
 (rows = projects, columns = `todo` / `next` / `doing` / `done`). Use the
-`pandan` MCP tools when they are connected, otherwise the `kanban` skill.
+`pandan` MCP tools when they are connected, otherwise the `pandan` skill.
 
 - When real work on a task starts, put **one** card in `doing`. If a card for
   it already exists, move that one — never open a second card for the same job.

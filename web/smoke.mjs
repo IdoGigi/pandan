@@ -37,6 +37,12 @@ function fakeFetch(url, opts = {}) {
   const json = (data, status = 200) =>
     Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(data) });
 
+  if (path === '/about') return json({
+    name: 'Pandan', version: '1.0.0', description: 'test', license: 'MIT',
+    node: 'v24.0.0', repo: null, issues: null, contributing: null,
+    columns: ['todo', 'next', 'doing', 'done'],
+    counts: { projects: 3, cards: 3 },
+  });
   if (path === '/me') return json({ ok: true });
   if (path === '/login') return json({ ok: true });
   if (path === '/logout') return json({ ok: true });
@@ -683,6 +689,25 @@ await step('a normal left click still opens the card editor', async () => {
   if (!document.querySelector('.modal')) throw new Error('card editor did not open');
   const cancel = [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Cancel');
   await click(cancel);
+});
+
+await step('the name opens an About panel with the licence', async () => {
+  const brand = container.querySelector('.brand');
+  if (!brand) throw new Error('the name is not clickable');
+  await click(brand);
+  const about = document.querySelector('.about');
+  if (!about) throw new Error('About did not open');
+  if (!about.textContent.includes('Pandan')) throw new Error('name missing');
+  if (!about.textContent.includes('1.0.0')) throw new Error('version missing');
+  if (!about.textContent.includes('MIT')) throw new Error('licence missing');
+  if (!about.textContent.includes('CONTRIBUTING.md')) throw new Error('contribute note missing');
+  if (!about.textContent.includes('3 projects')) throw new Error('board counts missing');
+
+  await act(async () => {
+    dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' }));
+  });
+  await settle();
+  if (document.querySelector('.about')) throw new Error('Escape did not close About');
 });
 
 await step('headers and the project column stay pinned', async () => {
