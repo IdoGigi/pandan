@@ -24,8 +24,12 @@ down, and gives you a board that updates while they work.
 
 ## The board
 
-Rows are projects. Columns are `To do`, `Next`, `Doing` and `Done`, with `Next`
-and `Doing` grouped under **In progress**.
+Rows are projects. Columns are `To do`, `Next`, `Doing`, `Review` and `Done`,
+with `Next` and `Doing` grouped under **In progress**.
+
+**Review** is where an agent puts work it wants you to look at. It is a signal,
+not a gate — an agent can still move a card straight to `Done` when the work
+plainly needs no checking. The point is that it can tell you which is which.
 
 Cards carry a colour, a flag, notes and a checklist. Right-click one to recolour
 it. Each project also holds notes, a repo link, links, contacts, and a dated
@@ -43,13 +47,14 @@ SQLite, so there is nothing to compile.
 git clone https://github.com/YOUR-NAME/pandan.git
 cd pandan
 npm install
-npm run setup     # makes .env with a random password
-npm run build
-npm run serve
+npm start
 ```
 
-Open <http://localhost:3000>. Your password is in `.env`, on the
-`APP_PASSWORD` line — setup does not print it.
+That is it. `npm install` writes a `.env` with a random password, and
+`npm start` builds the board the first time and serves it.
+
+Open <http://localhost:3000>. Your password is on the `APP_PASSWORD` line of
+`.env` — it is never printed, so open the file to read it.
 
 ### With Docker
 

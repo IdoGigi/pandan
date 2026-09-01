@@ -77,7 +77,7 @@ function addColumn(table, name, definition) {
 addColumn('projects', 'description', "TEXT NOT NULL DEFAULT ''");
 addColumn('projects', 'repo_url', "TEXT NOT NULL DEFAULT ''");
 
-export const COLUMNS = ['todo', 'next', 'doing', 'done'];
+export const COLUMNS = ['todo', 'next', 'doing', 'review', 'done'];
 export const LINK_KINDS = ['link', 'contact'];
 
 /**

@@ -1,8 +1,10 @@
 import { useRef } from 'react';
 import { List } from './List.jsx';
 
-export const COLUMN_LABELS = { todo: 'To do', next: 'Next', doing: 'Doing', done: 'Done' };
-const COLS = ['todo', 'next', 'doing', 'done'];
+export const COLUMN_LABELS = {
+  todo: 'To do', next: 'Next', doing: 'Doing', review: 'Review', done: 'Done',
+};
+const COLS = ['todo', 'next', 'doing', 'review', 'done'];
 
 /** Header: "To do" and "Done" stand alone; "Next" and "Doing" sit under "In progress". */
 function Header() {
@@ -11,7 +13,8 @@ function Header() {
       <div className="cell head-blank" style={{ gridColumn: 1, gridRow: '1 / 3' }} />
       <div className="cell head-col" style={{ gridColumn: 2, gridRow: '1 / 3' }}>To do</div>
       <div className="cell head-group" style={{ gridColumn: '3 / 5', gridRow: 1 }}>In progress</div>
-      <div className="cell head-col last-col" style={{ gridColumn: 5, gridRow: '1 / 3' }}>Done</div>
+      <div className="cell head-col review-head" style={{ gridColumn: 5, gridRow: '1 / 3' }}>Review</div>
+      <div className="cell head-col last-col" style={{ gridColumn: 6, gridRow: '1 / 3' }}>Done</div>
       <div className="cell head-col" style={{ gridColumn: 3, gridRow: 2 }}>Next</div>
       <div className="cell head-col" style={{ gridColumn: 4, gridRow: 2 }}>Doing</div>
     </>
@@ -69,7 +72,7 @@ export function Board({
             {isShut ? (
               <div
                 className="cell last-col row-collapsed"
-                style={{ gridColumn: '2 / 6', gridRow: row }}
+                style={{ gridColumn: '2 / 7', gridRow: row }}
                 onDoubleClick={() => onToggleRow(project.id)}
               >
                 {COLS.map((c) => (

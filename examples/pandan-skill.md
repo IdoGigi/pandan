@@ -64,8 +64,14 @@ to `doing`. Only if there is none, `create_card` in `doing`.
 
 ### 4. When it is finished
 
-- `move_card` the card to `done`
+- `move_card` the card to **`review`** if a person should check the work, or to
+  **`done`** if it plainly needs no checking. You are allowed to use either —
+  `review` is a signal, not a wall.
 - `add_project_update` with **one sentence** on what changed
+
+Use `review` for anything you would want a second pair of eyes on: a change you
+were unsure about, something you could not fully test, or work that touches
+money, data or other people. Use `done` for the obvious ones.
 
 That is the whole loop. Nothing else gets written.
 

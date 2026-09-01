@@ -8,13 +8,14 @@
   },
   "scripts": {
     "build": "npm --prefix web ci --no-audit --no-fund && npm --prefix web run build",
-    "start": "node server/index.js",
+    "start": "node start.js",
     "dev": "node --watch server/index.js",
-    "check": "node --check server/index.js && node --check server/db.js && node --check server/auth.js && node --check server/routes.js && node --check server/mcp.js && node --check server/events.js",
+    "check": "node --check server/index.js && node --check server/db.js && node --check server/auth.js && node --check server/routes.js && node --check server/mcp.js && node --check server/events.js && node --check start.js && node --check connect.js",
     "smoke": "npm --prefix web run smoke",
     "setup": "node setup.js",
-    "serve": "node --env-file=.env server/index.js",
-    "connect": "node connect.js"
+    "serve": "node start.js",
+    "connect": "node connect.js",
+    "postinstall": "node setup.js --quiet"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

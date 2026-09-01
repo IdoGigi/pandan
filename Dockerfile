@@ -3,7 +3,8 @@ FROM node:24-alpine AS build
 WORKDIR /app
 COPY package*.json ./
 COPY web/package*.json ./web/
-RUN npm ci --omit=dev --no-audit --no-fund
+# --ignore-scripts so postinstall never writes a .env into the image.
+RUN npm ci --omit=dev --no-audit --no-fund --ignore-scripts
 COPY . .
 RUN npm run build
 

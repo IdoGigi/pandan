@@ -5,7 +5,7 @@ import { Dialog } from './Dialog.jsx';
 import { LinkList } from './LinkList.jsx';
 
 const PROJECT_COLORS = ['#c3d117', '#4bb3d4', '#f0b429', '#e2725b', '#9b8ec4', '#57a773', '#94a3b8'];
-const COLS = ['todo', 'next', 'doing', 'done'];
+const COLS = ['todo', 'next', 'doing', 'review', 'done'];
 
 export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCard }) {
   const [data, setData] = useState(null);

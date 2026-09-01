@@ -40,13 +40,13 @@ function fakeFetch(url, opts = {}) {
   if (path === '/about') return json({
     name: 'Pandan', version: '1.0.0', description: 'test', license: 'MIT',
     node: 'v24.0.0', repo: null, issues: null, contributing: null,
-    columns: ['todo', 'next', 'doing', 'done'],
+    columns: ['todo', 'next', 'doing', 'review', 'done'],
     counts: { projects: 3, cards: 3 },
   });
   if (path === '/me') return json({ ok: true });
   if (path === '/login') return json({ ok: true });
   if (path === '/logout') return json({ ok: true });
-  if (path === '/board') return json({ columns: ['todo', 'next', 'doing', 'done'], ...state });
+  if (path === '/board') return json({ columns: ['todo', 'next', 'doing', 'review', 'done'], ...state });
   if (path.startsWith('/cards/') && path.endsWith('/move')) return json({ id: 10 });
   if (path.startsWith('/cards/') && path.endsWith('/checks')) return json({ id: 99, text: body.text, done: 0, position: 1000 }, 201);
   if (/^\/cards\/\d+$/.test(path) && method === 'GET') {
@@ -61,7 +61,7 @@ function fakeFetch(url, opts = {}) {
     const id = Number(detail[1]);
     const p = state.projects.find((x) => x.id === id);
     const cards = state.cards.filter((c) => c.project_id === id);
-    const by_column = { todo: 0, next: 0, doing: 0, done: 0 };
+    const by_column = { todo: 0, next: 0, doing: 0, review: 0, done: 0 };
     for (const c of cards) by_column[c.column_key] += 1;
     return json({
       ...p, created_at: '2026-09-01 00:00:00', cards,
@@ -214,11 +214,43 @@ await step('board renders after load', () => {
   if (!text.includes('In progress')) throw new Error('In progress header missing');
 });
 
-await step('all four columns present', () => {
+await step('all five columns present, including Review', () => {
   const heads = q('.head-col').map((n) => n.textContent);
-  for (const label of ['To do', 'Next', 'Doing', 'Done']) {
+  for (const label of ['To do', 'Next', 'Doing', 'Review', 'Done']) {
     if (!heads.includes(label)) throw new Error(`missing column ${label}`);
   }
+});
+
+await step('a card can be dragged into Review', async () => {
+  const card = q('.card')[0];
+  const review = q('.list.review')[0];
+  if (!review) throw new Error('no Review cell');
+
+  let moved = null;
+  const prev = g.fetch;
+  const spy = (url, opts = {}) => {
+    if (/\/move$/.test(String(url))) moved = JSON.parse(opts.body);
+    return prev(url, opts);
+  };
+  g.fetch = spy; dom.window.fetch = spy;
+
+  const dt = { data: {}, effectAllowed: '', dropEffect: '', setData() {}, getData() { return ''; } };
+  const fire = async (el, type, extra = {}) => {
+    await act(async () => {
+      const ev = new dom.window.Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(ev, 'dataTransfer', { value: dt });
+      Object.assign(ev, extra);
+      el.dispatchEvent(ev);
+    });
+  };
+  await fire(card, 'dragstart');
+  await fire(review, 'dragover', { clientY: 5 });
+  await fire(review, 'drop', { clientY: 5 });
+  await fire(card, 'dragend');
+  await settle();
+
+  g.fetch = prev; dom.window.fetch = prev;
+  if (moved?.column_key !== 'review') throw new Error(`expected a move to review, got ${JSON.stringify(moved)}`);
 });
 
 await step('checklist count shows on card', () => {

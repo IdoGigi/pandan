@@ -86,11 +86,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .board {
   display: grid;
-  grid-template-columns: 156px repeat(4, minmax(190px, 1fr));
+  grid-template-columns: 156px repeat(5, minmax(168px, 1fr));
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 6px;
-  min-width: 900px;
+  min-width: 1040px;
   box-shadow: var(--shadow);
 }
 
@@ -125,6 +125,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .head-group { top: 0; }
 .head-col { top: 0; }
 .board > .head-col[style*="grid-row: 2"] { top: 31px; }
+
+/* Review is a stage, not a gate — marked, but not walled off. */
+.head-col.review-head { color: #b07d12; }
+.list.review { background: #fffdf6; }
+.list.review.drop-active { background: #fdf6e3; }
 .head-blank, .board > .head-col:first-of-type { left: 0; z-index: 4; }
 
 .row-label {

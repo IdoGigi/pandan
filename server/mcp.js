@@ -34,7 +34,8 @@ const tool = (fn) => async (args) => {
 };
 
 const columnField = z.enum(COLUMNS).describe(
-  'Which column. "todo" = To do, "next" and "doing" sit under the In progress header, "done" = finished.'
+  'Which column. "todo" = not started, "next" and "doing" are in progress, ' +
+  '"review" = finished but wants a human look, "done" = finished and settled.'
 );
 const colorField = z.enum(COLORS).describe('Card colour. "plain" is the default grey.');
 
@@ -45,7 +46,9 @@ export function buildMcpServer() {
       instructions:
         'Pandan, a personal kanban board. Rows are projects, columns are todo, next, doing and done. ' +
         'Call get_board first to see the projects and cards with their ids, then use the other ' +
-        'tools with those ids. Cards carry an optional checklist and a flag for anything urgent.',
+        'tools with those ids. Cards carry an optional checklist and a flag for anything urgent. ' +
+        'When you finish a card, move it to "review" if a person should check your work, or to ' +
+        '"done" if it is plainly finished. You are allowed to use either.',
     }
   );
 
@@ -166,7 +169,8 @@ export function buildMcpServer() {
     description:
       'Move a card to another column or project, and choose where in the list it lands. ' +
       'Use index 0 for the top; leave index out to drop it at the bottom. ' +
-      'This is the tool to use when work changes state, for example moving a card to "done".',
+      'This is the tool to use when work changes state. When you finish something, move it to ' +
+      '"review" if a person should check it first, or "done" if it needs no checking.',
     inputSchema: {
       card_id: z.number().int().describe('Which card to move.'),
       column_key: columnField.optional(),

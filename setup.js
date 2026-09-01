@@ -7,9 +7,14 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, writeFileSync } from 'node:fs';
 
+const quiet = process.argv.includes('--quiet');
 const file = '.env';
 
+// npm ci in a container or on CI should not write a password into the image.
+if (quiet && (process.env.CI || process.env.PANDAN_NO_SETUP)) process.exit(0);
+
 if (existsSync(file)) {
+  if (quiet) process.exit(0);
   console.log('.env already exists — leaving it alone.');
   console.log('Your password is on the APP_PASSWORD line. Open the file to read it.');
   process.exit(0);
@@ -32,9 +37,9 @@ writeFileSync(
   { mode: 0o600 }
 );
 
-console.log('Created .env with a new random password.');
 console.log('');
-console.log('  Your password is in .env, on the APP_PASSWORD line.');
-console.log('  Open that file to read it. It was not printed here on purpose.');
+console.log('Made a .env with a new random password.');
+console.log('  Your password is on the APP_PASSWORD line of .env.');
+console.log('  Open that file to read it — it is not printed here on purpose.');
 console.log('');
-console.log('Next:  npm run build  &&  npm start');
+console.log('Next:  npm start');
