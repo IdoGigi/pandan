@@ -217,6 +217,7 @@ export function App() {
         </span>
         {error && <span className="error" style={{ margin: 0 }}>{error}</span>}
         <span className="spacer" />
+        <button className="btn btn-ghost" onClick={() => setAbout(true)}>About</button>
         <button
           className="btn btn-ghost"
           onClick={async () => { await api.logout(); setAuthed(false); }}

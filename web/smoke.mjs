@@ -691,10 +691,10 @@ await step('a normal left click still opens the card editor', async () => {
   await click(cancel);
 });
 
-await step('the name opens an About panel with the licence', async () => {
-  const brand = container.querySelector('.brand');
-  if (!brand) throw new Error('the name is not clickable');
-  await click(brand);
+await step('the header has an About button that opens the panel', async () => {
+  const btn = q('.topbar .btn').find((b) => b.textContent === 'About');
+  if (!btn) throw new Error('no About button in the header');
+  await click(btn);
   const about = document.querySelector('.about');
   if (!about) throw new Error('About did not open');
   if (!about.textContent.includes('Pandan')) throw new Error('name missing');
@@ -708,6 +708,16 @@ await step('the name opens an About panel with the licence', async () => {
   });
   await settle();
   if (document.querySelector('.about')) throw new Error('Escape did not close About');
+});
+
+await step('clicking the name opens About too', async () => {
+  const brand = container.querySelector('.brand');
+  if (!brand) throw new Error('the name is not clickable');
+  await click(brand);
+  if (!document.querySelector('.about')) throw new Error('the name did not open About');
+  const close = [...document.querySelectorAll('.about .btn')].find((b) => b.textContent === 'Close');
+  await click(close);
+  if (document.querySelector('.about')) throw new Error('Close did not work');
 });
 
 await step('headers and the project column stay pinned', async () => {
