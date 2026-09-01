@@ -31,6 +31,8 @@ function writeSetting(key, value) {
 
 export function App() {
   const [authed, setAuthed] = useState(null); // null = still checking
+  const [boards, setBoards] = useState([]);
+  const [boardId, setBoardId] = useState(() => readSetting('boardId', null));
   const [projects, setProjects] = useState([]);
   const [cards, setCards] = useState([]);
   const [focus, setFocus] = useState('all');
@@ -54,7 +56,12 @@ export function App() {
 
   const load = useCallback(async () => {
     try {
-      const data = await api.board();
+      const list = await api.boards();
+      setBoards(list);
+      // The remembered board may have been deleted, so fall back to the first.
+      const wanted = list.some((b) => b.id === boardId) ? boardId : list[0]?.id ?? null;
+      const data = await api.board(wanted);
+      setBoardId(data.board.id);
       setProjects(data.projects);
       setCards(data.cards);
       setAuthed(true);
@@ -62,7 +69,7 @@ export function App() {
       if (err.unauthorized) setAuthed(false);
       else setError(err.message);
     }
-  }, []);
+  }, [boardId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -98,6 +105,8 @@ export function App() {
     document.documentElement.dataset.theme = theme;
     writeSetting('theme', theme);
   }, [theme]);
+
+  useEffect(() => { if (boardId) writeSetting('boardId', boardId); }, [boardId]);
 
   useEffect(() => { writeSetting('compact', compact); }, [compact]);
   useEffect(() => { writeSetting('rowCap', rowCap); }, [rowCap]);
@@ -169,6 +178,69 @@ export function App() {
     commit(() => api.updateCard(card.id, patch), () => setCards(before));
   }
 
+  function addBoard() {
+    setDialog({
+      kind: 'prompt',
+      title: 'New board',
+      placeholder: 'What is it for, e.g. Personal',
+      confirmLabel: 'Add board',
+      onConfirm: async (name) => {
+        setDialog(null);
+        try {
+          const made = await api.createBoard(name);
+          setBoardId(made.id);   // switch to it straight away
+          await load();
+        } catch (e) {
+          setError(e.message);
+        }
+      },
+    });
+  }
+
+  function renameBoard() {
+    const current = boards.find((b) => b.id === boardId);
+    if (!current) return;
+    setDialog({
+      kind: 'prompt',
+      title: 'Rename board',
+      initialValue: current.name,
+      confirmLabel: 'Save',
+      onConfirm: (name) => {
+        setDialog(null);
+        if (name === current.name) return;
+        commit(() => api.updateBoard(current.id, { name }));
+      },
+    });
+  }
+
+  function deleteBoard() {
+    const current = boards.find((b) => b.id === boardId);
+    if (!current) return;
+    if (boards.length <= 1) {
+      setError('This is your only board, so it cannot be deleted.');
+      return;
+    }
+    setDialog({
+      kind: 'confirm',
+      title: `Delete the board "${current.name}"?`,
+      message: current.projects === 0
+        ? 'It has no projects.'
+        : `This also deletes its ${current.projects} project${current.projects === 1 ? '' : 's'} and every card on them. You cannot undo this.`,
+      confirmLabel: 'Delete board',
+      danger: true,
+      onConfirm: async () => {
+        setDialog(null);
+        try {
+          await api.deleteBoard(current.id);
+          setBoardId(boards.find((b) => b.id !== current.id)?.id ?? null);
+          await load();
+        } catch (e) {
+          setError(e.message);
+        }
+      },
+    });
+  }
+
   function addProject() {
     setDialog({
       kind: 'prompt',
@@ -178,7 +250,7 @@ export function App() {
       onConfirm: (name) => {
         setDialog(null);
         const color = PROJECT_COLORS[projects.length % PROJECT_COLORS.length];
-        commit(() => api.createProject({ name, color }));
+        commit(() => api.createProject({ name, color, board_id: boardId }));
       },
     });
   }
@@ -194,7 +266,30 @@ export function App() {
         <button className="brand" onClick={() => setAbout(true)} title="About Pandan">
           <Logo /> Pandan
         </button>
-        <select className="filter-select" value={focus} onChange={(e) => setFocus(e.target.value)}>
+        <select
+          className="filter-select board-select"
+          value={boardId ?? ''}
+          onChange={(e) => {
+            const value = e.target.value;
+            if (value === '__new') return addBoard();
+            setBoardId(Number(value));
+            setFocus('all');
+          }}
+          title="Switch board"
+        >
+          {boards.map((b) => (
+            <option key={b.id} value={b.id}>{b.name}</option>
+          ))}
+          <option value="__new">+ New board…</option>
+        </select>
+        <button className="btn btn-ghost" onClick={renameBoard} title="Rename this board">✎</button>
+        <button className="btn btn-ghost" onClick={deleteBoard} title="Delete this board">×</button>
+        <span className="topbar-sep" />
+        <select
+          className="filter-select project-filter"
+          value={focus}
+          onChange={(e) => setFocus(e.target.value)}
+        >
           <option value="all">All projects</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>

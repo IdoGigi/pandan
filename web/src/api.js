@@ -30,7 +30,12 @@ export const api = {
   createToken: (name) => request('POST', '/tokens', { name }),
   revokeToken: (id) => request('DELETE', `/tokens/${id}`),
 
-  board: () => request('GET', '/board'),
+  boards: () => request('GET', '/boards'),
+  createBoard: (name) => request('POST', '/boards', { name }),
+  updateBoard: (id, data) => request('PATCH', `/boards/${id}`, data),
+  deleteBoard: (id) => request('DELETE', `/boards/${id}`),
+
+  board: (boardId) => request('GET', boardId ? `/board?board_id=${boardId}` : '/board'),
 
   getProject: (id) => request('GET', `/projects/${id}`),
   createProject: (data) => request('POST', '/projects', data),

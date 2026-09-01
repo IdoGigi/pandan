@@ -12,6 +12,13 @@ db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS boards (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT    NOT NULL,
+    position   REAL    NOT NULL,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS projects (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     name       TEXT    NOT NULL,
@@ -88,6 +95,28 @@ function addColumn(table, name, definition) {
 
 addColumn('projects', 'description', "TEXT NOT NULL DEFAULT ''");
 addColumn('projects', 'repo_url', "TEXT NOT NULL DEFAULT ''");
+addColumn('projects', 'board_id', 'INTEGER REFERENCES boards(id) ON DELETE CASCADE');
+
+/**
+ * There is always at least one board. An older database has projects with no
+ * board, so they are adopted by the first one rather than disappearing.
+ */
+export function ensureBoard() {
+  let row = db.prepare('SELECT id FROM boards ORDER BY position, id LIMIT 1').get();
+  if (!row) {
+    const info = db.prepare('INSERT INTO boards (name, position) VALUES (?, ?)').run('My board', 1000);
+    row = { id: Number(info.lastInsertRowid) };
+  }
+  db.prepare('UPDATE projects SET board_id = ? WHERE board_id IS NULL').run(row.id);
+  return row.id;
+}
+
+const firstBoardId = ensureBoard();
+if (db.prepare('SELECT COUNT(*) AS n FROM boards').get().n === 1) {
+  // Nothing to log on a fresh database; only worth a line when we adopted rows.
+  const orphans = db.prepare('SELECT COUNT(*) AS n FROM projects WHERE board_id = ?').get(firstBoardId).n;
+  if (orphans > 0) console.log(`[db] ${orphans} project(s) on the default board`);
+}
 
 export const COLUMNS = ['todo', 'next', 'doing', 'review', 'done'];
 export const LINK_KINDS = ['link', 'contact'];
@@ -114,7 +143,13 @@ export function nextPosition(table, whereSql, params) {
 export function seedIfEmpty() {
   const { n } = db.prepare('SELECT COUNT(*) AS n FROM projects').get();
   if (n > 0) return;
-  const ins = db.prepare('INSERT INTO projects (name, color, position) VALUES (?, ?, ?)');
-  ins.run('House chores', '#c3d117', 1000);
-  ins.run('Volunteering', '#4bb3d4', 2000);
+  const board = ensureBoard();
+  const ins = db.prepare('INSERT INTO projects (board_id, name, color, position) VALUES (?, ?, ?, ?)');
+  ins.run(board, 'House chores', '#c3d117', 1000);
+  ins.run(board, 'Volunteering', '#4bb3d4', 2000);
+}
+
+/** The board to use when a request does not name one. */
+export function defaultBoardId() {
+  return db.prepare('SELECT id FROM boards ORDER BY position, id LIMIT 1').get()?.id ?? ensureBoard();
 }

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { db, COLUMNS, LINK_KINDS, nextPosition, safeUrl } from './db.js';
+import { db, COLUMNS, LINK_KINDS, nextPosition, safeUrl, defaultBoardId } from './db.js';
 import { createToken, requireOwner } from './auth.js';
 
 export const api = Router();
@@ -62,35 +62,87 @@ api.get('/about', (req, res) => {
     columns: COLUMNS,
     actor: req.actor || null,
     counts: {
+      boards: db.prepare('SELECT COUNT(*) AS n FROM boards').get().n,
       projects: db.prepare('SELECT COUNT(*) AS n FROM projects WHERE archived = 0').get().n,
       cards: db.prepare('SELECT COUNT(*) AS n FROM cards').get().n,
     },
   });
 });
 
-/* ---------------- board ---------------- */
+/* ---------------- boards ---------------- */
 
-/** Everything the UI needs in one round trip. */
+api.get('/boards', (req, res) => {
+  res.json(db.prepare(
+    `SELECT b.id, b.name, b.position, b.created_at,
+            (SELECT COUNT(*) FROM projects p WHERE p.board_id = b.id AND p.archived = 0) AS projects
+       FROM boards b ORDER BY b.position, b.id`
+  ).all());
+});
+
+api.post('/boards', (req, res) => {
+  const name = clean(req.body?.name, 120);
+  if (!name) return bad(res, 'name is required');
+  const position = nextPosition('boards', '1 = 1', []);
+  const { lastInsertRowid } = db
+    .prepare('INSERT INTO boards (name, position) VALUES (?, ?)').run(name, position);
+  res.status(201).json(db.prepare('SELECT * FROM boards WHERE id = ?').get(lastInsertRowid));
+});
+
+api.patch('/boards/:id', (req, res) => {
+  const row = db.prepare('SELECT * FROM boards WHERE id = ?').get(Number(req.params.id));
+  if (!row) return res.status(404).json({ error: 'board not found' });
+  const name = req.body?.name === undefined ? row.name : clean(req.body.name, 120);
+  if (!name) return bad(res, 'name cannot be empty');
+  const position = req.body?.position === undefined ? row.position : Number(req.body.position);
+  db.prepare('UPDATE boards SET name = ?, position = ? WHERE id = ?').run(name, position, row.id);
+  res.json(db.prepare('SELECT * FROM boards WHERE id = ?').get(row.id));
+});
+
+api.delete('/boards/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!db.prepare('SELECT id FROM boards WHERE id = ?').get(id)) {
+    return res.status(404).json({ error: 'board not found' });
+  }
+  // There must always be somewhere for projects to live.
+  if (db.prepare('SELECT COUNT(*) AS n FROM boards').get().n <= 1) {
+    return bad(res, 'this is your only board, so it cannot be deleted');
+  }
+  db.prepare('DELETE FROM boards WHERE id = ?').run(id);
+  res.json({ deleted: true });
+});
+
+/* ---------------- board contents ---------------- */
+
+/** Everything the UI needs for one board in one round trip. */
 api.get('/board', (req, res) => {
+  const boardId = req.query.board_id ? Number(req.query.board_id) : defaultBoardId();
+  const board = db.prepare('SELECT id, name FROM boards WHERE id = ?').get(boardId);
+  if (!board) return res.status(404).json({ error: 'board not found' });
+
   const projects = db.prepare(
-    'SELECT id, name, color, position, archived FROM projects WHERE archived = 0 ORDER BY position'
-  ).all();
+    `SELECT id, name, color, position, archived FROM projects
+      WHERE archived = 0 AND board_id = ? ORDER BY position`
+  ).all(board.id);
   const cards = db.prepare(
     `SELECT c.id, c.project_id, c.column_key, c.title, c.notes, c.color, c.flagged, c.position,
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id)                AS checks_total,
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id AND k.done = 1) AS checks_done
        FROM cards c
        JOIN projects p ON p.id = c.project_id
-      WHERE p.archived = 0
+      WHERE p.archived = 0 AND p.board_id = ?
       ORDER BY c.position`
-  ).all();
-  res.json({ columns: COLUMNS, projects, cards });
+  ).all(board.id);
+
+  res.json({ columns: COLUMNS, board, projects, cards });
 });
 
 /* ---------------- projects ---------------- */
 
 api.get('/projects', (req, res) => {
-  res.json(db.prepare('SELECT * FROM projects WHERE archived = 0 ORDER BY position').all());
+  const boardId = req.query.board_id ? Number(req.query.board_id) : null;
+  res.json(boardId
+    ? db.prepare('SELECT * FROM projects WHERE archived = 0 AND board_id = ? ORDER BY position').all(boardId)
+    : db.prepare('SELECT * FROM projects WHERE archived = 0 ORDER BY position').all());
 });
 
 /** Everything about one project: its details, its cards, and a few counts. */
@@ -151,10 +203,17 @@ api.post('/projects', (req, res) => {
   const name = clean(req.body?.name, 120);
   if (!name) return bad(res, 'name is required');
   const color = clean(req.body?.color, 20) || '#94a3b8';
-  const position = nextPosition('projects', 'archived = 0', []);
+  const boardId = req.body?.board_id ? Number(req.body.board_id) : defaultBoardId();
+  if (!db.prepare('SELECT id FROM boards WHERE id = ?').get(boardId)) {
+    return bad(res, 'board_id must be an existing board');
+  }
+  const position = nextPosition('projects', 'archived = 0 AND board_id = ?', [boardId]);
   const { lastInsertRowid } = db
-    .prepare('INSERT INTO projects (name, color, position, description, repo_url) VALUES (?, ?, ?, ?, ?)')
-    .run(name, color, position, clean(req.body?.description, 5000), clean(req.body?.repo_url, 500));
+    .prepare(
+      `INSERT INTO projects (board_id, name, color, position, description, repo_url)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    )
+    .run(boardId, name, color, position, clean(req.body?.description, 5000), clean(req.body?.repo_url, 500));
   res.status(201).json(db.prepare('SELECT * FROM projects WHERE id = ?').get(lastInsertRowid));
 });
 
@@ -166,11 +225,17 @@ api.patch('/projects/:id', (req, res) => {
   const color = req.body?.color === undefined ? row.color : clean(req.body.color, 20);
   const position = req.body?.position === undefined ? row.position : Number(req.body.position);
   const archived = req.body?.archived === undefined ? row.archived : (req.body.archived ? 1 : 0);
+  if (req.body?.board_id !== undefined &&
+      !db.prepare('SELECT id FROM boards WHERE id = ?').get(Number(req.body.board_id))) {
+    return bad(res, 'board_id must be an existing board');
+  }
+  const boardId = req.body?.board_id === undefined ? row.board_id : Number(req.body.board_id);
   const description = req.body?.description === undefined ? row.description : clean(req.body.description, 5000);
   const repoUrl = req.body?.repo_url === undefined ? row.repo_url : clean(req.body.repo_url, 500);
   db.prepare(
-    'UPDATE projects SET name=?, color=?, position=?, archived=?, description=?, repo_url=? WHERE id=?'
-  ).run(name, color, position, archived, description, repoUrl, row.id);
+    `UPDATE projects SET name=?, color=?, position=?, archived=?, description=?, repo_url=?, board_id=?
+      WHERE id=?`
+  ).run(name, color, position, archived, description, repoUrl, boardId, row.id);
   res.json(db.prepare('SELECT * FROM projects WHERE id = ?').get(row.id));
 });
 

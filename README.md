@@ -15,7 +15,7 @@ down, and gives you a board that updates while they work.
 
 - **Runs on localhost.** One Node process, one SQLite file. No database to set
   up, no account, nothing leaves your machine.
-- **Agents can read and write it.** A built-in MCP server with 14 tools. An
+- **Agents can read and write it.** A built-in MCP server with 16 tools. An
   agent finds them itself — you do not have to explain your API to it.
 - **The board updates live.** A card an agent adds appears in about a second.
   No refresh.
@@ -24,7 +24,11 @@ down, and gives you a board that updates while they work.
 
 ## The board
 
-Rows are projects. Columns are `To do`, `Next`, `Doing`, `Review` and `Done`,
+Keep as many boards as you like — one for work, one for home. The switcher is
+in the top bar, and it remembers which one you had open. A project can be moved
+between boards, and deleting a board takes its projects with it.
+
+On a board, rows are projects. Columns are `To do`, `Next`, `Doing`, `Review` and `Done`,
 with `Next` and `Doing` grouped under **In progress**.
 
 **Review** is where an agent puts work it wants you to look at. It is a signal,

@@ -44,23 +44,44 @@ export function buildMcpServer() {
     { name: 'pandan', version: '1.0.0' },
     {
       instructions:
-        'Pandan, a personal kanban board. Rows are projects, columns are todo, next, doing and done. ' +
-        'Call get_board first to see the projects and cards with their ids, then use the other ' +
+        'Pandan, a personal kanban board. There may be several boards, for example work and ' +
+        'personal. On a board, rows are projects and columns are todo, next, doing, review and done. ' +
+        'Call get_boards then get_board to see the projects and cards with their ids, then use the other ' +
         'tools with those ids. Cards carry an optional checklist and a flag for anything urgent. ' +
         'When you finish a card, move it to "review" if a person should check your work, or to ' +
         '"done" if it is plainly finished. You are allowed to use either.',
     }
   );
 
-  server.registerTool('get_board', {
-    title: 'Get the whole board',
+  server.registerTool('get_boards', {
+    title: 'List the boards',
     description:
-      'Read every project and card in one call. Returns project ids and names, and each card with ' +
-      'its id, project_id, column_key, title, notes, colour, flag and checklist progress. ' +
-      'Start here so you have the ids the other tools need.',
+      'List every board with its id, name and how many projects it holds. Someone may keep work ' +
+      'and personal on separate boards, so check here first if you are not sure which one a ' +
+      'project belongs to.',
     inputSchema: {},
     annotations: { readOnlyHint: true },
-  }, tool(() => callApi('GET', '/board')));
+  }, tool(() => callApi('GET', '/boards')));
+
+  server.registerTool('create_board', {
+    title: 'Add a board',
+    description:
+      'Add a whole new board, for a separate area of life such as work or personal. Most of the ' +
+      'time a new project on an existing board is what is wanted instead — ask before making one.',
+    inputSchema: { name: z.string().min(1).describe('What the board is for, e.g. "Work".') },
+  }, tool((args) => callApi('POST', '/boards', args)));
+
+  server.registerTool('get_board', {
+    title: 'Get one board',
+    description:
+      'Read every project and card on a board in one call. Returns project ids and names, and each ' +
+      'card with its id, project_id, column_key, title, notes, colour, flag and checklist progress. ' +
+      'Leave board_id out for the first board. Start here so you have the ids the other tools need.',
+    inputSchema: {
+      board_id: z.number().int().optional().describe('Which board. Defaults to the first one.'),
+    },
+    annotations: { readOnlyHint: true },
+  }, tool(({ board_id }) => callApi('GET', board_id ? `/board?board_id=${board_id}` : '/board')));
 
   server.registerTool('get_project', {
     title: 'Read one project',
@@ -78,6 +99,7 @@ export function buildMcpServer() {
     description: 'Add a new project, which appears as a new row on the board.',
     inputSchema: {
       name: z.string().min(1).describe('The project name shown on the row.'),
+      board_id: z.number().int().optional().describe('Which board. Defaults to the first one.'),
       color: z.string().optional().describe('Optional hex colour for the row dot, like "#4bb3d4".'),
     },
   }, tool((args) => callApi('POST', '/projects', args)));
@@ -91,6 +113,7 @@ export function buildMcpServer() {
       color: z.string().optional().describe('New hex colour.'),
       description: z.string().optional().describe('Free notes about the project. Replaces what is there.'),
       repo_url: z.string().optional().describe('Link to the code repo, for example a GitHub URL.'),
+      board_id: z.number().int().optional().describe('Move the project to a different board.'),
       archived: z.boolean().optional().describe('True hides the project from the board.'),
     },
   }, tool(({ project_id, ...rest }) => callApi('PATCH', `/projects/${project_id}`, rest)));

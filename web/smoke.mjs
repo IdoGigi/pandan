@@ -15,6 +15,10 @@ const problems = [];
 
 /* ---- fake board data ---- */
 const state = {
+  boards: [
+    { id: 1, name: 'Work', position: 1000, created_at: '2026-08-01', projects: 3 },
+    { id: 2, name: 'Personal', position: 2000, created_at: '2026-08-02', projects: 0 },
+  ],
   projects: [
     { id: 1, name: 'House chores', color: '#c3d117', position: 1000, archived: 0 },
     { id: 2, name: 'Volunteering', color: '#4bb3d4', position: 2000, archived: 0 },
@@ -62,7 +66,30 @@ function fakeFetch(url, opts = {}) {
   if (path === '/me') return json({ ok: true });
   if (path === '/login') return json({ ok: true });
   if (path === '/logout') return json({ ok: true });
-  if (path === '/board') return json({ columns: ['todo', 'next', 'doing', 'review', 'done'], ...state });
+  if (path === '/boards' && method === 'GET') return json(state.boards);
+  if (path === '/boards' && method === 'POST') {
+    const row = { id: 3, name: body.name, position: 3000, created_at: '2026-09-01', projects: 0 };
+    state.boards = [...state.boards, row];
+    return json(row, 201);
+  }
+  if (path.startsWith('/boards/') && method === 'DELETE') {
+    const id = Number(path.split('/')[2]);
+    state.boards = state.boards.filter((b) => b.id !== id);
+    return json({ deleted: true });
+  }
+  if (path.startsWith('/boards/')) return json({ id: 1, name: body.name || 'Work' });
+  if (path.startsWith('/board')) {
+    const id = Number((path.match(/board_id=(\d+)/) || [])[1] || 1);
+    const board = state.boards.find((b) => b.id === id) || state.boards[0];
+    // Only board 1 has the seeded projects; board 2 is empty.
+    const empty = board.id !== 1;
+    return json({
+      columns: ['todo', 'next', 'doing', 'review', 'done'],
+      board: { id: board.id, name: board.name },
+      projects: empty ? [] : state.projects,
+      cards: empty ? [] : state.cards,
+    });
+  }
   if (path.startsWith('/cards/') && path.endsWith('/move')) return json({ id: 10 });
   if (path.startsWith('/cards/') && path.endsWith('/checks')) return json({ id: 99, text: body.text, done: 0, position: 1000 }, 201);
   if (/^\/cards\/\d+$/.test(path) && method === 'GET') {
@@ -353,7 +380,7 @@ await step('deleting a card asks first, and keeps the card modal open on cancel'
 });
 
 await step('filter to one project', async () => {
-  const sel = q('.filter-select')[0];
+  const sel = q('.project-filter')[0];
   if (!sel) throw new Error('filter missing');
   await act(async () => {
     sel.value = '2';
@@ -366,7 +393,7 @@ await step('filter to one project', async () => {
 });
 
 await step('filter back to all projects', async () => {
-  const sel = q('.filter-select')[0];
+  const sel = q('.project-filter')[0];
   await act(async () => {
     sel.value = 'all';
     sel.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
@@ -839,6 +866,72 @@ await step('agent keys: make one, see it once, revoke it', async () => {
 
   const close = [...document.querySelectorAll('.modal-wide .modal-actions .btn')].find((b) => b.textContent === 'Close');
   await click(close);
+});
+
+await step('the header has a board switcher', () => {
+  const select = container.querySelector('.board-select');
+  if (!select) throw new Error('no board switcher');
+  const names = [...select.options].map((o) => o.textContent);
+  if (!names.includes('Work') || !names.includes('Personal')) {
+    throw new Error(`boards missing from the switcher: ${names.join(', ')}`);
+  }
+  if (!names.some((n) => n.includes('New board'))) throw new Error('no way to add a board');
+});
+
+await step('switching board swaps the projects, and is remembered', async () => {
+  if (!container.textContent.includes('House chores')) throw new Error('should start on Work');
+
+  const select = container.querySelector('.board-select');
+  await act(async () => {
+    select.value = '2';
+    select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  });
+  await settle();
+
+  const rows = q('.row-label .name').map((n) => n.textContent);
+  if (rows.length !== 0) throw new Error(`Personal should be empty, got: ${rows.join(', ')}`);
+  if (!container.textContent.includes('No projects yet')) throw new Error('no empty-board message');
+
+  let saved = null;
+  try { saved = JSON.parse(dom.window.localStorage.getItem('kanban.boardId')); } catch { /* ignore */ }
+  if (saved !== 2) throw new Error(`board choice not remembered, got ${saved}`);
+
+  await act(async () => {
+    select.value = '1';
+    select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  });
+  await settle();
+  if (!container.textContent.includes('House chores')) throw new Error('did not switch back');
+});
+
+await step('a new project goes on the board you are looking at', async () => {
+  let sent = null;
+  const prev = g.fetch;
+  const spy = (url, opts = {}) => {
+    if (String(url) === '/api/projects' && (opts.method || 'GET') === 'POST') sent = JSON.parse(opts.body);
+    return prev(url, opts);
+  };
+  g.fetch = spy; dom.window.fetch = spy;
+
+  const btn = q('.topbar .btn').find((b) => b.textContent.includes('Project'));
+  await click(btn);
+  const dlg = document.querySelector('.modal-sm');
+  await act(async () => { setNativeValue(dlg.querySelector('.input'), 'On this board'); });
+  await settle();
+  await click([...dlg.querySelectorAll('.btn')].find((b) => b.textContent === 'Add project'));
+
+  g.fetch = prev; dom.window.fetch = prev;
+  if (sent?.board_id !== 1) throw new Error(`project not tied to the open board: ${JSON.stringify(sent)}`);
+});
+
+await step('deleting a board warns what goes with it', async () => {
+  const del = q('.topbar .btn').find((b) => b.getAttribute('title') === 'Delete this board');
+  if (!del) throw new Error('no delete board button');
+  await click(del);
+  const dlg = document.querySelector('.modal-sm');
+  if (!dlg) throw new Error('no confirm');
+  if (!dlg.textContent.includes('project')) throw new Error('should say how many projects go too');
+  await click([...dlg.querySelectorAll('.btn')].find((b) => b.textContent === 'Cancel'));
 });
 
 await step('headers and the project column stay pinned', async () => {

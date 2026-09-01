@@ -22,19 +22,31 @@ export KEY="Authorization: Bearer YOUR_PASSWORD"
 
 ## Shape of the board
 
-- A **project** is one row (swimlane) on the board.
+- A **board** is a whole workspace, for example work or personal. There is
+  always at least one, and you cannot delete your last.
+- A **project** is one row (swimlane) on a board.
 - A **card** belongs to one project and sits in one column.
 - Columns are fixed: `todo`, `next`, `doing`, `done`.
   On screen, `next` and `doing` sit under the "In progress" header.
 - `position` orders cards inside a column. Lower comes first. You rarely set it
   by hand — use the move endpoint with an `index`.
 
-## Read the whole board
+## Boards
 
-One call gives an agent everything it needs.
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/boards` | Every board with its project count |
+| POST | `/boards` | `{ "name" }` |
+| PATCH | `/boards/:id` | `{ "name?", "position?" }` |
+| DELETE | `/boards/:id` | Also deletes its projects and their cards. Refuses on the last board |
+
+## Read one board
+
+One call gives an agent everything it needs. Leave `board_id` out for the first
+board.
 
 ```bash
-curl -s -H "$KEY" $KB/board
+curl -s -H "$KEY" "$KB/board?board_id=1"
 ```
 
 ```json
@@ -62,8 +74,8 @@ curl -s -H "$KEY" $KB/board
 | DELETE | `/links/:id` | Remove a link or contact |
 | POST | `/projects/:id/updates` | `{ "text" }` — add a dated entry to the log |
 | DELETE | `/updates/:id` | Remove a log entry |
-| POST | `/projects` | `{ "name", "color?", "description?", "repo_url?" }` |
-| PATCH | `/projects/:id` | Any of `name`, `color`, `description`, `repo_url`, `position`, `archived` |
+| POST | `/projects` | `{ "name", "board_id?", "color?", "description?", "repo_url?" }` |
+| PATCH | `/projects/:id` | Any of `name`, `color`, `description`, `repo_url`, `board_id`, `position`, `archived` |
 | DELETE | `/projects/:id` | Also deletes that project's cards |
 
 ```bash
@@ -222,7 +234,9 @@ Keep the password in an environment variable, never in the file:
 
 | Tool | What it does |
 | --- | --- |
-| `get_board` | Read every project and card in one call. Start here to get the ids |
+| `get_boards` | List the boards — work, personal, whatever you keep separate |
+| `create_board` | Add a whole new board |
+| `get_board` | Read one board's projects and cards. Start here to get the ids |
 | `get_project` | One project in full: cards, counts, notes, repo, links, contacts, update log |
 | `add_project_link` | Attach a link or a contact to a project |
 | `delete_project_link` | Remove a link or contact |
