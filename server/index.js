@@ -66,4 +66,4 @@ app.use((err, req, res, next) => {
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, '0.0.0.0', () => console.log(`kanban listening on ${port}`));
+app.listen(port, '0.0.0.0', () => console.log(`Pandan listening on http://localhost:${port}`));

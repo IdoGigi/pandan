@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from './api.js';
+import { Logo } from './Logo.jsx';
 
 export function Login({ onSuccess }) {
   const [password, setPassword] = useState('');
@@ -23,7 +24,7 @@ export function Login({ onSuccess }) {
   return (
     <div className="login-wrap">
       <form className="login-card" onSubmit={submit}>
-        <h1>Kanban</h1>
+        <h1><Logo size={26} /> Pandan</h1>
         <p>Enter your password to open the board.</p>
         <input
           className="input"

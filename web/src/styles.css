@@ -650,3 +650,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .ctx-item:hover { background: #f0f2f4; }
 .ctx-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--flag); flex: 0 0 auto; }
+
+/* the logo sits with the wordmark in the top bar */
+.topbar h1, .login-card h1 { display: flex; align-items: center; gap: 8px; }
+.topbar h1 svg, .login-card h1 svg { flex: 0 0 auto; }

@@ -1,5 +1,5 @@
 {
-  "name": "kanban",
+  "name": "pandan",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -11,11 +11,15 @@
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "check": "node --check server/index.js && node --check server/db.js && node --check server/auth.js && node --check server/routes.js && node --check server/mcp.js && node --check server/events.js",
-    "smoke": "npm --prefix web run smoke"
+    "smoke": "npm --prefix web run smoke",
+    "setup": "node setup.js",
+    "serve": "node --env-file=.env server/index.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "express": "^5.1.0",
     "zod": "^4.5.4"
-  }
+  },
+  "description": "A small self-hosted kanban board with an MCP server, so you can see what your agents are doing.",
+  "license": "MIT"
 }

@@ -1,4 +1,4 @@
-# Kanban API
+# Pandan API
 
 A small REST API for the board. Made to be easy for an agent to drive.
 
@@ -13,10 +13,10 @@ Authorization: Bearer YOUR_PASSWORD
 The browser UI uses a signed cookie instead, but an agent should always use the header.
 Without it, every `/api/*` route returns `401 {"error":"unauthorized"}`.
 
-Base URL: `https://kanban-production-e69e.up.railway.app/api`
+Base URL: `http://localhost:3000/api`
 
 ```bash
-export KB=https://kanban-production-e69e.up.railway.app/api
+export KB=http://localhost:3000/api
 export KEY="Authorization: Bearer YOUR_PASSWORD"
 ```
 
@@ -171,7 +171,7 @@ The board also speaks **MCP**, so an agent can discover the tools by itself
 instead of being told about the endpoints. The endpoint is:
 
 ```
-POST https://kanban-production-e69e.up.railway.app/mcp
+POST http://localhost:3000/mcp
 ```
 
 It uses the same password as a Bearer token.
@@ -182,8 +182,8 @@ Run this in your own terminal, with your real password in place of the
 placeholder. Do not paste your password into a chat.
 
 ```bash
-claude mcp add --transport http kanban \
-  https://kanban-production-e69e.up.railway.app/mcp \
+claude mcp add --transport http pandan \
+  http://localhost:3000/mcp \
   --header "Authorization: Bearer YOUR_PASSWORD"
 ```
 
@@ -194,9 +194,9 @@ Keep the password in an environment variable, never in the file:
 ```json
 {
   "mcpServers": {
-    "kanban": {
+    "pandan": {
       "type": "http",
-      "url": "https://kanban-production-e69e.up.railway.app/mcp",
+      "url": "http://localhost:3000/mcp",
       "headers": { "Authorization": "Bearer ${KANBAN_PASSWORD}" }
     }
   }
@@ -230,7 +230,7 @@ like `card not found`.
 ### Checking it by hand
 
 ```bash
-curl -s -X POST https://kanban-production-e69e.up.railway.app/mcp \
+curl -s -X POST http://localhost:3000/mcp \
   -H "Authorization: Bearer YOUR_PASSWORD" \
   -H "Accept: application/json, text/event-stream" \
   -H "Content-Type: application/json" \

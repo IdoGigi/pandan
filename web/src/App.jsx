@@ -6,6 +6,7 @@ import { ProjectModal } from './ProjectModal.jsx';
 import { Login } from './Login.jsx';
 import { Dialog } from './Dialog.jsx';
 import { CardMenu } from './ContextMenu.jsx';
+import { Logo } from './Logo.jsx';
 
 const PROJECT_COLORS = ['#c3d117', '#4bb3d4', '#f0b429', '#e2725b', '#9b8ec4', '#57a773'];
 
@@ -176,7 +177,7 @@ export function App() {
   return (
     <div className="app">
       <div className="topbar">
-        <h1>Kanban</h1>
+        <h1><Logo /> Pandan</h1>
         <select className="filter-select" value={focus} onChange={(e) => setFocus(e.target.value)}>
           <option value="all">All projects</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}

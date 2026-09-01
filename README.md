@@ -1,139 +1,160 @@
-# Kanban
+<h1 align="center">
+  <img src="web/public/favicon.svg" width="72" height="72" alt=""><br>
+  Pandan
+</h1>
 
-A small personal kanban board. Rows are projects, columns are `To do`,
-`Next`, `Doing`, `Done` — `Next` and `Doing` sit under one "In progress" header.
+<p align="center">
+  A small kanban board you run on your own machine — with an MCP server, so you
+  can see what your coding agents are actually doing.
+</p>
 
-One password protects the whole thing. The browser gets a signed cookie,
-an agent sends the same password as a Bearer token. See [API.md](API.md).
+---
 
-## What it is made of
+Agents do a lot of work you never see. Pandan gives them somewhere to write it
+down, and gives you a board that updates while they work.
 
-- **Server** — Node + Express. Data in SQLite through Node's built-in
-  `node:sqlite`, so there is no native module to compile.
-- **Web** — React + Vite. Card moves update the screen first and talk to the
-  server after, so dragging feels instant.
-- **One service** — the same Node process serves the API and the built UI.
+- **Runs on localhost.** One Node process, one SQLite file. No database to set
+  up, no account, nothing leaves your machine.
+- **Agents can read and write it.** A built-in MCP server with 14 tools. An
+  agent finds them itself — you do not have to explain your API to it.
+- **The board updates live.** A card an agent adds appears in about a second.
+  No refresh.
+- **Small enough to read.** Around 2,300 lines. You can check what it does
+  before you trust it with your work.
 
-```
-server/
-  index.js    app wiring, login, static files
-  auth.js     password check, signed cookie, bearer token
-  db.js       schema and the database handle
-  routes.js   the JSON API
-web/src/
-  App.jsx        state, optimistic updates
-  Board.jsx      the grid and its headers
-  List.jsx       one cell: cards, drag and drop, quick add
-  Card.jsx       a single card
-  CardModal.jsx  the edit dialog
-  api.js         fetch wrapper
-```
+## The board
 
-## Run it locally
+Rows are projects. Columns are `To do`, `Next`, `Doing` and `Done`, with `Next`
+and `Doing` grouped under **In progress**.
+
+Cards carry a colour, a flag, notes and a checklist. Right-click one to recolour
+it. Each project also holds notes, a repo link, links, contacts, and a dated
+update log — so the context lives next to the work.
+
+Rows fold away and every column scrolls on its own, so a project with fifty
+cards takes the same room as one with five.
+
+## Run it
+
+You need [Node 22.13 or newer](https://nodejs.org) — it uses Node's built-in
+SQLite, so there is nothing to compile.
 
 ```bash
+git clone https://github.com/YOUR-NAME/pandan.git
+cd pandan
 npm install
-npm run build          # builds the web UI into web/dist
+npm run setup     # makes .env with a random password
+npm run build
+npm run serve
 ```
 
-Put a password in `.env` at the repo root:
+Open <http://localhost:3000>. Your password is in `.env`, on the
+`APP_PASSWORD` line — setup does not print it.
 
-```
-APP_PASSWORD=choose-something-long
-DB_PATH=./data/kanban.db
-```
-
-Then start it:
+### With Docker
 
 ```bash
-node --env-file=.env server/index.js
+npm run setup           # or write your own .env
+docker compose up -d
 ```
 
-Open http://localhost:3000.
+Same address. The database sits on a named volume, so it survives a rebuild.
 
-For frontend work with hot reload, run the server as above and in another
-terminal `npm --prefix web run dev`, then open http://localhost:5173.
-Vite proxies `/api` to port 3000.
+## Connect an agent
 
-## Environment variables
+One password protects everything. The browser uses a cookie; an agent sends the
+same password as a Bearer token.
+
+**Claude Code** — run this in your own terminal, with your real password:
+
+```bash
+claude mcp add --transport http pandan http://localhost:3000/mcp \
+  --header "Authorization: Bearer YOUR_PASSWORD"
+```
+
+**Anything that reads `.mcp.json`** — keep the password in an environment
+variable, not in the file:
+
+```json
+{
+  "mcpServers": {
+    "pandan": {
+      "type": "http",
+      "url": "http://localhost:3000/mcp",
+      "headers": { "Authorization": "Bearer ${PANDAN_PASSWORD}" }
+    }
+  }
+}
+```
+
+The agent then gets tools to read the board, add and edit cards, move them
+between columns, manage projects and write update entries. Full list and a
+plain REST API in [API.md](API.md).
+
+## Make agents actually use it
+
+An agent will not log its work unless you tell it to, and left alone it writes
+far too much. [`examples/`](examples/) has the two pieces that fix that:
+
+- `examples/CLAUDE.md-snippet.md` — a short rule to paste into your `CLAUDE.md`
+- `examples/kanban-skill.md` — a Claude Code skill with the same rules in detail
+
+Both are built around one idea: **the board is for glancing at.** Card titles
+are capped at 8 words, log entries at one sentence, and most work is not worth
+a card at all. A board with six clear cards beats one with forty true ones.
+
+## Security — read this before exposing it
+
+Pandan is built for **one person on one machine**. It has one password, and
+that password is both your login and your agent key.
+
+- Docker compose binds to `127.0.0.1` on purpose. It is not reachable from
+  your network until you change that.
+- There are no user accounts, and no way to revoke an agent's access without
+  changing your own password too.
+- If you put it on the internet, put it behind something that does real auth,
+  and use a long random password.
+
+Failed logins are rate limited, cookies are signed and HTTP-only, and stored
+links only become clickable for `http`, `https`, `mailto` and `tel` — but none
+of that makes it a multi-user app.
+
+## Settings
 
 | Name | Needed | What it does |
 | --- | --- | --- |
 | `APP_PASSWORD` | yes | The only password. The app refuses to start without it |
-| `DB_PATH` | no | Where the SQLite file lives. Defaults to `./data/kanban.db` |
-| `PORT` | no | Railway sets this. Defaults to 3000 |
+| `DB_PATH` | no | Where the SQLite file lives. Defaults to `./data/pandan.db` |
+| `PORT` | no | Port to listen on. Defaults to 3000 |
 | `NODE_ENV` | no | Set to `production` so the cookie gets the `Secure` flag |
 
-## Deploy on Railway
-
-The app is one service with a volume mounted at `/data`, and
-`DB_PATH=/data/kanban.db` so the board survives restarts and redeploys.
+## Development
 
 ```bash
-railway up            # push the current folder
-railway logs          # watch it start
+npm run dev                  # server with reload
+npm --prefix web run dev     # UI on :5173, proxies /api to :3000
+npm run check                # syntax check the server
+npm run smoke                # headless UI test
 ```
 
-To change the password later, set `APP_PASSWORD` in the Railway dashboard
-under Variables. The service restarts and old cookies stop working, which is
-exactly what you want.
+`npm run smoke` mounts the real React app in jsdom against a fake API and clicks
+through every flow with true pointer events. It fails if the app ever calls
+`window.prompt`, `confirm` or `alert` — Pandan uses its own dialogs.
 
-## Notes
-
-- `node:sqlite` prints an "experimental" warning on start. It is safe to ignore.
-- Failed logins from one address are limited to 8 a minute.
-- Never commit `.env` — it is in `.gitignore`.
-
-## Live
-
-- App: https://kanban-production-e69e.up.railway.app
-- Railway project: `kanban` (workspace DevTeam), service `kanban`,
-  volume `kanban-volume` mounted at `/data`.
-
-Your password is in `.env` in this folder. Open that file to read it —
-it was never printed to a terminal.
-
-### A note on `railway.json`
-
-Railway now prefers `.railway/railway.ts` and warns that `railway.json`
-is deprecated. The current file keeps working until 2026-12-01. Run
-`railway config migrate` when you want to switch.
-
-## UI smoke test
-
-The board has no browser-based tests, so there is a headless one. It mounts the
-real React app in jsdom against a fake API and clicks through the main flows.
-
-```bash
-npm run smoke
+```
+server/
+  index.js    wiring, login, static files
+  auth.js     password check, signed cookie, bearer token
+  db.js       schema and migrations
+  routes.js   the JSON API
+  mcp.js      the MCP server
+  events.js   live updates over Server-Sent Events
+web/src/      the React board
 ```
 
-It fails if any step breaks, if React logs an error, or if the app ever calls
-`window.prompt`, `window.confirm` or `window.alert` — the app uses its own
-dialogs instead, so those must stay unused.
+Existing boards upgrade in place: new columns are added only when missing, and
+new tables use `CREATE TABLE IF NOT EXISTS`.
 
-## Agent access
+## Licence
 
-Two ways in, both behind the same password:
-
-- **REST** — plain JSON endpoints, documented in [API.md](API.md).
-- **MCP** — `POST /mcp`, so an agent discovers the tools on its own.
-  Ten tools cover reading the board and adding or editing projects, cards and
-  checklist items. See the "Connect an agent" section of [API.md](API.md).
-
-The MCP tools call this app's own REST API over localhost, so an agent goes
-through exactly the same checks as the browser does. There is no second copy
-of the rules to keep in step.
-
-## Live updates
-
-The board keeps itself in step. `GET /api/events` is a Server-Sent Events
-stream; every successful write to `/api` bumps a revision and pings each open
-browser, which then re-reads the board. Changes from another tab, another
-device, or an agent over MCP all show up within a second, with no refresh.
-
-The ping carries only a revision number, not the change itself. One code path,
-and a browser that missed a ping catches up on the next one. `EventSource`
-reconnects on its own, and a tab that was asleep re-reads when it wakes.
-
-The dot in the top bar is green while the stream is connected.
+MIT. See [LICENSE](LICENSE).
