@@ -11,6 +11,16 @@ const bad = (res, msg) => res.status(400).json({ error: msg });
 const clean = (v, max = 500) => String(v ?? '').trim().slice(0, max);
 const NOW = "datetime('now')";
 
+/** Who is doing this — you, or one of your agent keys by name. */
+const actorOf = (req) => [req.actor?.name ?? 'you', req.actor?.kind ?? 'owner'];
+
+/** Records who last touched a card, so an agent's work is visible as such. */
+function stamp(req, cardId) {
+  const [name, kind] = actorOf(req);
+  db.prepare('UPDATE cards SET last_actor = ?, last_actor_kind = ? WHERE id = ?')
+    .run(name, kind, cardId);
+}
+
 /* ---------------- agent tokens ---------------- */
 
 // requireOwner on every one of these: an agent token can use the board, but it
@@ -47,7 +57,9 @@ const pkg = JSON.parse(
   readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8')
 );
 const repo = String(pkg.repository?.url || '').replace(/^git\+/, '').replace(/\.git$/, '');
-const published = repo && !repo.includes('YOUR-NAME');
+// Until the repo is real, the About panel hides the links rather than
+// showing ones that 404.
+const published = Boolean(repo);
 
 api.get('/about', (req, res) => {
   res.json({
@@ -125,7 +137,7 @@ api.get('/board', (req, res) => {
   ).all(board.id);
   const cards = db.prepare(
     `SELECT c.id, c.project_id, c.column_key, c.title, c.notes, c.color, c.flagged, c.position,
-            c.due_date,
+            c.due_date, c.last_actor, c.last_actor_kind,
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id)                AS checks_total,
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id AND k.done = 1) AS checks_done
        FROM cards c
@@ -182,7 +194,7 @@ api.get('/projects/:id', (req, res) => {
   ).all(project.id).map((l) => ({ ...l, href: safeUrl(l.value) }));
 
   const updates = db.prepare(
-    'SELECT id, text, created_at FROM project_updates WHERE project_id = ? ORDER BY id DESC LIMIT 50'
+    'SELECT id, text, actor, created_at FROM project_updates WHERE project_id = ? ORDER BY id DESC LIMIT 50'
   ).all(project.id);
 
   const open = cards.length - by_column.done;
@@ -304,10 +316,10 @@ api.post('/projects/:id/updates', (req, res) => {
   const text = clean(req.body?.text, 2000);
   if (!text) return bad(res, 'text is required');
   const { lastInsertRowid } = db
-    .prepare('INSERT INTO project_updates (project_id, text) VALUES (?, ?)')
-    .run(projectId, text);
+    .prepare('INSERT INTO project_updates (project_id, text, actor) VALUES (?, ?, ?)')
+    .run(projectId, text, actorOf(req)[0]);
   res.status(201).json(
-    db.prepare('SELECT id, text, created_at FROM project_updates WHERE id = ?').get(lastInsertRowid)
+    db.prepare('SELECT id, text, actor, created_at FROM project_updates WHERE id = ?').get(lastInsertRowid)
   );
 });
 
@@ -402,6 +414,7 @@ api.post('/cards', (req, res) => {
     req.body?.flagged ? 1 : 0,
     position, due
   );
+  stamp(req, lastInsertRowid);
   res.status(201).json(db.prepare('SELECT * FROM cards WHERE id = ?').get(lastInsertRowid));
 });
 
@@ -446,6 +459,7 @@ api.patch('/cards/:id', (req, res) => {
     b.flagged === undefined ? card.flagged : (b.flagged ? 1 : 0),
     position, due, card.id
   );
+  stamp(req, card.id);
   res.json(db.prepare('SELECT * FROM cards WHERE id = ?').get(card.id));
 });
 
@@ -482,6 +496,7 @@ api.post('/cards/:id/move', (req, res) => {
   db.prepare(
     `UPDATE cards SET project_id = ?, column_key = ?, position = ?, updated_at = ${NOW} WHERE id = ?`
   ).run(projectId, column, position, card.id);
+  stamp(req, card.id);
   res.json(db.prepare('SELECT * FROM cards WHERE id = ?').get(card.id));
 });
 
@@ -495,6 +510,7 @@ api.delete('/cards/:id', (req, res) => {
                WHERE id = ? AND archived_at IS NULL`)
     .run(Number(req.params.id));
   if (!info.changes) return res.status(404).json({ error: 'no live card with that id' });
+  stamp(req, Number(req.params.id));
   res.json({ archived: true });
 });
 
@@ -504,6 +520,7 @@ api.post('/cards/:id/restore', (req, res) => {
                WHERE id = ? AND archived_at IS NOT NULL`)
     .run(Number(req.params.id));
   if (!info.changes) return res.status(404).json({ error: 'no archived card with that id' });
+  stamp(req, Number(req.params.id));
   res.json(db.prepare('SELECT * FROM cards WHERE id = ?').get(Number(req.params.id)));
 });
 

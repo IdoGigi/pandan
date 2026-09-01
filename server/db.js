@@ -105,6 +105,9 @@ addColumn('projects', 'repo_url', "TEXT NOT NULL DEFAULT ''");
 addColumn('projects', 'board_id', 'INTEGER REFERENCES boards(id) ON DELETE CASCADE');
 addColumn('cards', 'archived_at', 'TEXT');
 addColumn('cards', 'due_date', 'TEXT');
+addColumn('cards', 'last_actor', 'TEXT');
+addColumn('cards', 'last_actor_kind', 'TEXT');
+addColumn('project_updates', 'actor', 'TEXT');
 
 /**
  * There is always at least one board. An older database has projects with no

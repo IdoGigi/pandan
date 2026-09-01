@@ -47,6 +47,7 @@ export function App() {
   const [archive, setArchive] = useState(false);
   const [labels, setLabels] = useState({});
   const [search, setSearch] = useState('');
+  const [agentOnly, setAgentOnly] = useState(false);
   // First visit follows the system setting; after that your choice sticks.
   const [theme, setTheme] = useState(() => readSetting(
     'theme',
@@ -283,17 +284,18 @@ export function App() {
   if (authed === false) return <Login onSuccess={load} />;
 
   const needle = search.trim().toLowerCase();
-  const visibleCards = needle
-    ? cards.filter((c) =>
-        `${c.title} ${c.notes || ''}`.toLowerCase().includes(needle))
+  let visibleCards = needle
+    ? cards.filter((c) => `${c.title} ${c.notes || ''}`.toLowerCase().includes(needle))
     : cards;
+  if (agentOnly) visibleCards = visibleCards.filter((c) => c.last_actor_kind === 'agent');
 
-  const needleCount = needle
+  const filtering = needle || agentOnly;
+  const needleCount = filtering
     ? `${visibleCards.length} card${visibleCards.length === 1 ? '' : 's'}`
     : null;
 
   let shown = focus === 'all' ? projects : projects.filter((p) => p.id === Number(focus));
-  if (needle) {
+  if (filtering) {
     const withHits = new Set(visibleCards.map((c) => c.project_id));
     shown = shown.filter((p) => withHits.has(p.id));
   }
@@ -340,6 +342,13 @@ export function App() {
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === 'Escape' && setSearch('')}
         />
+        <button
+          className={`btn agent-filter${agentOnly ? ' on' : ''}`}
+          onClick={() => setAgentOnly((v) => !v)}
+          title="Show only cards an agent last changed"
+        >
+          ◆ agent
+        </button>
         {needleCount !== null && <span className="search-count">{needleCount}</span>}
 
         <span className={`saving${busy ? ' on' : ''}`}>Saving…</span>

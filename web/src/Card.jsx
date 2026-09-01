@@ -31,6 +31,9 @@ export function Card({ card, dragging, onOpen, onMenu, onDragStart, onDragEnd })
       title={card.notes || card.title}
     >
       {card.flagged ? <span className="card-flag" /> : null}
+      {card.last_actor_kind === 'agent' && (
+        <span className="by-agent" title={`Last changed by ${card.last_actor}`}>◆</span>
+      )}
       <div className="card-title">{card.title}</div>
       {(total > 0 || due) && (
         <div className="card-meta">

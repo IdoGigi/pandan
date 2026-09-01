@@ -199,7 +199,10 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
             <div className="log">
               {data.updates.map((u) => (
                 <div key={u.id} className="log-row">
-                  <div className="log-when">{u.created_at}</div>
+                  <div className="log-when">
+                    {u.created_at}
+                    {u.actor && u.actor !== 'you' && <><br /><b>{u.actor}</b></>}
+                  </div>
                   <div className="log-text">{u.text}</div>
                   <button
                     className="btn btn-ghost"

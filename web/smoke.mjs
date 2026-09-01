@@ -40,6 +40,9 @@ const state = {
       due_date: '2020-01-01' },
     { id: 12, project_id: 2, column_key: 'done', title: 'Sort donations', notes: '', color: 'sky',
       flagged: 0, position: 1000, checks_total: 0, checks_done: 0 },
+    { id: 13, project_id: 1, column_key: 'review', title: 'Written by an agent', notes: '',
+      color: 'plain', flagged: 0, position: 1000, checks_total: 0, checks_done: 0,
+      last_actor: 'Claude on laptop', last_actor_kind: 'agent' },
   ],
 };
 
@@ -498,7 +501,10 @@ await step('clicking a project name opens the project panel', async () => {
 await step('project panel shows the right counts', async () => {
   const panel = document.querySelector('.modal-wide');
   const stats = [...panel.querySelectorAll('.stat')].map((n) => n.textContent);
-  if (!stats.some((t) => t.startsWith('2cards'))) throw new Error(`card count wrong: ${stats.join(' | ')}`);
+  const expected = state.cards.filter((c) => c.project_id === 1).length;
+  if (!stats.some((t) => t.startsWith(`${expected}cards`))) {
+    throw new Error(`card count wrong, expected ${expected}: ${stats.join(' | ')}`);
+  }
   if (!panel.textContent.includes('% done')) throw new Error('percent missing');
 });
 
@@ -1044,6 +1050,37 @@ await step('labels can also be renamed from settings', async () => {
   g.fetch = prev; dom.window.fetch = prev;
   if (sent?.name !== 'Deep work') throw new Error(`name not saved: ${JSON.stringify(sent)}`);
   await closeSettings();
+});
+
+await step('a card an agent changed is marked', () => {
+  const marks = q('.by-agent');
+  if (marks.length !== 1) throw new Error(`expected 1 agent mark, got ${marks.length}`);
+  if (!marks[0].getAttribute('title').includes('Claude on laptop')) {
+    throw new Error('the mark should name the agent');
+  }
+});
+
+await step('the agent filter shows only what an agent touched', async () => {
+  const btn = q('.topbar .btn').find((b) => b.textContent.includes('agent'));
+  if (!btn) throw new Error('no agent filter');
+  await click(btn);
+
+  const titles = q('.card-title').map((n) => n.textContent);
+  if (!titles.includes('Written by an agent')) throw new Error('the agent card vanished');
+  if (titles.includes('Buy milk')) throw new Error('a card you changed is still showing');
+  if (!container.querySelector('.search-count')) throw new Error('no count while filtering');
+
+  await click(q('.topbar .btn').find((b) => b.textContent.includes('agent')));
+  if (q('.card-title').length < 3) throw new Error('turning the filter off did not restore the board');
+});
+
+await step('the card editor says who changed it', async () => {
+  const agentCard = q('.card').find((c) => c.textContent.includes('Written by an agent'));
+  await click(agentCard);
+  const modal = document.querySelector('.modal');
+  if (!modal.textContent.includes('Last changed by')) throw new Error('no provenance line');
+  if (!modal.textContent.includes('an agent')) throw new Error('should say it was an agent');
+  await click([...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Cancel'));
 });
 
 await step('headers and the project column stay pinned', async () => {

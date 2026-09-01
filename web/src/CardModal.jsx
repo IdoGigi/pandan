@@ -211,6 +211,13 @@ export function CardModal({ cardId, projects, labels = {}, boardId, onClose, onS
           </div>
         </div>
 
+        {card.last_actor && (
+          <p className="dialog-msg" style={{ margin: '0 0 4px' }}>
+            Last changed by <b>{card.last_actor}</b>
+            {card.last_actor_kind === 'agent' ? ' (an agent)' : ''}.
+          </p>
+        )}
+
         {error && <div className="error">{error}</div>}
 
         <div className="modal-actions">

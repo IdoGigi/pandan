@@ -933,3 +933,28 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--muted);
 }
 .settings-btn:hover { color: var(--text); }
+
+/* ---------------- who changed it ---------------- */
+
+.by-agent {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  font-size: 8px;
+  line-height: 1;
+  color: var(--sky);
+  opacity: 0.8;
+}
+.card.sky .by-agent, .card.rose .by-agent, .card.violet .by-agent { color: #fff; }
+
+.agent-filter {
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 5px 8px;
+}
+.agent-filter.on {
+  background: var(--sky);
+  border-color: var(--sky);
+  color: #fff;
+}

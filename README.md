@@ -65,7 +65,7 @@ SQLite, so there is nothing to compile and no database to install.
 ### With Docker
 
 ```bash
-docker run -d -p 127.0.0.1:3000:3000   -v pandan:/data   -e APP_PASSWORD=pick-something-long   ghcr.io/YOUR-NAME/pandan
+docker run -d -p 127.0.0.1:3000:3000   -v pandan:/data   -e APP_PASSWORD=pick-something-long   ghcr.io/IdoBGdev/pandan
 ```
 
 Or with compose, which binds to localhost for you:
@@ -80,7 +80,7 @@ For hacking on it. A checkout keeps its board inside the checkout, so your
 real one is never touched.
 
 ```bash
-git clone https://github.com/YOUR-NAME/pandan.git
+git clone https://github.com/IdoBGdev/pandan.git
 cd pandan
 npm install
 npm start
