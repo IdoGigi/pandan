@@ -45,8 +45,10 @@ a real label such as "Blocked". The search box filters the whole board as you
 type, and rows can be dragged into the order you want.
 
 **Nothing is deleted.** Archiving takes a card off the board and keeps it, and
-an agent key cannot delete anything at all — only you can, from the archive. Each project also holds notes, a repo link, links, contacts, and a dated
-update log — so the context lives next to the work.
+an agent key cannot delete anything at all — only you can, from the archive.
+
+Each project also holds notes, a repo link, links, contacts, and a dated update
+log, so the context lives next to the work.
 
 Rows fold away and every column scrolls on its own, so a project with fifty
 cards takes the same room as one with five.
@@ -76,8 +78,7 @@ docker run -d \
   ghcr.io/IdoGigi/pandan
 ```
 
-The image is published on the first tagged release. Until then, build it
-yourself with compose, which also binds to localhost for you:
+Or with compose, which binds to localhost for you and builds from source:
 
 ```bash
 npm run setup && docker compose up -d
