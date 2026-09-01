@@ -17,19 +17,21 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { envFile } from './server/paths.js';
+
 const here = dirname(fileURLToPath(import.meta.url));
 const url = process.argv[2] || process.env.PANDAN_URL || 'http://localhost:3000';
 
 /* ---- the password ---- */
 
-const envFile = join(here, '.env');
-if (!existsSync(envFile)) {
-  console.error('No .env found. Run `npm run setup` first.');
+const settings = envFile();
+if (!existsSync(settings)) {
+  console.error(`No settings found at ${settings}. Start Pandan once first.`);
   process.exit(1);
 }
-const password = (readFileSync(envFile, 'utf8').match(/^APP_PASSWORD=(.*)$/m) || [])[1]?.trim();
+const password = (readFileSync(settings, 'utf8').match(/^APP_PASSWORD=(.*)$/m) || [])[1]?.trim();
 if (!password) {
-  console.error('No APP_PASSWORD line in .env. Run `npm run setup` first.');
+  console.error(`No APP_PASSWORD line in ${settings}.`);
   process.exit(1);
 }
 

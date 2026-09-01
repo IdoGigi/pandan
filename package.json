@@ -1,7 +1,6 @@
 {
-  "name": "pandan",
+  "name": "pandan-board",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
   "engines": {
     "node": "24.x"
@@ -10,12 +9,13 @@
     "build": "npm --prefix web ci --no-audit --no-fund && npm --prefix web run build",
     "start": "node start.js",
     "dev": "node --watch server/index.js",
-    "check": "node --check server/index.js && node --check server/db.js && node --check server/auth.js && node --check server/routes.js && node --check server/mcp.js && node --check server/events.js && node --check start.js && node --check connect.js",
+    "check": "node --check setup.js && node --check start.js && node --check connect.js && node --check server/index.js && node --check server/paths.js && node --check server/db.js && node --check server/auth.js && node --check server/routes.js && node --check server/mcp.js && node --check server/events.js",
     "smoke": "npm --prefix web run smoke",
     "setup": "node setup.js",
     "serve": "node start.js",
     "connect": "node connect.js",
-    "postinstall": "node setup.js --quiet"
+    "postinstall": "node setup.js --quiet",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -39,5 +39,19 @@
     "claude",
     "self-hosted",
     "sqlite"
+  ],
+  "bin": {
+    "pandan": "start.js"
+  },
+  "files": [
+    "server/",
+    "web/dist/",
+    "examples/",
+    "start.js",
+    "setup.js",
+    "connect.js",
+    "README.md",
+    "API.md",
+    "LICENSE"
   ]
 }

@@ -40,8 +40,35 @@ cards takes the same room as one with five.
 
 ## Run it
 
-You need [Node 22.13 or newer](https://nodejs.org) — it uses Node's built-in
-SQLite, so there is nothing to compile.
+```bash
+npx pandan-board
+```
+
+That is the whole install. It makes you a password on first run and opens on
+<http://localhost:3000>.
+
+Your board lives in `~/.pandan` — the database and an `.env` holding the
+password. The password is never printed, so open that file to read it.
+
+You need [Node 22.13 or newer](https://nodejs.org). Pandan uses Node's built-in
+SQLite, so there is nothing to compile and no database to install.
+
+### With Docker
+
+```bash
+docker run -d -p 127.0.0.1:3000:3000   -v pandan:/data   -e APP_PASSWORD=pick-something-long   ghcr.io/YOUR-NAME/pandan
+```
+
+Or with compose, which binds to localhost for you:
+
+```bash
+npm run setup && docker compose up -d
+```
+
+### From the source
+
+For hacking on it. A checkout keeps its board inside the checkout, so your
+real one is never touched.
 
 ```bash
 git clone https://github.com/YOUR-NAME/pandan.git
@@ -49,21 +76,6 @@ cd pandan
 npm install
 npm start
 ```
-
-That is it. `npm install` writes a `.env` with a random password, and
-`npm start` builds the board the first time and serves it.
-
-Open <http://localhost:3000>. Your password is on the `APP_PASSWORD` line of
-`.env` — it is never printed, so open the file to read it.
-
-### With Docker
-
-```bash
-npm run setup           # or write your own .env
-docker compose up -d
-```
-
-Same address. The database sits on a named volume, so it survives a rebuild.
 
 ## Connect an agent
 
@@ -145,7 +157,8 @@ of that makes it a multi-user app.
 | Name | Needed | What it does |
 | --- | --- | --- |
 | `APP_PASSWORD` | yes | The only password. The app refuses to start without it |
-| `DB_PATH` | no | Where the SQLite file lives. Defaults to `./data/pandan.db` |
+| `DB_PATH` | no | The database file. Defaults to `~/.pandan/pandan.db` |
+| `PANDAN_HOME` | no | Where settings and the board live. Defaults to `~/.pandan` |
 | `PORT` | no | Port to listen on. Defaults to 3000 |
 | `NODE_ENV` | no | Set to `production` so the cookie gets the `Secure` flag |
 

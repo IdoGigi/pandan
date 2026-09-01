@@ -1,8 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { dbFile } from './paths.js';
 
-const file = process.env.DB_PATH || './data/kanban.db';
+const file = dbFile();
 mkdirSync(dirname(file), { recursive: true });
 
 export const db = new DatabaseSync(file);
