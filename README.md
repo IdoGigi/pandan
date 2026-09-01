@@ -15,7 +15,7 @@ down, and gives you a board that updates while they work.
 
 - **Runs on localhost.** One Node process, one SQLite file. No database to set
   up, no account, nothing leaves your machine.
-- **Agents can read and write it.** A built-in MCP server with 16 tools. An
+- **Agents can read and write it.** A built-in MCP server with 19 tools, none of them destructive. An
   agent finds them itself — you do not have to explain your API to it.
 - **The board updates live.** A card an agent adds appears in about a second.
   No refresh.
@@ -35,8 +35,13 @@ with `Next` and `Doing` grouped under **In progress**.
 not a gate — an agent can still move a card straight to `Done` when the work
 plainly needs no checking. The point is that it can tell you which is which.
 
-Cards carry a colour, a flag, notes and a checklist. Right-click one to recolour
-it. Each project also holds notes, a repo link, links, contacts, and a dated
+Cards carry a label colour, a due date, a flag, notes and a checklist. Late
+cards go red. Right-click one to recolour it, and name a colour to turn it into
+a real label such as "Blocked". The search box filters the whole board as you
+type, and rows can be dragged into the order you want.
+
+**Nothing is deleted.** Archiving takes a card off the board and keeps it, and
+an agent key cannot delete anything at all — only you can, from the archive. Each project also holds notes, a repo link, links, contacts, and a dated
 update log — so the context lives next to the work.
 
 Rows fold away and every column scrolls on its own, so a project with fifty

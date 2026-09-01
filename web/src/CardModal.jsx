@@ -9,11 +9,11 @@ const SWATCH = {
   amber: '#f0b429', rose: '#e2725b', violet: '#9b8ec4',
 };
 
-export function CardModal({ cardId, projects, onClose, onSaved, onDeleted }) {
+export function CardModal({ cardId, projects, labels = {}, onClose, onSaved, onDeleted }) {
   const [card, setCard] = useState(null);
   const [checks, setChecks] = useState([]);
   const [newCheck, setNewCheck] = useState('');
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -31,12 +31,12 @@ export function CardModal({ cardId, projects, onClose, onSaved, onDeleted }) {
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
-      if (confirmDelete) setConfirmDelete(false);
+      if (confirmArchive) setConfirmArchive(false);
       else onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, confirmDelete]);
+  }, [onClose, confirmArchive]);
 
   if (!card) {
     return (
@@ -57,6 +57,7 @@ export function CardModal({ cardId, projects, onClose, onSaved, onDeleted }) {
         notes: card.notes,
         color: card.color,
         flagged: !!card.flagged,
+        due_date: card.due_date || '',
         project_id: card.project_id,
         column_key: card.column_key,
       });
@@ -136,17 +137,35 @@ export function CardModal({ cardId, projects, onClose, onSaved, onDeleted }) {
         </div>
 
         <div className="field">
-          <label>Colour</label>
+          <label>Label</label>
           <div className="swatches">
             {CARD_COLORS.map((c) => (
               <button
                 key={c}
                 className={`swatch${card.color === c ? ' on' : ''}`}
                 style={{ background: SWATCH[c] }}
-                title={c}
+                title={labels[c] || c}
                 onClick={() => set({ color: c })}
               />
             ))}
+            {labels[card.color] && <span className="label-name">{labels[card.color]}</span>}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+          <div className="field" style={{ flex: 1 }}>
+            <label>Due date</label>
+            <div className="repo-row">
+              <input
+                className="input"
+                type="date"
+                value={card.due_date || ''}
+                onChange={(e) => set({ due_date: e.target.value })}
+              />
+              {card.due_date && (
+                <button className="btn" onClick={() => set({ due_date: '' })}>Clear</button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -185,8 +204,8 @@ export function CardModal({ cardId, projects, onClose, onSaved, onDeleted }) {
         {error && <div className="error">{error}</div>}
 
         <div className="modal-actions">
-          <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
-            Delete
+          <button className="btn btn-danger" onClick={() => setConfirmArchive(true)}>
+            Archive
           </button>
           <span className="spacer" />
           <button className="btn" onClick={onClose}>Cancel</button>
@@ -194,18 +213,18 @@ export function CardModal({ cardId, projects, onClose, onSaved, onDeleted }) {
         </div>
       </div>
 
-      {confirmDelete && (
+      {confirmArchive && (
         <Dialog
           kind="confirm"
-          title="Delete this card?"
-          message={card.title}
-          confirmLabel="Delete"
+          title="Archive this card?"
+          message={`"${card.title}" leaves the board. You can bring it back from the archive.`}
+          confirmLabel="Archive"
           danger
-          onCancel={() => setConfirmDelete(false)}
+          onCancel={() => setConfirmArchive(false)}
           onConfirm={async () => {
-            setConfirmDelete(false);
+            setConfirmArchive(false);
             try {
-              await api.deleteCard(card.id);
+              await api.archiveCard(card.id);
               onDeleted();
               onClose();
             } catch (e) {

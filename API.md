@@ -89,13 +89,24 @@ curl -s -H "$KEY" -H 'Content-Type: application/json' \
 | --- | --- | --- |
 | GET | `/cards` | Filter with `?project_id=1&column=todo` |
 | GET | `/cards/:id` | Includes the `checklist` array |
-| POST | `/cards` | `{ "project_id", "title", "column_key?", "notes?", "color?", "flagged?" }` |
+| POST | `/cards` | `{ "project_id", "title", "column_key?", "notes?", "color?", "flagged?", "due_date?" }` |
 | PATCH | `/cards/:id` | Any field. Changing project/column without a `position` sends it to the end |
 | POST | `/cards/:id/move` | `{ "column_key?", "project_id?", "index?" }` |
-| DELETE | `/cards/:id` | |
+| DELETE | `/cards/:id` | **Archives** it. Not destroyed, and restorable |
+| POST | `/cards/:id/restore` | Put an archived card back |
+| DELETE | `/cards/:id/permanent` | Really delete. Needs the password — an agent key gets `403` |
+| GET | `/cards?archived=true` | What is in the archive |
 
 `color` is one of: `plain`, `lime`, `sky`, `amber`, `rose`, `violet`.
 `flagged` shows a small red dot on the card.
+`due_date` is `YYYY-MM-DD`, or `""` to clear it. Late cards go red on the board.
+
+Name a colour to turn it into a label:
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/boards/:id/labels` | Names for this board's colours |
+| PUT | `/boards/:id/labels/:color` | `{ "name" }`. An empty name removes it |
 
 Add a card:
 
@@ -247,7 +258,10 @@ Keep the password in an environment variable, never in the file:
 | `create_card` | Add a card to a project |
 | `update_card` | Change a card's text, notes, colour, flag, project or column |
 | `move_card` | Move a card between columns or projects, and pick its place in the list |
-| `delete_card` | Delete a card for good |
+| `archive_card` | Put a card away. It can be restored |
+| `restore_card` | Bring an archived card back |
+| `list_archived_cards` | See what is in the archive |
+| `set_label` | Give a colour a meaning, e.g. rose = "Blocked" |
 | `add_check` | Add a checklist item to a card |
 | `update_check` | Tick, untick, or reword a checklist item |
 

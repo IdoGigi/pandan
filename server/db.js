@@ -49,6 +49,13 @@ db.exec(`
     position REAL    NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS labels (
+    board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    color    TEXT    NOT NULL,
+    name     TEXT    NOT NULL,
+    PRIMARY KEY (board_id, color)
+  );
+
   CREATE TABLE IF NOT EXISTS project_links (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -96,6 +103,8 @@ function addColumn(table, name, definition) {
 addColumn('projects', 'description', "TEXT NOT NULL DEFAULT ''");
 addColumn('projects', 'repo_url', "TEXT NOT NULL DEFAULT ''");
 addColumn('projects', 'board_id', 'INTEGER REFERENCES boards(id) ON DELETE CASCADE');
+addColumn('cards', 'archived_at', 'TEXT');
+addColumn('cards', 'due_date', 'TEXT');
 
 /**
  * There is always at least one board. An older database has projects with no
@@ -119,6 +128,15 @@ if (db.prepare('SELECT COUNT(*) AS n FROM boards').get().n === 1) {
 }
 
 export const COLUMNS = ['todo', 'next', 'doing', 'review', 'done'];
+export const CARD_COLORS = ['plain', 'lime', 'sky', 'amber', 'rose', 'violet'];
+
+/** A date the UI and an agent can both agree on: YYYY-MM-DD, or nothing. */
+export function cleanDate(value) {
+  if (value === null || value === '') return null;
+  const text = String(value).trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return undefined;   // undefined = reject
+  return Number.isNaN(Date.parse(text)) ? undefined : text;
+}
 export const LINK_KINDS = ['link', 'contact'];
 
 /**

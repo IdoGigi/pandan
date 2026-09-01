@@ -24,6 +24,10 @@ const state = {
     { id: 2, name: 'Volunteering', color: '#4bb3d4', position: 2000, archived: 0 },
     { id: 3, name: 'smart-city-dashboard', color: '#e2725b', position: 3000, archived: 0 },
   ],
+  archived: [
+    { id: 77, title: 'an archived card', color: 'rose', project_name: 'House chores',
+      archived_at: '2026-09-01 10:00' },
+  ],
   tokens: [
     { id: 1, name: 'laptop agent', prefix: 'pnd_aaa111',
       created_at: '2026-08-01 09:00', last_used_at: '2026-09-01 09:30', revoked_at: null },
@@ -32,7 +36,8 @@ const state = {
     { id: 10, project_id: 1, column_key: 'todo', title: 'Buy milk', notes: '', color: 'lime',
       flagged: 0, position: 1000, checks_total: 2, checks_done: 1 },
     { id: 11, project_id: 1, column_key: 'doing', title: 'Fix the sink', notes: 'call plumber',
-      color: 'plain', flagged: 1, position: 1000, checks_total: 0, checks_done: 0 },
+      color: 'plain', flagged: 1, position: 1000, checks_total: 0, checks_done: 0,
+      due_date: '2020-01-01' },
     { id: 12, project_id: 2, column_key: 'done', title: 'Sort donations', notes: '', color: 'sky',
       flagged: 0, position: 1000, checks_total: 0, checks_done: 0 },
   ],
@@ -51,6 +56,18 @@ function fakeFetch(url, opts = {}) {
     columns: ['todo', 'next', 'doing', 'review', 'done'],
     counts: { projects: 3, cards: 3 },
   });
+  if (path === '/cards?archived=true') return json(state.archived);
+  if (/\/cards\/\d+\/restore$/.test(path)) {
+    const id = Number(path.split('/')[2]);
+    state.archived = state.archived.filter((c) => c.id !== id);
+    return json({ id });
+  }
+  if (/\/cards\/\d+\/permanent$/.test(path)) {
+    const id = Number(path.split('/')[2]);
+    state.archived = state.archived.filter((c) => c.id !== id);
+    return json({ deleted: true });
+  }
+  if (/\/boards\/\d+\/labels\//.test(path)) return json({ color: 'rose', name: body.name });
   if (path === '/tokens' && method === 'GET') return json(state.tokens);
   if (path === '/tokens' && method === 'POST') {
     const row = { id: 9, name: body.name, prefix: 'pnd_abc123',
@@ -88,6 +105,7 @@ function fakeFetch(url, opts = {}) {
       board: { id: board.id, name: board.name },
       projects: empty ? [] : state.projects,
       cards: empty ? [] : state.cards,
+      labels: { rose: 'Blocked' },
     });
   }
   if (path.startsWith('/cards/') && path.endsWith('/move')) return json({ id: 10 });
@@ -364,13 +382,13 @@ await step('escape closes the dialog', async () => {
   if (document.querySelector('.modal-sm')) throw new Error('escape did not close the dialog');
 });
 
-await step('deleting a card asks first, and keeps the card modal open on cancel', async () => {
+await step('archiving a card asks first, and keeps the card modal open on cancel', async () => {
   await click(q('.card')[0]);
   if (!document.querySelector('.modal')) throw new Error('card modal did not open');
-  const del = [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Delete');
-  if (!del) throw new Error('card delete button missing');
-  await click(del);
-  if (!document.querySelector('.modal-sm')) throw new Error('card delete confirm did not open');
+  const archive = [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Archive');
+  if (!archive) throw new Error('card archive button missing');
+  await click(archive);
+  if (!document.querySelector('.modal-sm')) throw new Error('archive confirm did not open');
   const cancel = [...document.querySelectorAll('.modal-sm .btn')].find((b) => b.textContent === 'Cancel');
   await click(cancel);
   if (document.querySelector('.modal-sm')) throw new Error('confirm did not close');
@@ -932,6 +950,79 @@ await step('deleting a board warns what goes with it', async () => {
   if (!dlg) throw new Error('no confirm');
   if (!dlg.textContent.includes('project')) throw new Error('should say how many projects go too');
   await click([...dlg.querySelectorAll('.btn')].find((b) => b.textContent === 'Cancel'));
+});
+
+await step('an overdue card shows a late badge', () => {
+  const late = container.querySelector('.due-late');
+  if (!late) throw new Error('no overdue badge');
+  if (!late.textContent.includes('⚠')) throw new Error('overdue should be marked');
+});
+
+await step('search filters cards and hides empty rows', async () => {
+  const box = container.querySelector('.search');
+  if (!box) throw new Error('no search box');
+  await act(async () => { setNativeValue(box, 'milk'); });
+  await settle();
+
+  const titles = q('.card-title').map((n) => n.textContent);
+  if (!titles.includes('Buy milk')) throw new Error('the match disappeared');
+  if (titles.includes('Fix the sink')) throw new Error('a non-match is still showing');
+  if (!container.querySelector('.search-count')) throw new Error('no result count');
+
+  // Searching notes too.
+  await act(async () => { setNativeValue(box, 'plumber'); });
+  await settle();
+  if (!q('.card-title').map((n) => n.textContent).includes('Fix the sink')) {
+    throw new Error('search should look at notes as well');
+  }
+
+  await act(async () => { setNativeValue(box, ''); });
+  await settle();
+  if (q('.card-title').length < 2) throw new Error('clearing search did not bring cards back');
+});
+
+await step('the card editor archives instead of deleting', async () => {
+  await click(q('.card')[0]);
+  const actions = [...document.querySelectorAll('.modal-actions .btn')].map((b) => b.textContent);
+  if (actions.includes('Delete')) throw new Error('the card editor should not offer Delete');
+  if (!actions.includes('Archive')) throw new Error('no Archive button');
+
+  await click([...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Archive'));
+  const dlg = document.querySelector('.modal-sm');
+  if (!dlg.textContent.includes('bring it back')) throw new Error('should say it can be restored');
+  await click([...dlg.querySelectorAll('.btn')].find((b) => b.textContent === 'Cancel'));
+  await click([...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Cancel'));
+});
+
+await step('the card editor shows a due date and the label name', async () => {
+  await click(q('.card')[0]);
+  const modal = document.querySelector('.modal');
+  if (!modal.querySelector('input[type="date"]')) throw new Error('no due date field');
+  const labels = [...modal.querySelectorAll('.field label')].map((n) => n.textContent);
+  if (!labels.includes('Label')) throw new Error('colour section should be called Label');
+  await click([...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Cancel'));
+});
+
+await step('the archive lists cards and can restore them', async () => {
+  const open = q('.topbar .btn').find((b) => b.textContent === 'Archive');
+  if (!open) throw new Error('no Archive button in the header');
+  await click(open);
+  const panel = document.querySelector('.modal-wide');
+  if (!panel.textContent.includes('an archived card')) throw new Error('archived card not listed');
+  if (!panel.textContent.includes('House chores')) throw new Error('should say which project');
+
+  await click([...panel.querySelectorAll('.btn')].find((b) => b.textContent === 'Restore'));
+  await settle();
+  if (document.querySelector('.modal-wide').textContent.includes('an archived card')) {
+    throw new Error('restored card should leave the archive');
+  }
+  await click([...document.querySelectorAll('.modal-wide .modal-actions .btn')].find((b) => b.textContent === 'Close'));
+});
+
+await step('project rows have a drag handle', () => {
+  const grips = q('.row-grip');
+  if (grips.length !== q('.row-label').length) throw new Error('not every row has a handle');
+  if (grips[0].getAttribute('draggable') !== 'true') throw new Error('the handle is not draggable');
 });
 
 await step('headers and the project column stay pinned', async () => {

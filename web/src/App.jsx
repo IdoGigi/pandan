@@ -9,6 +9,7 @@ import { CardMenu } from './ContextMenu.jsx';
 import { Logo } from './Logo.jsx';
 import { AboutModal } from './AboutModal.jsx';
 import { TokensModal } from './TokensModal.jsx';
+import { ArchiveModal } from './ArchiveModal.jsx';
 
 const PROJECT_COLORS = ['#c3d117', '#4bb3d4', '#f0b429', '#e2725b', '#9b8ec4', '#57a773'];
 
@@ -42,6 +43,9 @@ export function App() {
   const [menu, setMenu] = useState(null);
   const [about, setAbout] = useState(false);
   const [tokens, setTokens] = useState(false);
+  const [archive, setArchive] = useState(false);
+  const [labels, setLabels] = useState({});
+  const [search, setSearch] = useState('');
   // First visit follows the system setting; after that your choice sticks.
   const [theme, setTheme] = useState(() => readSetting(
     'theme',
@@ -64,6 +68,7 @@ export function App() {
       setBoardId(data.board.id);
       setProjects(data.projects);
       setCards(data.cards);
+      setLabels(data.labels || {});
       setAuthed(true);
     } catch (err) {
       if (err.unauthorized) setAuthed(false);
@@ -241,6 +246,24 @@ export function App() {
     });
   }
 
+  /** Drop a project row above or below another, and save the new order. */
+  function reorderProjects(dragId, overId) {
+    if (dragId === overId) return;
+    const ordered = [...projects].sort((a, b) => a.position - b.position);
+    const from = ordered.findIndex((p) => p.id === dragId);
+    const to = ordered.findIndex((p) => p.id === overId);
+    if (from < 0 || to < 0) return;
+
+    const [moved] = ordered.splice(from, 1);
+    ordered.splice(to, 0, moved);
+
+    const before = projects;
+    const spaced = ordered.map((p, i) => ({ ...p, position: (i + 1) * 1000 }));
+    setProjects(spaced);
+    const target = spaced.find((p) => p.id === dragId);
+    commit(() => api.updateProject(dragId, { position: target.position }), () => setProjects(before));
+  }
+
   function addProject() {
     setDialog({
       kind: 'prompt',
@@ -258,7 +281,21 @@ export function App() {
   if (authed === null) return <div className="center-note">Loading…</div>;
   if (authed === false) return <Login onSuccess={load} />;
 
-  const shown = focus === 'all' ? projects : projects.filter((p) => p.id === Number(focus));
+  const needle = search.trim().toLowerCase();
+  const visibleCards = needle
+    ? cards.filter((c) =>
+        `${c.title} ${c.notes || ''}`.toLowerCase().includes(needle))
+    : cards;
+
+  const needleCount = needle
+    ? `${visibleCards.length} card${visibleCards.length === 1 ? '' : 's'}`
+    : null;
+
+  let shown = focus === 'all' ? projects : projects.filter((p) => p.id === Number(focus));
+  if (needle) {
+    const withHits = new Set(visibleCards.map((c) => c.project_id));
+    shown = shown.filter((p) => withHits.has(p.id));
+  }
 
   return (
     <div className="app">
@@ -294,6 +331,14 @@ export function App() {
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <button className="btn" onClick={addProject}>+ Project</button>
+        <input
+          className="search"
+          value={search}
+          placeholder="Search cards…"
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => e.key === 'Escape' && setSearch('')}
+        />
+        {needleCount !== null && <span className="search-count">{needleCount}</span>}
         <button
           className="btn"
           onClick={() => setCompact((c) => !c)}
@@ -332,6 +377,7 @@ export function App() {
         >
           {theme === 'dark' ? '☀' : '☾'}
         </button>
+        <button className="btn btn-ghost" onClick={() => setArchive(true)}>Archive</button>
         <button className="btn btn-ghost" onClick={() => setTokens(true)}>Agent keys</button>
         <button className="btn btn-ghost" onClick={() => setAbout(true)}>About</button>
         <button
@@ -348,11 +394,12 @@ export function App() {
         ) : (
           <Board
             projects={shown}
-            cards={cards}
+            cards={visibleCards}
             compact={compact}
             rowCap={rowCap}
             collapsed={collapsed}
             onToggleRow={toggleRow}
+            onReorderProjects={reorderProjects}
             onOpenCard={(card) => typeof card.id === 'number' && setOpenCardId(card.id)}
             onCardMenu={(card, x, y) => {
               if (typeof card.id === 'number') setMenu({ card, x, y });
@@ -382,6 +429,8 @@ export function App() {
 
       {tokens && <TokensModal onClose={() => setTokens(false)} />}
 
+      {archive && <ArchiveModal onClose={() => setArchive(false)} onChanged={load} />}
+
       {dialog && <Dialog {...dialog} onCancel={() => setDialog(null)} />}
 
       {openProjectId && (
@@ -398,6 +447,7 @@ export function App() {
         <CardModal
           cardId={openCardId}
           projects={projects}
+          labels={labels}
           onClose={() => setOpenCardId(null)}
           onSaved={load}
           onDeleted={load}

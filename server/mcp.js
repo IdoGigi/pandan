@@ -161,6 +161,7 @@ export function buildMcpServer() {
       notes: z.string().optional().describe('Longer notes, only visible when the card is opened.'),
       color: colorField.optional(),
       flagged: z.boolean().optional().describe('True puts a small red dot on the card.'),
+      due_date: z.string().optional().describe('When it is due, as 2026-09-15. Empty clears it.'),
     },
   }, tool((args) => callApi('POST', '/cards', args)));
 
@@ -184,6 +185,7 @@ export function buildMcpServer() {
       project_id: z.number().int().optional().describe('Move the card to a different project.'),
       color: colorField.optional(),
       flagged: z.boolean().optional().describe('True puts a small red dot on the card.'),
+      due_date: z.string().optional().describe('When it is due, as 2026-09-15. Empty clears it.'),
     },
   }, tool(({ card_id, ...rest }) => callApi('PATCH', `/cards/${card_id}`, rest)));
 
@@ -202,12 +204,38 @@ export function buildMcpServer() {
     },
   }, tool(({ card_id, ...rest }) => callApi('POST', `/cards/${card_id}/move`, rest)));
 
-  server.registerTool('delete_card', {
-    title: 'Delete a card',
-    description: 'Delete a card for good. This cannot be undone, so check the title first.',
-    inputSchema: { card_id: z.number().int().describe('Which card to delete.') },
-    annotations: { destructiveHint: true },
+  server.registerTool('archive_card', {
+    title: 'Archive a card',
+    description:
+      'Put a card away. It leaves the board but is not destroyed, and it can be restored. ' +
+      'Use this instead of deleting — you cannot delete a card for good, only a person can.',
+    inputSchema: { card_id: z.number().int().describe('Which card to archive.') },
   }, tool(({ card_id }) => callApi('DELETE', `/cards/${card_id}`)));
+
+  server.registerTool('restore_card', {
+    title: 'Bring an archived card back',
+    description: 'Put an archived card back on the board, in the column it came from.',
+    inputSchema: { card_id: z.number().int().describe('Which card to restore.') },
+  }, tool(({ card_id }) => callApi('POST', `/cards/${card_id}/restore`)));
+
+  server.registerTool('list_archived_cards', {
+    title: 'List archived cards',
+    description: 'Cards that were put away, newest first, with the project each came from.',
+    inputSchema: {},
+    annotations: { readOnlyHint: true },
+  }, tool(() => callApi('GET', '/cards?archived=true')));
+
+  server.registerTool('set_label', {
+    title: 'Name a card colour',
+    description:
+      'Give a colour a meaning on this board, for example rose = "Blocked". Naming a colour is ' +
+      'what turns it into a label. Send an empty name to remove one.',
+    inputSchema: {
+      board_id: z.number().int().describe('Which board the label belongs to.'),
+      color: z.enum(COLORS).describe('The colour to name.'),
+      name: z.string().describe('What it means, e.g. "Blocked". Empty removes the name.'),
+    },
+  }, tool(({ board_id, color, name }) => callApi('PUT', `/boards/${board_id}/labels/${color}`, { name })));
 
   server.registerTool('add_check', {
     title: 'Add a checklist item',

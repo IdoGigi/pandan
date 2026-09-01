@@ -53,7 +53,11 @@ export const api = {
   createCard: (data) => request('POST', '/cards', data),
   updateCard: (id, data) => request('PATCH', `/cards/${id}`, data),
   moveCard: (id, data) => request('POST', `/cards/${id}/move`, data),
-  deleteCard: (id) => request('DELETE', `/cards/${id}`),
+  archiveCard: (id) => request('DELETE', `/cards/${id}`),
+  restoreCard: (id) => request('POST', `/cards/${id}/restore`),
+  deleteCardForGood: (id) => request('DELETE', `/cards/${id}/permanent`),
+  archivedCards: () => request('GET', '/cards?archived=true'),
+  setLabel: (boardId, color, name) => request('PUT', `/boards/${boardId}/labels/${color}`, { name }),
 
   addCheck: (cardId, text) => request('POST', `/cards/${cardId}/checks`, { text }),
   updateCheck: (id, data) => request('PATCH', `/checks/${id}`, data),

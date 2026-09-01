@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { List } from './List.jsx';
 
 export const COLUMN_LABELS = {
@@ -23,9 +23,11 @@ function Header() {
 
 export function Board({
   projects, cards, compact, rowCap, collapsed,
-  onToggleRow, onOpenCard, onCardMenu, onOpenProject, onAddCard, onDropCard,
+  onToggleRow, onReorderProjects, onOpenCard, onCardMenu, onOpenProject, onAddCard, onDropCard,
 }) {
   const drag = useRef(null);
+  const rowDrag = useRef(null);
+  const [overRow, setOverRow] = useState(null);
 
   const byCell = new Map();
   const counts = new Map();
@@ -47,8 +49,38 @@ export function Board({
 
         return (
           <div key={project.id} style={{ display: 'contents' }}>
-            <div className="cell row-label" style={{ gridColumn: 1, gridRow: row }}>
+            <div
+              className={`cell row-label${overRow === project.id ? ' row-over' : ''}`}
+              style={{ gridColumn: 1, gridRow: row }}
+              onDragOver={(e) => {
+                // Only react to a row being dragged, never a card.
+                if (rowDrag.current === null) return;
+                e.preventDefault();
+                setOverRow(project.id);
+              }}
+              onDragLeave={() => setOverRow((id) => (id === project.id ? null : id))}
+              onDrop={(e) => {
+                if (rowDrag.current === null) return;
+                e.preventDefault();
+                onReorderProjects(rowDrag.current, project.id);
+                rowDrag.current = null;
+                setOverRow(null);
+              }}
+            >
               <div className="row-top">
+                <span
+                  className="row-grip"
+                  title="Drag to reorder"
+                  draggable
+                  onDragStart={(e) => {
+                    rowDrag.current = project.id;
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', `row:${project.id}`);
+                  }}
+                  onDragEnd={() => { rowDrag.current = null; setOverRow(null); }}
+                >
+                  ⠿
+                </span>
                 <button
                   className="row-fold"
                   onClick={() => onToggleRow(project.id)}

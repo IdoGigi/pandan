@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { db, COLUMNS, LINK_KINDS, nextPosition, safeUrl, defaultBoardId } from './db.js';
+import { db, COLUMNS, CARD_COLORS, LINK_KINDS, nextPosition, safeUrl, defaultBoardId, cleanDate } from './db.js';
 import { createToken, requireOwner } from './auth.js';
 
 export const api = Router();
@@ -125,15 +125,21 @@ api.get('/board', (req, res) => {
   ).all(board.id);
   const cards = db.prepare(
     `SELECT c.id, c.project_id, c.column_key, c.title, c.notes, c.color, c.flagged, c.position,
+            c.due_date,
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id)                AS checks_total,
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id AND k.done = 1) AS checks_done
        FROM cards c
        JOIN projects p ON p.id = c.project_id
-      WHERE p.archived = 0 AND p.board_id = ?
+      WHERE p.archived = 0 AND p.board_id = ? AND c.archived_at IS NULL
       ORDER BY c.position`
   ).all(board.id);
 
-  res.json({ columns: COLUMNS, board, projects, cards });
+  const labels = Object.fromEntries(
+    db.prepare('SELECT color, name FROM labels WHERE board_id = ?').all(board.id)
+      .map((l) => [l.color, l.name])
+  );
+
+  res.json({ columns: COLUMNS, board, projects, cards, labels });
 });
 
 /* ---------------- projects ---------------- */
@@ -156,7 +162,7 @@ api.get('/projects/:id', (req, res) => {
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id)                AS checks_total,
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id AND k.done = 1) AS checks_done
        FROM cards c
-      WHERE c.project_id = ?
+      WHERE c.project_id = ? AND c.archived_at IS NULL
       ORDER BY c.position`
   ).all(project.id);
 
@@ -313,6 +319,33 @@ api.delete('/updates/:id', (req, res) => {
 
 /* ---------------- cards ---------------- */
 
+/* ---------------- labels ---------------- */
+
+api.get('/boards/:id/labels', (req, res) => {
+  res.json(db.prepare('SELECT color, name FROM labels WHERE board_id = ?').all(Number(req.params.id)));
+});
+
+/** Naming a colour is what turns it from decoration into a label. */
+api.put('/boards/:id/labels/:color', (req, res) => {
+  const boardId = Number(req.params.id);
+  const color = clean(req.params.color, 20);
+  if (!db.prepare('SELECT id FROM boards WHERE id = ?').get(boardId)) {
+    return res.status(404).json({ error: 'board not found' });
+  }
+  if (!CARD_COLORS.includes(color)) return bad(res, `color must be one of: ${CARD_COLORS.join(', ')}`);
+
+  const name = clean(req.body?.name, 40);
+  if (!name) {
+    db.prepare('DELETE FROM labels WHERE board_id = ? AND color = ?').run(boardId, color);
+    return res.json({ color, name: null });
+  }
+  db.prepare(
+    `INSERT INTO labels (board_id, color, name) VALUES (?, ?, ?)
+     ON CONFLICT(board_id, color) DO UPDATE SET name = excluded.name`
+  ).run(boardId, color, name);
+  res.json({ color, name });
+});
+
 api.get('/cards', (req, res) => {
   const where = [];
   const params = [];
@@ -324,12 +357,14 @@ api.get('/cards', (req, res) => {
     where.push('c.column_key = ?');
     params.push(clean(req.query.column, 20));
   }
+  const archived = req.query.archived === 'true';
+  where.push(archived ? 'c.archived_at IS NOT NULL' : 'c.archived_at IS NULL');
   const filter = where.length ? `AND ${where.join(' AND ')}` : '';
   res.json(db.prepare(
-    `SELECT c.* FROM cards c
+    `SELECT c.*, p.name AS project_name FROM cards c
        JOIN projects p ON p.id = c.project_id
       WHERE p.archived = 0 ${filter}
-      ORDER BY c.position`
+      ORDER BY ${archived ? 'c.archived_at DESC' : 'c.position'}`
   ).all(...params));
 });
 
@@ -353,16 +388,19 @@ api.post('/cards', (req, res) => {
   const column = clean(req.body?.column_key, 20) || 'todo';
   if (!COLUMNS.includes(column)) return bad(res, `column_key must be one of: ${COLUMNS.join(', ')}`);
 
+  const due = cleanDate(req.body?.due_date ?? null);
+  if (due === undefined) return bad(res, 'due_date must look like 2026-09-15, or be empty');
+
   const position = nextPosition('cards', 'project_id = ? AND column_key = ?', [projectId, column]);
   const { lastInsertRowid } = db.prepare(
-    `INSERT INTO cards (project_id, column_key, title, notes, color, flagged, position)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO cards (project_id, column_key, title, notes, color, flagged, position, due_date)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     projectId, column, title,
     clean(req.body?.notes, 4000),
     clean(req.body?.color, 20) || 'plain',
     req.body?.flagged ? 1 : 0,
-    position
+    position, due
   );
   res.status(201).json(db.prepare('SELECT * FROM cards WHERE id = ?').get(lastInsertRowid));
 });
@@ -383,6 +421,9 @@ api.patch('/cards/:id', (req, res) => {
   const title = b.title === undefined ? card.title : clean(b.title, 300);
   if (!title) return bad(res, 'title cannot be empty');
 
+  const due = b.due_date === undefined ? card.due_date : cleanDate(b.due_date);
+  if (due === undefined) return bad(res, 'due_date must look like 2026-09-15, or be empty');
+
   const projectId = b.project_id === undefined ? card.project_id : Number(b.project_id);
   const column = b.column_key === undefined ? card.column_key : b.column_key;
 
@@ -396,14 +437,14 @@ api.patch('/cards/:id', (req, res) => {
   db.prepare(
     `UPDATE cards
         SET project_id = ?, column_key = ?, title = ?, notes = ?, color = ?, flagged = ?,
-            position = ?, updated_at = ${NOW}
+            position = ?, due_date = ?, updated_at = ${NOW}
       WHERE id = ?`
   ).run(
     projectId, column, title,
     b.notes === undefined ? card.notes : clean(b.notes, 4000),
     b.color === undefined ? card.color : clean(b.color, 20),
     b.flagged === undefined ? card.flagged : (b.flagged ? 1 : 0),
-    position, card.id
+    position, due, card.id
   );
   res.json(db.prepare('SELECT * FROM cards WHERE id = ?').get(card.id));
 });
@@ -444,7 +485,30 @@ api.post('/cards/:id/move', (req, res) => {
   res.json(db.prepare('SELECT * FROM cards WHERE id = ?').get(card.id));
 });
 
+/**
+ * Archive rather than delete. Anything with a key can call this, and a card put
+ * away by mistake — by you or by an agent — can always be brought back.
+ */
 api.delete('/cards/:id', (req, res) => {
+  const info = db
+    .prepare(`UPDATE cards SET archived_at = ${NOW}, updated_at = ${NOW}
+               WHERE id = ? AND archived_at IS NULL`)
+    .run(Number(req.params.id));
+  if (!info.changes) return res.status(404).json({ error: 'no live card with that id' });
+  res.json({ archived: true });
+});
+
+api.post('/cards/:id/restore', (req, res) => {
+  const info = db
+    .prepare(`UPDATE cards SET archived_at = NULL, updated_at = ${NOW}
+               WHERE id = ? AND archived_at IS NOT NULL`)
+    .run(Number(req.params.id));
+  if (!info.changes) return res.status(404).json({ error: 'no archived card with that id' });
+  res.json(db.prepare('SELECT * FROM cards WHERE id = ?').get(Number(req.params.id)));
+});
+
+/** The only way to really lose a card. Owner only — an agent key cannot. */
+api.delete('/cards/:id/permanent', requireOwner, (req, res) => {
   const info = db.prepare('DELETE FROM cards WHERE id = ?').run(Number(req.params.id));
   if (!info.changes) return res.status(404).json({ error: 'card not found' });
   res.json({ deleted: true });
