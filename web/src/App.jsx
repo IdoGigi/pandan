@@ -8,6 +8,23 @@ import { Dialog } from './Dialog.jsx';
 
 const PROJECT_COLORS = ['#c3d117', '#4bb3d4', '#f0b429', '#e2725b', '#9b8ec4', '#57a773'];
 
+/** View settings live in the browser. Reading them can throw, so never trust it. */
+function readSetting(key, fallback) {
+  try {
+    const raw = localStorage.getItem(`kanban.${key}`);
+    return raw === null ? fallback : JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+function writeSetting(key, value) {
+  try {
+    localStorage.setItem(`kanban.${key}`, JSON.stringify(value));
+  } catch {
+    /* private window, or storage blocked — the board still works */
+  }
+}
+
 export function App() {
   const [authed, setAuthed] = useState(null); // null = still checking
   const [projects, setProjects] = useState([]);
@@ -16,6 +33,9 @@ export function App() {
   const [openCardId, setOpenCardId] = useState(null);
   const [openProjectId, setOpenProjectId] = useState(null);
   const [dialog, setDialog] = useState(null);
+  const [compact, setCompact] = useState(() => readSetting('compact', true));
+  const [rowCap, setRowCap] = useState(() => readSetting('rowCap', 240));
+  const [collapsed, setCollapsed] = useState(() => new Set(readSetting('collapsed', [])));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -32,6 +52,18 @@ export function App() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => { writeSetting('compact', compact); }, [compact]);
+  useEffect(() => { writeSetting('rowCap', rowCap); }, [rowCap]);
+  useEffect(() => { writeSetting('collapsed', [...collapsed]); }, [collapsed]);
+
+  function toggleRow(id) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
 
   /** Run a write, but keep the UI honest: reload from the server, and roll back if it failed. */
   const commit = useCallback(async (fn, rollback) => {
@@ -98,39 +130,6 @@ export function App() {
     });
   }
 
-  function renameProject(project) {
-    setDialog({
-      kind: 'prompt',
-      title: 'Rename project',
-      initialValue: project.name,
-      confirmLabel: 'Save',
-      onConfirm: (name) => {
-        setDialog(null);
-        if (name === project.name) return;
-        const before = projects;
-        setProjects((list) => list.map((p) => (p.id === project.id ? { ...p, name } : p)));
-        commit(() => api.updateProject(project.id, { name }), () => setProjects(before));
-      },
-    });
-  }
-
-  function deleteProject(project) {
-    const count = cards.filter((c) => c.project_id === project.id).length;
-    setDialog({
-      kind: 'confirm',
-      title: `Delete "${project.name}"?`,
-      message: count === 0
-        ? 'This project has no cards.'
-        : `This also deletes ${count} card${count === 1 ? '' : 's'}. You cannot undo this.`,
-      confirmLabel: 'Delete',
-      danger: true,
-      onConfirm: () => {
-        setDialog(null);
-        commit(() => api.deleteProject(project.id));
-      },
-    });
-  }
-
   if (authed === null) return <div className="center-note">Loading…</div>;
   if (authed === false) return <Login onSuccess={load} />;
 
@@ -145,6 +144,30 @@ export function App() {
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <button className="btn" onClick={addProject}>+ Project</button>
+        <button
+          className="btn"
+          onClick={() => setCompact((c) => !c)}
+          title="Switch between tight rows and roomy ones"
+        >
+          {compact ? 'Compact' : 'Roomy'}
+        </button>
+        <label className="cap">
+          rows
+          <input
+            type="range"
+            min="120" max="640" step="40"
+            value={rowCap}
+            onChange={(e) => setRowCap(Number(e.target.value))}
+            title="How tall a row can grow before it scrolls"
+          />
+        </label>
+        <button
+          className="btn btn-ghost"
+          onClick={() => setCollapsed((prev) =>
+            prev.size === projects.length ? new Set() : new Set(projects.map((p) => p.id)))}
+        >
+          {collapsed.size === projects.length && projects.length > 0 ? 'Open all' : 'Fold all'}
+        </button>
         <span className={`saving${busy ? ' on' : ''}`}>Saving…</span>
         {error && <span className="error" style={{ margin: 0 }}>{error}</span>}
         <span className="spacer" />
@@ -163,12 +186,14 @@ export function App() {
           <Board
             projects={shown}
             cards={cards}
+            compact={compact}
+            rowCap={rowCap}
+            collapsed={collapsed}
+            onToggleRow={toggleRow}
             onOpenCard={(card) => typeof card.id === 'number' && setOpenCardId(card.id)}
             onOpenProject={setOpenProjectId}
             onAddCard={addCard}
             onDropCard={dropCard}
-            onRenameProject={renameProject}
-            onDeleteProject={deleteProject}
           />
         )}
       </div>

@@ -90,7 +90,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 6px;
-  overflow: hidden;
   min-width: 900px;
   box-shadow: var(--shadow);
 }
@@ -114,19 +113,48 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 .head-group { grid-column: span 2; }
-.head-col { min-height: 34px; }
+.head-col { min-height: 30px; }
 .head-blank { background: #fbfcfd; }
+
+/* headers stay visible while the board scrolls */
+.head-group, .head-col, .head-blank {
+  position: sticky;
+  z-index: 3;
+  background: #fbfcfd;
+}
+.head-group { top: 0; }
+.head-col { top: 0; }
+.board > .head-col[style*="grid-row: 2"] { top: 31px; }
+.head-blank, .board > .head-col:first-of-type { left: 0; z-index: 4; }
 
 .row-label {
   justify-content: flex-start;
+  align-items: flex-start;
   text-align: left;
-  gap: 8px;
+  gap: 7px;
   font-size: 13px;
   color: var(--text);
   font-weight: 600;
-  padding: 14px 12px;
-  position: relative;
+  padding: 9px 10px;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--panel);
 }
+.row-label .row-top { display: flex; align-items: center; gap: 7px; width: 100%; }
+.row-label .row-count { font-size: 11px; color: var(--muted); font-weight: 500; margin-top: 3px; }
+
+.row-fold {
+  border: none;
+  background: none;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.row-fold:hover { color: var(--text); }
 .row-label .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .row-label .name { overflow-wrap: anywhere; }
 .row-label .row-actions { position: absolute; right: 6px; top: 6px; opacity: 0; transition: opacity 0.12s; }
@@ -135,20 +163,27 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* ---------------- card list ---------------- */
 
 .list {
-  padding: 10px 10px 6px;
-  min-height: 92px;
+  padding: 7px 7px 4px;
+  min-height: 58px;
+  max-height: var(--row-cap, 240px);
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
   transition: background 0.12s;
+  scrollbar-width: thin;
 }
+.list::-webkit-scrollbar { width: 7px; }
+.list::-webkit-scrollbar-thumb { background: #d6dade; border-radius: 4px; }
+.list::-webkit-scrollbar-track { background: transparent; }
 .list.drop-active { background: #f0f6f9; }
 
 .card {
   position: relative;
   background: var(--plain);
   border-radius: var(--radius);
-  padding: 10px 11px;
+  padding: 6px 8px;
   cursor: grab;
   user-select: none;
   transition: transform 0.08s ease, box-shadow 0.12s ease, opacity 0.12s;
@@ -188,17 +223,25 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 .card-title {
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: 12.5px;
+  line-height: 1.35;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+/* long titles stay one line in compact mode, full text is in the tooltip */
+.board.compact .card-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.board.compact .card { padding: 4px 8px; }
+.board.compact .list { gap: 3px; }
 
 .card-meta {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 6px;
+  margin-top: 3px;
   font-size: 11px;
   color: #6f767d;
   font-variant-numeric: tabular-nums;
@@ -220,6 +263,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--sky);
   margin: -4px 0;
 }
+
+.row-collapsed {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  background: #fcfcfd;
+}
+.row-collapsed b { color: var(--text); font-variant-numeric: tabular-nums; }
 
 .add-card {
   border: none;
@@ -500,3 +554,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   white-space: nowrap;
 }
 .log-text { flex: 1; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+/* ---------------- density control ---------------- */
+
+.cap { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.cap input[type='range'] { width: 84px; accent-color: var(--sky); }

@@ -8,6 +8,7 @@
 import { JSDOM } from 'jsdom';
 import esbuild from 'esbuild';
 import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 const problems = [];
@@ -99,8 +100,14 @@ const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></
   pretendToBeVisual: true,
 });
 
+dom.window.document.head.insertAdjacentHTML(
+  'beforeend',
+  `<style>${readFileSync('src/styles.css', 'utf8')}</style>`
+);
+
 const g = globalThis;
 g.window = dom.window;
+g.localStorage = dom.window.localStorage;
 g.document = dom.window.document;
 Object.defineProperty(g, 'navigator', { value: dom.window.navigator, configurable: true, writable: true });
 g.HTMLElement = dom.window.HTMLElement;
@@ -141,9 +148,15 @@ const { act } = await import('react');
 const { App } = await import(pathToFileURL(outfile).href);
 
 const container = document.getElementById('root');
-const root = createRoot(container);
+let root = createRoot(container);
 
 const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 20)); }); };
+const remount = async () => {
+  await act(async () => { root.unmount(); });
+  root = createRoot(container);
+  await act(async () => { root.render(React.createElement(App)); });
+  await settle();
+};
 const q = (sel) => [...container.querySelectorAll(sel)];
 const click = async (el) => { await act(async () => { el.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); }); await settle(); };
 
@@ -236,18 +249,6 @@ await step('escape closes the dialog', async () => {
   });
   await settle();
   if (document.querySelector('.modal-sm')) throw new Error('escape did not close the dialog');
-});
-
-await step('delete project asks first, in-app', async () => {
-  const del = q('.row-label .row-actions .btn').find((b) => b.textContent === '×');
-  if (!del) throw new Error('delete button missing');
-  await click(del);
-  const dlg = document.querySelector('.modal-sm');
-  if (!dlg) throw new Error('confirm dialog did not open');
-  if (!dlg.textContent.includes('Delete')) throw new Error('wrong confirm text');
-  const cancel = [...dlg.querySelectorAll('.btn')].find((b) => b.textContent === 'Cancel');
-  await click(cancel);
-  if (document.querySelector('.modal-sm')) throw new Error('confirm did not close');
 });
 
 await step('deleting a card asks first, and keeps the card modal open on cancel', async () => {
@@ -439,6 +440,81 @@ await step('editing the notes turns Save on', async () => {
   if (save.disabled) throw new Error('Save should enable after editing notes');
   const close = [...panel.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Close');
   await click(close);
+});
+
+await step('every column cell scrolls on its own, capped', async () => {
+  const lists = q('.list');
+  if (!lists.length) throw new Error('no lists');
+  for (const el of lists) {
+    const css = dom.window.getComputedStyle(el);
+    if (css.overflowY !== 'auto') throw new Error(`a cell does not scroll: ${css.overflowY}`);
+    if (!css.maxHeight || css.maxHeight === 'none') throw new Error('a cell has no height cap');
+  }
+});
+
+await step('40 cards in one cell do not stretch the row', async () => {
+  const many = [];
+  for (let i = 0; i < 40; i += 1) {
+    many.push({ id: 500 + i, project_id: 1, column_key: 'todo', title: `bulk card ${i}`,
+      notes: '', color: 'plain', flagged: 0, position: 1000 + i, checks_total: 0, checks_done: 0 });
+  }
+  const kept = state.cards;
+  state.cards = [...kept, ...many];
+  await remount();
+
+  const cell = q('.list')[0];
+  const cardsIn = cell.querySelectorAll('[data-card]').length;
+  if (cardsIn < 40) throw new Error(`expected 40+ cards in the cell, got ${cardsIn}`);
+  const css = dom.window.getComputedStyle(cell);
+  if (!css.maxHeight || css.maxHeight === 'none') throw new Error('the cell grew without a cap');
+  state.cards = kept;
+  await remount();
+});
+
+await step('a row folds to one line and remembers it', async () => {
+  const fold = q('.row-fold')[0];
+  if (!fold) throw new Error('fold button missing');
+  await click(fold);
+  if (!q('.row-collapsed').length) throw new Error('row did not fold');
+  if (q('.row-collapsed')[0].textContent.replace(/\s/g, '') === '') throw new Error('folded row shows no counts');
+
+  let saved = [];
+  try { saved = JSON.parse(dom.window.localStorage.getItem('kanban.collapsed')); } catch { /* ignore */ }
+  if (!Array.isArray(saved) || saved.length !== 1) throw new Error('fold was not remembered');
+
+  await click(q('.row-fold')[0]);
+  if (q('.row-collapsed').length) throw new Error('row did not open again');
+});
+
+await step('Fold all folds every project, then opens them', async () => {
+  const btn = q('.topbar .btn').find((b) => b.textContent === 'Fold all');
+  if (!btn) throw new Error('Fold all button missing');
+  await click(btn);
+  if (q('.row-collapsed').length !== q('.row-label').length) throw new Error('not every row folded');
+  const open = q('.topbar .btn').find((b) => b.textContent === 'Open all');
+  if (!open) throw new Error('button did not switch to Open all');
+  await click(open);
+  if (q('.row-collapsed').length) throw new Error('rows did not reopen');
+});
+
+await step('compact toggle switches and is remembered', async () => {
+  const btn = q('.topbar .btn').find((b) => ['Compact', 'Roomy'].includes(b.textContent));
+  if (!btn) throw new Error('density button missing');
+  const wasCompact = q('.board')[0].className.includes('compact');
+  await click(btn);
+  const nowCompact = q('.board')[0].className.includes('compact');
+  if (wasCompact === nowCompact) throw new Error('density did not change');
+  let saved = null;
+  try { saved = JSON.parse(dom.window.localStorage.getItem('kanban.compact')); } catch { /* ignore */ }
+  if (saved !== nowCompact) throw new Error('density was not remembered');
+  await click(q('.topbar .btn').find((b) => ['Compact', 'Roomy'].includes(b.textContent)));
+});
+
+await step('headers and the project column stay pinned', async () => {
+  const head = q('.head-col')[0];
+  if (dom.window.getComputedStyle(head).position !== 'sticky') throw new Error('column headers not sticky');
+  const label = q('.row-label')[0];
+  if (dom.window.getComputedStyle(label).position !== 'sticky') throw new Error('project column not sticky');
 });
 
 console.log('');
