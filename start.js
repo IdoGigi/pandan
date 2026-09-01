@@ -45,13 +45,21 @@ if (!process.env.APP_PASSWORD) {
 
 if (!existsSync(join(here, 'web', 'dist', 'index.html'))) {
   console.log('Building the board for the first time…');
-  const build = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build'], {
+  const isWindows = process.platform === 'win32';
+  const build = spawnSync(isWindows ? 'npm.cmd' : 'npm', ['run', 'build'], {
     cwd: here,
     stdio: 'inherit',
-    shell: false,
+    // Node refuses to run a .cmd without a shell, and npm on Windows is a .cmd.
+    // The arguments here are fixed strings, so there is nothing to inject.
+    shell: isWindows,
   });
+  if (build.error) {
+    console.error(`\nCould not run the build: ${build.error.message}`);
+    console.error('Try `npm install` then `npm run build`.\n');
+    process.exit(1);
+  }
   if (build.status !== 0) {
-    console.error('\nThe build failed. Try `npm install` first.\n');
+    console.error('\nThe build failed. Try `npm install` then `npm run build`.\n');
     process.exit(1);
   }
 }
