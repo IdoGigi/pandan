@@ -38,6 +38,11 @@ export function App() {
   const [dialog, setDialog] = useState(null);
   const [menu, setMenu] = useState(null);
   const [about, setAbout] = useState(false);
+  // First visit follows the system setting; after that your choice sticks.
+  const [theme, setTheme] = useState(() => readSetting(
+    'theme',
+    window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  ));
   const [compact, setCompact] = useState(() => readSetting('compact', true));
   const [rowCap, setRowCap] = useState(() => readSetting('rowCap', 240));
   const [collapsed, setCollapsed] = useState(() => new Set(readSetting('collapsed', [])));
@@ -86,6 +91,11 @@ export function App() {
       setLive(false);
     };
   }, [authed, load]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    writeSetting('theme', theme);
+  }, [theme]);
 
   useEffect(() => { writeSetting('compact', compact); }, [compact]);
   useEffect(() => { writeSetting('rowCap', rowCap); }, [rowCap]);
@@ -217,6 +227,14 @@ export function App() {
         </span>
         {error && <span className="error" style={{ margin: 0 }}>{error}</span>}
         <span className="spacer" />
+        <button
+          className="btn btn-ghost"
+          onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+          title={theme === 'dark' ? 'Switch to day mode' : 'Switch to night mode'}
+          aria-label={theme === 'dark' ? 'Switch to day mode' : 'Switch to night mode'}
+        >
+          {theme === 'dark' ? '☀' : '☾'}
+        </button>
         <button className="btn btn-ghost" onClick={() => setAbout(true)}>About</button>
         <button
           className="btn btn-ghost"
