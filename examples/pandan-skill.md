@@ -43,7 +43,7 @@ Full endpoint list: `/path/to/pandan/API.md`.
 
 Call `get_board` first. Match the project by name against the repo folder or
 what the user calls it. Reuse an existing row — near-matches count
-(`Caracal` covers `IdoBGdev__Caracal`).
+(`Website` covers a folder named `acme__website`).
 
 ### 2. Create it only if it is genuinely missing
 
