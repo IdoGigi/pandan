@@ -68,7 +68,8 @@ SQLite, so there is nothing to compile and no database to install.
 docker run -d -p 127.0.0.1:3000:3000   -v pandan:/data   -e APP_PASSWORD=pick-something-long   ghcr.io/IdoGigi/pandan
 ```
 
-Or with compose, which binds to localhost for you:
+The image is published on the first tagged release. Until then, build it
+yourself with compose, which also binds to localhost for you:
 
 ```bash
 npm run setup && docker compose up -d
