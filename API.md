@@ -126,6 +126,24 @@ curl -s -X PATCH -H "$KEY" -H 'Content-Type: application/json' \
   -d '{"done":true}' $KB/checks/3
 ```
 
+## Live updates
+
+`GET /api/events` is a Server-Sent Events stream. It sends `hello` on connect,
+then a `change` event after every successful write, so a client can re-read
+instead of polling. The browser authenticates with its cookie; a script sends
+the usual Bearer header.
+
+```bash
+curl -N -H "$KEY" -H "Accept: text/event-stream" $KB/events
+```
+
+```
+event: change
+data: {"revision":4,"source":"POST /cards"}
+```
+
+Reads and failed writes send nothing.
+
 ## Errors
 
 | Status | Meaning |

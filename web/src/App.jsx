@@ -37,6 +37,7 @@ export function App() {
   const [rowCap, setRowCap] = useState(() => readSetting('rowCap', 240));
   const [collapsed, setCollapsed] = useState(() => new Set(readSetting('collapsed', [])));
   const [busy, setBusy] = useState(false);
+  const [live, setLive] = useState(false);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -52,6 +53,34 @@ export function App() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  /**
+   * Keep the board in step with the server. The stream sends a ping whenever
+   * anything changes — from another tab, another device, or an agent — and we
+   * re-read the board. EventSource reconnects on its own if the link drops.
+   */
+  useEffect(() => {
+    if (authed !== true) return undefined;
+    // Very old browsers have no EventSource. The board still works, it just
+    // will not update on its own.
+    if (typeof EventSource === 'undefined') return undefined;
+
+    const stream = new EventSource('/api/events');
+    stream.addEventListener('hello', () => setLive(true));
+    stream.addEventListener('change', () => { load(); });
+    stream.onerror = () => setLive(false);
+    stream.onopen = () => setLive(true);
+
+    // A tab that slept can miss pings, so re-read when it comes back.
+    const onVisible = () => { if (!document.hidden) load(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      stream.close();
+      document.removeEventListener('visibilitychange', onVisible);
+      setLive(false);
+    };
+  }, [authed, load]);
 
   useEffect(() => { writeSetting('compact', compact); }, [compact]);
   useEffect(() => { writeSetting('rowCap', rowCap); }, [rowCap]);
@@ -169,6 +198,9 @@ export function App() {
           {collapsed.size === projects.length && projects.length > 0 ? 'Open all' : 'Fold all'}
         </button>
         <span className={`saving${busy ? ' on' : ''}`}>Saving…</span>
+        <span className={`live${live ? ' on' : ''}`} title={live ? 'Updating live' : 'Reconnecting…'}>
+          <i /> {live ? 'live' : 'offline'}
+        </span>
         {error && <span className="error" style={{ margin: 0 }}>{error}</span>}
         <span className="spacer" />
         <button

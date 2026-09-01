@@ -124,3 +124,16 @@ Two ways in, both behind the same password:
 The MCP tools call this app's own REST API over localhost, so an agent goes
 through exactly the same checks as the browser does. There is no second copy
 of the rules to keep in step.
+
+## Live updates
+
+The board keeps itself in step. `GET /api/events` is a Server-Sent Events
+stream; every successful write to `/api` bumps a revision and pings each open
+browser, which then re-reads the board. Changes from another tab, another
+device, or an agent over MCP all show up within a second, with no refresh.
+
+The ping carries only a revision number, not the change itself. One code path,
+and a browser that missed a ping catches up on the next one. `EventSource`
+reconnects on its own, and a tab that was asleep re-reads when it wakes.
+
+The dot in the top bar is green while the stream is connected.

@@ -7,6 +7,7 @@ import { seedIfEmpty } from './db.js';
 import { api } from './routes.js';
 import { requireAuth, checkPassword, setSessionCookie, clearSessionCookie, loginLimiter } from './auth.js';
 import { handleMcpRequest } from './mcp.js';
+import { eventsHandler, changeNotifier } from './events.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webDist = join(here, '..', 'web', 'dist');
@@ -34,8 +35,12 @@ app.post('/api/logout', (req, res) => {
 
 app.get('/api/me', requireAuth, (req, res) => res.json({ ok: true }));
 
+/* ---- live updates: one open stream per browser tab ---- */
+// Mounted before the router so the stream is not treated as a normal request.
+app.get('/api/events', requireAuth, eventsHandler);
+
 /* ---- everything else under /api needs the password ---- */
-app.use('/api', requireAuth, api);
+app.use('/api', requireAuth, changeNotifier, api);
 
 /* ---- MCP endpoint, so an agent can discover the tools itself ---- */
 app.post('/mcp', requireAuth, (req, res, next) => {

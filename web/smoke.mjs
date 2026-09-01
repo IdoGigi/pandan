@@ -122,6 +122,22 @@ g.IS_REACT_ACT_ENVIRONMENT = true;
 g.fetch = fakeFetch;
 dom.window.fetch = fakeFetch;
 // The app must never use native popups again — make them fail loudly.
+/** jsdom has no EventSource, so stand in a small one the tests can drive. */
+const streams = [];
+class FakeEventSource {
+  constructor(url) {
+    this.url = url;
+    this.listeners = {};
+    this.closed = false;
+    streams.push(this);
+  }
+  addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
+  emit(type, data) { for (const fn of this.listeners[type] || []) fn({ data: JSON.stringify(data) }); }
+  close() { this.closed = true; }
+}
+g.EventSource = FakeEventSource;
+dom.window.EventSource = FakeEventSource;
+
 dom.window.prompt = () => { throw new Error('window.prompt was called'); };
 dom.window.confirm = () => { throw new Error('window.confirm was called'); };
 dom.window.alert = () => { throw new Error('window.alert was called'); };
@@ -526,6 +542,50 @@ await step('a long project name stays on one line', async () => {
   if (nameCss.textOverflow !== 'ellipsis') throw new Error('a cut name needs an ellipsis');
   if (name.getAttribute('title') !== 'smart-city-dashboard') {
     throw new Error('the full name should be in the tooltip');
+  }
+});
+
+await step('the board opens a live stream and shows it is connected', async () => {
+  const stream = streams.find((x) => !x.closed);
+  if (!stream) throw new Error('no live stream was opened');
+  if (stream.url !== '/api/events') throw new Error(`wrong stream url: ${stream.url}`);
+  await act(async () => { stream.emit('hello', { revision: 1 }); });
+  await settle();
+  const badge = container.querySelector('.live');
+  if (!badge) throw new Error('live badge missing');
+  if (!badge.className.includes('on')) throw new Error('badge should show connected');
+  if (!badge.textContent.includes('live')) throw new Error('badge should read "live"');
+});
+
+await step('a change from elsewhere reloads the board with no refresh', async () => {
+  const stream = streams.find((x) => !x.closed);
+
+  // Something else adds a card — another tab, another device, or an agent.
+  state.cards = [...state.cards, {
+    id: 900, project_id: 1, column_key: 'next', title: 'added by an agent',
+    notes: '', color: 'sky', flagged: 0, position: 5000, checks_total: 0, checks_done: 0,
+  }];
+
+  if (container.textContent.includes('added by an agent')) throw new Error('card was already showing');
+  await act(async () => { stream.emit('change', { revision: 2, source: 'POST /cards' }); });
+  await settle();
+  if (!container.textContent.includes('added by an agent')) {
+    throw new Error('the board did not pick up the change');
+  }
+  state.cards = state.cards.filter((c) => c.id !== 900);
+});
+
+await step('losing the stream shows offline, not a crash', async () => {
+  const stream = streams.find((x) => !x.closed);
+  await act(async () => { stream.onerror?.(new Error('dropped')); });
+  await settle();
+  const badge = container.querySelector('.live');
+  if (badge.className.includes('on')) throw new Error('badge should show offline');
+  if (!badge.textContent.includes('offline')) throw new Error('badge should read "offline"');
+  await act(async () => { stream.onopen?.(); });
+  await settle();
+  if (!container.querySelector('.live').className.includes('on')) {
+    throw new Error('badge should go back to live when the stream returns');
   }
 });
 
