@@ -9,11 +9,13 @@ const SWATCH = {
   amber: '#f0b429', rose: '#e2725b', violet: '#9b8ec4',
 };
 
-export function CardModal({ cardId, projects, labels = {}, onClose, onSaved, onDeleted }) {
+export function CardModal({ cardId, projects, labels = {}, boardId, onClose, onSaved, onDeleted }) {
   const [card, setCard] = useState(null);
   const [checks, setChecks] = useState([]);
   const [newCheck, setNewCheck] = useState('');
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [naming, setNaming] = useState(false);
+  const [names, setNames] = useState(labels);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -137,19 +139,58 @@ export function CardModal({ cardId, projects, labels = {}, onClose, onSaved, onD
         </div>
 
         <div className="field">
-          <label>Label</label>
-          <div className="swatches">
-            {CARD_COLORS.map((c) => (
-              <button
-                key={c}
-                className={`swatch${card.color === c ? ' on' : ''}`}
-                style={{ background: SWATCH[c] }}
-                title={labels[c] || c}
-                onClick={() => set({ color: c })}
-              />
-            ))}
-            {labels[card.color] && <span className="label-name">{labels[card.color]}</span>}
-          </div>
+          <label>
+            Label
+            <button
+              className="btn btn-ghost label-edit"
+              onClick={() => setNaming((v) => !v)}
+            >
+              {naming ? 'Done' : 'Rename labels'}
+            </button>
+          </label>
+
+          {naming ? (
+            <div className="label-editor">
+              {CARD_COLORS.map((c) => (
+                <div key={c} className="label-row">
+                  <span className="swatch on" style={{ background: SWATCH[c], cursor: 'default' }} />
+                  <input
+                    className="input"
+                    value={names[c] ?? ''}
+                    placeholder={`no name — ${c}`}
+                    onChange={(e) => setNames((n) => ({ ...n, [c]: e.target.value }))}
+                    onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                    onBlur={async () => {
+                      const next = (names[c] ?? '').trim();
+                      if (next === (labels[c] ?? '')) return;
+                      try {
+                        await api.setLabel(boardId, c, next);
+                        onSaved();   // reload so the board picks the name up
+                      } catch (err) {
+                        setError(err.message);
+                      }
+                    }}
+                  />
+                </div>
+              ))}
+              <p className="dialog-msg" style={{ margin: '4px 0 0' }}>
+                Names belong to this board. Clear one to remove it.
+              </p>
+            </div>
+          ) : (
+            <div className="swatches">
+              {CARD_COLORS.map((c) => (
+                <button
+                  key={c}
+                  className={`swatch${card.color === c ? ' on' : ''}`}
+                  style={{ background: SWATCH[c] }}
+                  title={labels[c] || c}
+                  onClick={() => set({ color: c })}
+                />
+              ))}
+              {labels[card.color] && <span className="label-name">{labels[card.color]}</span>}
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>

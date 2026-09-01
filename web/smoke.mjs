@@ -999,8 +999,49 @@ await step('the card editor shows a due date and the label name', async () => {
   const modal = document.querySelector('.modal');
   if (!modal.querySelector('input[type="date"]')) throw new Error('no due date field');
   const labels = [...modal.querySelectorAll('.field label')].map((n) => n.textContent);
-  if (!labels.includes('Label')) throw new Error('colour section should be called Label');
+  if (!labels.some((t) => t.startsWith('Label'))) {
+    throw new Error(`colour section should be called Label, got: ${labels.join(' | ')}`);
+  }
   await click([...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Cancel'));
+});
+
+await step('labels can be renamed from the card editor', async () => {
+  let sent = null;
+  const prev = g.fetch;
+  const spy = (url, opts = {}) => {
+    if (/\/labels\//.test(String(url))) sent = { url: String(url), body: JSON.parse(opts.body) };
+    return prev(url, opts);
+  };
+  g.fetch = spy; dom.window.fetch = spy;
+
+  await click(q('.card')[0]);
+  const modal = document.querySelector('.modal');
+  const toggle = [...modal.querySelectorAll('.btn')].find((b) => b.textContent === 'Rename labels');
+  if (!toggle) throw new Error('no way to rename labels');
+  await click(toggle);
+
+  const rows = modal.querySelectorAll('.label-row');
+  if (rows.length !== 6) throw new Error(`expected 6 colours to name, got ${rows.length}`);
+
+  // The existing name is shown for editing.
+  const values = [...rows].map((r) => r.querySelector('.input').value);
+  if (!values.includes('Blocked')) throw new Error('existing label name not shown');
+
+  const first = rows[0].querySelector('.input');
+  await act(async () => { setNativeValue(first, 'Chore'); });
+  await act(async () => {
+    first.dispatchEvent(new dom.window.Event('blur'));
+    first.dispatchEvent(new dom.window.Event('focusout', { bubbles: true }));
+  });
+  await settle();
+
+  g.fetch = prev; dom.window.fetch = prev;
+  if (!sent) throw new Error('the new name was never saved');
+  if (sent.body.name !== 'Chore') throw new Error(`wrong name sent: ${JSON.stringify(sent.body)}`);
+  if (!sent.url.includes('/boards/1/labels/')) throw new Error(`wrong board in url: ${sent.url}`);
+
+  const cancel = [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Cancel');
+  await click(cancel);
 });
 
 await step('the archive lists cards and can restore them', async () => {

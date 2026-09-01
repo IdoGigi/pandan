@@ -448,6 +448,7 @@ export function App() {
           cardId={openCardId}
           projects={projects}
           labels={labels}
+          boardId={boardId}
           onClose={() => setOpenCardId(null)}
           onSaved={load}
           onDeleted={load}
