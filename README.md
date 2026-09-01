@@ -65,7 +65,11 @@ SQLite, so there is nothing to compile and no database to install.
 ### With Docker
 
 ```bash
-docker run -d -p 127.0.0.1:3000:3000   -v pandan:/data   -e APP_PASSWORD=pick-something-long   ghcr.io/IdoGigi/pandan
+docker run -d \
+  -p 127.0.0.1:3000:3000 \
+  -v pandan:/data \
+  -e APP_PASSWORD=pick-something-long \
+  ghcr.io/IdoGigi/pandan
 ```
 
 The image is published on the first tagged release. Until then, build it
