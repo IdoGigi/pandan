@@ -86,7 +86,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .board {
   display: grid;
-  grid-template-columns: 132px repeat(4, minmax(190px, 1fr));
+  grid-template-columns: 156px repeat(4, minmax(190px, 1fr));
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -128,10 +128,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .head-blank, .board > .head-col:first-of-type { left: 0; z-index: 4; }
 
 .row-label {
-  justify-content: flex-start;
+  flex-direction: column;
+  justify-content: center;
   align-items: flex-start;
   text-align: left;
-  gap: 7px;
+  gap: 2px;
   font-size: 13px;
   color: var(--text);
   font-weight: 600;
@@ -141,8 +142,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
   z-index: 2;
   background: var(--panel);
 }
-.row-label .row-top { display: flex; align-items: center; gap: 7px; width: 100%; }
-.row-label .row-count { font-size: 11px; color: var(--muted); font-weight: 500; margin-top: 3px; }
+.row-label .row-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+.row-label .row-count {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+  padding-left: 20px;
+}
 
 .row-fold {
   border: none;
@@ -407,6 +419,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* the project name in a row is a button, but must look like plain text */
 .row-label .name {
+  flex: 1;
+  min-width: 0;
   border: none;
   background: none;
   padding: 0;
@@ -414,6 +428,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: inherit;
   text-align: left;
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   border-bottom: 1px solid transparent;
 }
 .row-label .name:hover { border-bottom-color: var(--muted); }

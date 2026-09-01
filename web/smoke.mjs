@@ -18,6 +18,7 @@ const state = {
   projects: [
     { id: 1, name: 'House chores', color: '#c3d117', position: 1000, archived: 0 },
     { id: 2, name: 'Volunteering', color: '#4bb3d4', position: 2000, archived: 0 },
+    { id: 3, name: 'smart-city-dashboard', color: '#e2725b', position: 3000, archived: 0 },
   ],
   cards: [
     { id: 10, project_id: 1, column_key: 'todo', title: 'Buy milk', notes: '', color: 'lime',
@@ -508,6 +509,24 @@ await step('compact toggle switches and is remembered', async () => {
   try { saved = JSON.parse(dom.window.localStorage.getItem('kanban.compact')); } catch { /* ignore */ }
   if (saved !== nowCompact) throw new Error('density was not remembered');
   await click(q('.topbar .btn').find((b) => ['Compact', 'Roomy'].includes(b.textContent)));
+});
+
+await step('a long project name stays on one line', async () => {
+  const label = q('.row-label')[2];
+  if (!label) throw new Error('the long-named row is missing');
+  const name = label.querySelector('.name');
+  if (name.textContent !== 'smart-city-dashboard') throw new Error('wrong row picked');
+
+  const labelCss = dom.window.getComputedStyle(label);
+  if (labelCss.flexDirection !== 'column') {
+    throw new Error(`row label must stack, got flex-direction: ${labelCss.flexDirection}`);
+  }
+  const nameCss = dom.window.getComputedStyle(name);
+  if (nameCss.whiteSpace !== 'nowrap') throw new Error(`name should not wrap, got ${nameCss.whiteSpace}`);
+  if (nameCss.textOverflow !== 'ellipsis') throw new Error('a cut name needs an ellipsis');
+  if (name.getAttribute('title') !== 'smart-city-dashboard') {
+    throw new Error('the full name should be in the tooltip');
+  }
 });
 
 await step('headers and the project column stay pinned', async () => {

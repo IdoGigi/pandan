@@ -58,7 +58,7 @@ export function Board({
                 <button
                   className="name"
                   onClick={() => onOpenProject(project.id)}
-                  title="Open this project"
+                  title={project.name}
                 >
                   {project.name}
                 </button>
