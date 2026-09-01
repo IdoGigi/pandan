@@ -98,3 +98,29 @@ it was never printed to a terminal.
 Railway now prefers `.railway/railway.ts` and warns that `railway.json`
 is deprecated. The current file keeps working until 2026-12-01. Run
 `railway config migrate` when you want to switch.
+
+## UI smoke test
+
+The board has no browser-based tests, so there is a headless one. It mounts the
+real React app in jsdom against a fake API and clicks through the main flows.
+
+```bash
+npm run smoke
+```
+
+It fails if any step breaks, if React logs an error, or if the app ever calls
+`window.prompt`, `window.confirm` or `window.alert` — the app uses its own
+dialogs instead, so those must stay unused.
+
+## Agent access
+
+Two ways in, both behind the same password:
+
+- **REST** — plain JSON endpoints, documented in [API.md](API.md).
+- **MCP** — `POST /mcp`, so an agent discovers the tools on its own.
+  Ten tools cover reading the board and adding or editing projects, cards and
+  checklist items. See the "Connect an agent" section of [API.md](API.md).
+
+The MCP tools call this app's own REST API over localhost, so an agent goes
+through exactly the same checks as the browser does. There is no second copy
+of the rules to keep in step.

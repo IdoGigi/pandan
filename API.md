@@ -140,3 +140,73 @@ nothing about your data. Railway uses it to check the app is alive.
 2. Find the `project_id` you want by name.
 3. `POST /cards` to add work.
 4. `POST /cards/:id/move` with `column_key: "done"` when it is finished.
+
+## Connect an agent (MCP)
+
+The board also speaks **MCP**, so an agent can discover the tools by itself
+instead of being told about the endpoints. The endpoint is:
+
+```
+POST https://kanban-production-e69e.up.railway.app/mcp
+```
+
+It uses the same password as a Bearer token.
+
+### Claude Code
+
+Run this in your own terminal, with your real password in place of the
+placeholder. Do not paste your password into a chat.
+
+```bash
+claude mcp add --transport http kanban \
+  https://kanban-production-e69e.up.railway.app/mcp \
+  --header "Authorization: Bearer YOUR_PASSWORD"
+```
+
+### Any client that reads `.mcp.json`
+
+Keep the password in an environment variable, never in the file:
+
+```json
+{
+  "mcpServers": {
+    "kanban": {
+      "type": "http",
+      "url": "https://kanban-production-e69e.up.railway.app/mcp",
+      "headers": { "Authorization": "Bearer ${KANBAN_PASSWORD}" }
+    }
+  }
+}
+```
+
+### The tools an agent gets
+
+| Tool | What it does |
+| --- | --- |
+| `get_board` | Read every project and card in one call. Start here to get the ids |
+| `get_card` | Read one card in full, including its checklist |
+| `create_project` | Add a project (a new row) |
+| `update_project` | Rename, recolour, or archive a project |
+| `create_card` | Add a card to a project |
+| `update_card` | Change a card's text, notes, colour, flag, project or column |
+| `move_card` | Move a card between columns or projects, and pick its place in the list |
+| `delete_card` | Delete a card for good |
+| `add_check` | Add a checklist item to a card |
+| `update_check` | Tick, untick, or reword a checklist item |
+
+Each tool carries its own description and typed arguments, so an agent can read
+`tools/list` and work out what to do without any extra prompting. Bad input is
+rejected before it reaches the board, and errors come back as plain sentences
+like `card not found`.
+
+### Checking it by hand
+
+```bash
+curl -s -X POST https://kanban-production-e69e.up.railway.app/mcp \
+  -H "Authorization: Bearer YOUR_PASSWORD" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+```
+
+The `Accept` header must list both types, or the transport replies `406`.

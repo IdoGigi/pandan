@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import { seedIfEmpty } from './db.js';
 import { api } from './routes.js';
 import { requireAuth, checkPassword, setSessionCookie, clearSessionCookie, loginLimiter } from './auth.js';
+import { handleMcpRequest } from './mcp.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webDist = join(here, '..', 'web', 'dist');
@@ -36,10 +37,19 @@ app.get('/api/me', requireAuth, (req, res) => res.json({ ok: true }));
 /* ---- everything else under /api needs the password ---- */
 app.use('/api', requireAuth, api);
 
+/* ---- MCP endpoint, so an agent can discover the tools itself ---- */
+app.post('/mcp', requireAuth, (req, res, next) => {
+  handleMcpRequest(req, res).catch(next);
+});
+// Stateless, so there is no stream to open and no session to end. Without these
+// the SPA catch-all below would answer a GET /mcp with the HTML page.
+app.all('/mcp', requireAuth, (req, res) =>
+  res.status(405).json({ error: 'use POST for MCP' }));
+
 /* ---- static frontend ---- */
 if (existsSync(webDist)) {
   app.use(express.static(webDist, { maxAge: '1h', index: false }));
-  app.get(/^\/(?!api\/).*/, (req, res) => res.sendFile(join(webDist, 'index.html')));
+  app.get(/^\/(?!api\/|mcp$).*/, (req, res) => res.sendFile(join(webDist, 'index.html')));
 } else {
   app.get('/', (req, res) =>
     res.status(503).send('UI is not built yet. Run: npm run build'));
