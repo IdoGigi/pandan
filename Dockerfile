@@ -18,8 +18,9 @@ COPY --from=build /app/server ./server
 COPY --from=build /app/web/dist ./web/dist
 COPY --from=build /app/package.json ./
 
-# The database lives on a volume so it survives a rebuild.
-VOLUME /data
+# No VOLUME here on purpose. It would force an anonymous volume on everyone,
+# and some hosts reject it outright. docker-compose.yml mounts /data itself,
+# and the server creates the folder if it is missing.
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
