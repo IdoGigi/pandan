@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
 import { Board } from './Board.jsx';
 import { CardModal } from './CardModal.jsx';
+import { ProjectModal } from './ProjectModal.jsx';
 import { Login } from './Login.jsx';
 import { Dialog } from './Dialog.jsx';
 
@@ -13,6 +14,7 @@ export function App() {
   const [cards, setCards] = useState([]);
   const [focus, setFocus] = useState('all');
   const [openCardId, setOpenCardId] = useState(null);
+  const [openProjectId, setOpenProjectId] = useState(null);
   const [dialog, setDialog] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -162,6 +164,7 @@ export function App() {
             projects={shown}
             cards={cards}
             onOpenCard={(card) => typeof card.id === 'number' && setOpenCardId(card.id)}
+            onOpenProject={setOpenProjectId}
             onAddCard={addCard}
             onDropCard={dropCard}
             onRenameProject={renameProject}
@@ -171,6 +174,16 @@ export function App() {
       </div>
 
       {dialog && <Dialog {...dialog} onCancel={() => setDialog(null)} />}
+
+      {openProjectId && (
+        <ProjectModal
+          projectId={openProjectId}
+          onClose={() => setOpenProjectId(null)}
+          onSaved={load}
+          onDeleted={load}
+          onOpenCard={(id) => { setOpenProjectId(null); setOpenCardId(id); }}
+        />
+      )}
 
       {openCardId && (
         <CardModal

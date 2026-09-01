@@ -32,6 +32,49 @@ api.get('/projects', (req, res) => {
   res.json(db.prepare('SELECT * FROM projects WHERE archived = 0 ORDER BY position').all());
 });
 
+/** Everything about one project: its details, its cards, and a few counts. */
+api.get('/projects/:id', (req, res) => {
+  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(Number(req.params.id));
+  if (!project) return res.status(404).json({ error: 'project not found' });
+
+  const cards = db.prepare(
+    `SELECT c.id, c.column_key, c.title, c.notes, c.color, c.flagged, c.position,
+            c.created_at, c.updated_at,
+            (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id)                AS checks_total,
+            (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id AND k.done = 1) AS checks_done
+       FROM cards c
+      WHERE c.project_id = ?
+      ORDER BY c.position`
+  ).all(project.id);
+
+  const by_column = Object.fromEntries(COLUMNS.map((k) => [k, 0]));
+  let flagged = 0;
+  let checks_total = 0;
+  let checks_done = 0;
+  for (const card of cards) {
+    by_column[card.column_key] += 1;
+    if (card.flagged) flagged += 1;
+    checks_total += card.checks_total;
+    checks_done += card.checks_done;
+  }
+
+  const open = cards.length - by_column.done;
+  res.json({
+    ...project,
+    cards,
+    stats: {
+      total: cards.length,
+      open,
+      by_column,
+      flagged,
+      checks_total,
+      checks_done,
+      percent_done: cards.length ? Math.round((by_column.done / cards.length) * 100) : 0,
+      last_activity: cards.reduce((max, c) => (c.updated_at > max ? c.updated_at : max), project.created_at),
+    },
+  });
+});
+
 api.post('/projects', (req, res) => {
   const name = clean(req.body?.name, 120);
   if (!name) return bad(res, 'name is required');

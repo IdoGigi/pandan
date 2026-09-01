@@ -56,6 +56,7 @@ curl -s -H "$KEY" $KB/board
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/projects` | All active projects |
+| GET | `/projects/:id` | One project in full: its cards plus counts and progress |
 | POST | `/projects` | `{ "name", "color?" }` |
 | PATCH | `/projects/:id` | Any of `name`, `color`, `position`, `archived` |
 | DELETE | `/projects/:id` | Also deletes that project's cards |
@@ -184,6 +185,7 @@ Keep the password in an environment variable, never in the file:
 | Tool | What it does |
 | --- | --- |
 | `get_board` | Read every project and card in one call. Start here to get the ids |
+| `get_project` | One project in full: its cards, counts per column, and percent done |
 | `get_card` | Read one card in full, including its checklist |
 | `create_project` | Add a project (a new row) |
 | `update_project` | Rename, recolour, or archive a project |

@@ -26,6 +26,7 @@ export const api = {
 
   board: () => request('GET', '/board'),
 
+  getProject: (id) => request('GET', `/projects/${id}`),
   createProject: (data) => request('POST', '/projects', data),
   updateProject: (id, data) => request('PATCH', `/projects/${id}`, data),
   deleteProject: (id) => request('DELETE', `/projects/${id}`),

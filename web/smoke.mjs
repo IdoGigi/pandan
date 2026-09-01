@@ -48,6 +48,24 @@ function fakeFetch(url, opts = {}) {
   if (/^\/cards\/\d+$/.test(path)) return json({ id: 10 });
   if (path === '/cards') return json({ id: 77 }, 201);
   if (path.startsWith('/checks/')) return json({ id: 1 });
+  const detail = path.match(/^\/projects\/(\d+)$/);
+  if (detail && method === 'GET') {
+    const id = Number(detail[1]);
+    const p = state.projects.find((x) => x.id === id);
+    const cards = state.cards.filter((c) => c.project_id === id);
+    const by_column = { todo: 0, next: 0, doing: 0, done: 0 };
+    for (const c of cards) by_column[c.column_key] += 1;
+    return json({
+      ...p, created_at: '2026-09-01 00:00:00', cards,
+      stats: {
+        total: cards.length, open: cards.length - by_column.done, by_column,
+        flagged: cards.filter((c) => c.flagged).length,
+        checks_total: 2, checks_done: 1,
+        percent_done: cards.length ? Math.round((by_column.done / cards.length) * 100) : 0,
+        last_activity: '2026-09-01 00:00:00',
+      },
+    });
+  }
   if (path.startsWith('/projects')) return json({ id: 3 }, 201);
   return json({ error: 'not found' }, 404);
 }
@@ -323,6 +341,47 @@ await step('Enter then blur must not add the card twice', async () => {
 
   g.fetch = prev; dom.window.fetch = prev;
   if (posts !== 1) throw new Error(`card was POSTed ${posts} times, expected 1`);
+});
+
+await step('clicking a project name opens the project panel', async () => {
+  const nameBtn = q('.row-label .name')[0];
+  if (!nameBtn) throw new Error('project name is not clickable');
+  await click(nameBtn);
+  const panel = document.querySelector('.modal-wide');
+  if (!panel) throw new Error('project panel did not open');
+  if (!panel.querySelector('.project-name')) throw new Error('name field missing');
+  if (panel.querySelectorAll('.stat').length < 6) throw new Error('stats missing');
+  if (!panel.querySelector('.progress-bar span')) throw new Error('progress bar missing');
+  if (!panel.querySelector('.mini-card')) throw new Error('card list missing');
+});
+
+await step('project panel shows the right counts', async () => {
+  const panel = document.querySelector('.modal-wide');
+  const stats = [...panel.querySelectorAll('.stat')].map((n) => n.textContent);
+  if (!stats.some((t) => t.startsWith('2cards'))) throw new Error(`card count wrong: ${stats.join(' | ')}`);
+  if (!panel.textContent.includes('% done')) throw new Error('percent missing');
+});
+
+await step('a card in the panel opens that card', async () => {
+  const mini = document.querySelector('.modal-wide .mini-card');
+  await click(mini);
+  if (document.querySelector('.modal-wide')) throw new Error('project panel should close');
+  if (!document.querySelector('.modal')) throw new Error('card modal did not open');
+  const cancel = [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Cancel');
+  await click(cancel);
+});
+
+await step('project panel Save stays off until something changes', async () => {
+  await click(q('.row-label .name')[0]);
+  const panel = document.querySelector('.modal-wide');
+  const save = [...panel.querySelectorAll('.btn')].find((b) => b.textContent === 'Save');
+  if (!save.disabled) throw new Error('Save should start disabled');
+  const input = panel.querySelector('.project-name');
+  await act(async () => { setNativeValue(input, 'Renamed project'); });
+  await settle();
+  if (save.disabled) throw new Error('Save should enable after an edit');
+  const close = [...panel.querySelectorAll('.btn')].find((b) => b.textContent === 'Close');
+  await click(close);
 });
 
 console.log('');

@@ -18,7 +18,7 @@ function Header() {
   );
 }
 
-export function Board({ projects, cards, onOpenCard, onAddCard, onDropCard, onRenameProject, onDeleteProject }) {
+export function Board({ projects, cards, onOpenCard, onOpenProject, onAddCard, onDropCard, onRenameProject, onDeleteProject }) {
   const drag = useRef(null);
 
   const byCell = new Map();
@@ -38,7 +38,13 @@ export function Board({ projects, cards, onOpenCard, onAddCard, onDropCard, onRe
           <div key={project.id} style={{ display: 'contents' }}>
             <div className="cell row-label" style={{ gridColumn: 1, gridRow: row }}>
               <span className="dot" style={{ background: project.color }} />
-              <span className="name">{project.name}</span>
+              <button
+                className="name"
+                onClick={() => onOpenProject(project.id)}
+                title="Open this project"
+              >
+                {project.name}
+              </button>
               <span className="row-actions">
                 <button
                   className="btn btn-ghost"

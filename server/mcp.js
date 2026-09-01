@@ -59,6 +59,16 @@ export function buildMcpServer() {
     annotations: { readOnlyHint: true },
   }, tool(() => callApi('GET', '/board')));
 
+  server.registerTool('get_project', {
+    title: 'Read one project',
+    description:
+      'Everything about a single project: its name and colour, all of its cards, and counts — ' +
+      'how many cards sit in each column, how many are flagged, checklist progress, and the ' +
+      'percent done. Use this when you need the detail of one project rather than the whole board.',
+    inputSchema: { project_id: z.number().int().describe('Which project to read.') },
+    annotations: { readOnlyHint: true },
+  }, tool(({ project_id }) => callApi('GET', `/projects/${project_id}`)));
+
   server.registerTool('create_project', {
     title: 'Add a project',
     description: 'Add a new project, which appears as a new row on the board.',
