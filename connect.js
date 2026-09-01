@@ -46,7 +46,9 @@ const result = spawnSync(
     'pandan', `${url}/mcp`,
     '--header', `Authorization: Bearer ${password}`,
   ],
-  { encoding: 'utf8', shell: false }
+  // Same reason as start.js: Windows needs a shell to run claude.cmd. The
+  // arguments are passed as an array, so the password is never parsed by it.
+  { encoding: 'utf8', shell: isWindows }
 );
 
 if (result.error?.code === 'ENOENT') {
