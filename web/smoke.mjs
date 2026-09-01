@@ -175,7 +175,21 @@ const remount = async () => {
   await settle();
 };
 const q = (sel) => [...container.querySelectorAll(sel)];
-const click = async (el) => { await act(async () => { el.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); }); await settle(); };
+/**
+ * The full sequence a browser sends, each event in its own act() so React
+ * re-renders in between — exactly as it does for a real pointer. Firing them
+ * all in one act() hides any handler that unmounts on pointerdown.
+ */
+const click = async (el) => {
+  for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+    const Ctor = type.startsWith('pointer') ? dom.window.Event : dom.window.MouseEvent;
+    // eslint-disable-next-line no-await-in-loop
+    await act(async () => {
+      el.dispatchEvent(new Ctor(type, { bubbles: true, cancelable: true }));
+    });
+  }
+  await settle();
+};
 
 const step = async (name, fn) => {
   try { await fn(); console.log(`  ok    ${name}`); }

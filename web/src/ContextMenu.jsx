@@ -28,15 +28,22 @@ export function CardMenu({ x, y, card, onPickColor, onToggleFlag, onClose }) {
   }, [x, y]);
 
   useEffect(() => {
+    // This listener runs in the capture phase, before React sees the event, so
+    // it must ignore presses on the menu itself. Closing here would unmount the
+    // buttons before their click could ever fire.
+    const onPointerDown = (e) => {
+      if (ref.current?.contains(e.target)) return;
+      onClose();
+    };
     const close = () => onClose();
     const onKey = (e) => e.key === 'Escape' && onClose();
-    // `true` so a click anywhere closes it, even inside a scrolling cell.
-    window.addEventListener('pointerdown', close, true);
+
+    window.addEventListener('pointerdown', onPointerDown, true);
     window.addEventListener('scroll', close, true);
     window.addEventListener('resize', close);
     window.addEventListener('keydown', onKey);
     return () => {
-      window.removeEventListener('pointerdown', close, true);
+      window.removeEventListener('pointerdown', onPointerDown, true);
       window.removeEventListener('scroll', close, true);
       window.removeEventListener('resize', close);
       window.removeEventListener('keydown', onKey);
@@ -48,7 +55,6 @@ export function CardMenu({ x, y, card, onPickColor, onToggleFlag, onClose }) {
       ref={ref}
       className="ctx"
       style={{ left: pos.left, top: pos.top, visibility: pos.visible ? 'visible' : 'hidden' }}
-      onPointerDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
       role="menu"
     >
