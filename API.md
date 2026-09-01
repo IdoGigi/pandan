@@ -56,9 +56,14 @@ curl -s -H "$KEY" $KB/board
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/projects` | All active projects |
-| GET | `/projects/:id` | One project in full: its cards plus counts and progress |
-| POST | `/projects` | `{ "name", "color?" }` |
-| PATCH | `/projects/:id` | Any of `name`, `color`, `position`, `archived` |
+| GET | `/projects/:id` | One project in full: cards, counts, links, contacts and the update log |
+| POST | `/projects/:id/links` | `{ "kind": "link"\|"contact", "label", "value" }` |
+| PATCH | `/links/:id` | Change a link or contact |
+| DELETE | `/links/:id` | Remove a link or contact |
+| POST | `/projects/:id/updates` | `{ "text" }` — add a dated entry to the log |
+| DELETE | `/updates/:id` | Remove a log entry |
+| POST | `/projects` | `{ "name", "color?", "description?", "repo_url?" }` |
+| PATCH | `/projects/:id` | Any of `name`, `color`, `description`, `repo_url`, `position`, `archived` |
 | DELETE | `/projects/:id` | Also deletes that project's cards |
 
 ```bash
@@ -185,7 +190,10 @@ Keep the password in an environment variable, never in the file:
 | Tool | What it does |
 | --- | --- |
 | `get_board` | Read every project and card in one call. Start here to get the ids |
-| `get_project` | One project in full: its cards, counts per column, and percent done |
+| `get_project` | One project in full: cards, counts, notes, repo, links, contacts, update log |
+| `add_project_link` | Attach a link or a contact to a project |
+| `delete_project_link` | Remove a link or contact |
+| `add_project_update` | Write a dated entry in the project's update log |
 | `get_card` | Read one card in full, including its checklist |
 | `create_project` | Add a project (a new row) |
 | `update_project` | Rename, recolour, or archive a project |

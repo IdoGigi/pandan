@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db, COLUMNS, nextPosition } from './db.js';
+import { db, COLUMNS, LINK_KINDS, nextPosition, safeUrl } from './db.js';
 
 export const api = Router();
 
@@ -58,10 +58,21 @@ api.get('/projects/:id', (req, res) => {
     checks_done += card.checks_done;
   }
 
+  const links = db.prepare(
+    'SELECT id, kind, label, value, position FROM project_links WHERE project_id = ? ORDER BY kind, position'
+  ).all(project.id).map((l) => ({ ...l, href: safeUrl(l.value) }));
+
+  const updates = db.prepare(
+    'SELECT id, text, created_at FROM project_updates WHERE project_id = ? ORDER BY id DESC LIMIT 50'
+  ).all(project.id);
+
   const open = cards.length - by_column.done;
   res.json({
     ...project,
     cards,
+    links: links.filter((l) => l.kind === 'link'),
+    contacts: links.filter((l) => l.kind === 'contact'),
+    updates,
     stats: {
       total: cards.length,
       open,
@@ -81,8 +92,8 @@ api.post('/projects', (req, res) => {
   const color = clean(req.body?.color, 20) || '#94a3b8';
   const position = nextPosition('projects', 'archived = 0', []);
   const { lastInsertRowid } = db
-    .prepare('INSERT INTO projects (name, color, position) VALUES (?, ?, ?)')
-    .run(name, color, position);
+    .prepare('INSERT INTO projects (name, color, position, description, repo_url) VALUES (?, ?, ?, ?, ?)')
+    .run(name, color, position, clean(req.body?.description, 5000), clean(req.body?.repo_url, 500));
   res.status(201).json(db.prepare('SELECT * FROM projects WHERE id = ?').get(lastInsertRowid));
 });
 
@@ -94,14 +105,83 @@ api.patch('/projects/:id', (req, res) => {
   const color = req.body?.color === undefined ? row.color : clean(req.body.color, 20);
   const position = req.body?.position === undefined ? row.position : Number(req.body.position);
   const archived = req.body?.archived === undefined ? row.archived : (req.body.archived ? 1 : 0);
-  db.prepare('UPDATE projects SET name = ?, color = ?, position = ?, archived = ? WHERE id = ?')
-    .run(name, color, position, archived, row.id);
+  const description = req.body?.description === undefined ? row.description : clean(req.body.description, 5000);
+  const repoUrl = req.body?.repo_url === undefined ? row.repo_url : clean(req.body.repo_url, 500);
+  db.prepare(
+    'UPDATE projects SET name=?, color=?, position=?, archived=?, description=?, repo_url=? WHERE id=?'
+  ).run(name, color, position, archived, description, repoUrl, row.id);
   res.json(db.prepare('SELECT * FROM projects WHERE id = ?').get(row.id));
 });
 
 api.delete('/projects/:id', (req, res) => {
   const info = db.prepare('DELETE FROM projects WHERE id = ?').run(Number(req.params.id));
   if (!info.changes) return res.status(404).json({ error: 'project not found' });
+  res.json({ deleted: true });
+});
+
+/* ---------------- project links and contacts ---------------- */
+
+/** A link and a contact are the same row shape; `kind` tells them apart. */
+api.post('/projects/:id/links', (req, res) => {
+  const projectId = Number(req.params.id);
+  if (!db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId)) {
+    return res.status(404).json({ error: 'project not found' });
+  }
+  const kind = clean(req.body?.kind, 20) || 'link';
+  if (!LINK_KINDS.includes(kind)) return bad(res, `kind must be one of: ${LINK_KINDS.join(', ')}`);
+  const label = clean(req.body?.label, 120);
+  const value = clean(req.body?.value, 500);
+  if (!label) return bad(res, 'label is required');
+  if (!value) return bad(res, 'value is required');
+
+  const position = nextPosition('project_links', 'project_id = ? AND kind = ?', [projectId, kind]);
+  const { lastInsertRowid } = db
+    .prepare('INSERT INTO project_links (project_id, kind, label, value, position) VALUES (?,?,?,?,?)')
+    .run(projectId, kind, label, value, position);
+  const row = db.prepare('SELECT id, kind, label, value, position FROM project_links WHERE id = ?')
+    .get(lastInsertRowid);
+  res.status(201).json({ ...row, href: safeUrl(row.value) });
+});
+
+api.patch('/links/:id', (req, res) => {
+  const row = db.prepare('SELECT * FROM project_links WHERE id = ?').get(Number(req.params.id));
+  if (!row) return res.status(404).json({ error: 'link not found' });
+  const label = req.body?.label === undefined ? row.label : clean(req.body.label, 120);
+  const value = req.body?.value === undefined ? row.value : clean(req.body.value, 500);
+  if (!label) return bad(res, 'label cannot be empty');
+  if (!value) return bad(res, 'value cannot be empty');
+  db.prepare('UPDATE project_links SET label = ?, value = ? WHERE id = ?').run(label, value, row.id);
+  const updated = db.prepare('SELECT id, kind, label, value, position FROM project_links WHERE id = ?')
+    .get(row.id);
+  res.json({ ...updated, href: safeUrl(updated.value) });
+});
+
+api.delete('/links/:id', (req, res) => {
+  const info = db.prepare('DELETE FROM project_links WHERE id = ?').run(Number(req.params.id));
+  if (!info.changes) return res.status(404).json({ error: 'link not found' });
+  res.json({ deleted: true });
+});
+
+/* ---------------- project update log ---------------- */
+
+api.post('/projects/:id/updates', (req, res) => {
+  const projectId = Number(req.params.id);
+  if (!db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId)) {
+    return res.status(404).json({ error: 'project not found' });
+  }
+  const text = clean(req.body?.text, 2000);
+  if (!text) return bad(res, 'text is required');
+  const { lastInsertRowid } = db
+    .prepare('INSERT INTO project_updates (project_id, text) VALUES (?, ?)')
+    .run(projectId, text);
+  res.status(201).json(
+    db.prepare('SELECT id, text, created_at FROM project_updates WHERE id = ?').get(lastInsertRowid)
+  );
+});
+
+api.delete('/updates/:id', (req, res) => {
+  const info = db.prepare('DELETE FROM project_updates WHERE id = ?').run(Number(req.params.id));
+  if (!info.changes) return res.status(404).json({ error: 'update not found' });
   res.json({ deleted: true });
 });
 

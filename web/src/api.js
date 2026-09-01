@@ -31,6 +31,13 @@ export const api = {
   updateProject: (id, data) => request('PATCH', `/projects/${id}`, data),
   deleteProject: (id) => request('DELETE', `/projects/${id}`),
 
+  addLink: (projectId, data) => request('POST', `/projects/${projectId}/links`, data),
+  updateLink: (id, data) => request('PATCH', `/links/${id}`, data),
+  deleteLink: (id) => request('DELETE', `/links/${id}`),
+
+  addUpdate: (projectId, text) => request('POST', `/projects/${projectId}/updates`, { text }),
+  deleteUpdate: (id) => request('DELETE', `/updates/${id}`),
+
   getCard: (id) => request('GET', `/cards/${id}`),
   createCard: (data) => request('POST', '/cards', data),
   updateCard: (id, data) => request('PATCH', `/cards/${id}`, data),

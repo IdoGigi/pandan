@@ -57,6 +57,11 @@ function fakeFetch(url, opts = {}) {
     for (const c of cards) by_column[c.column_key] += 1;
     return json({
       ...p, created_at: '2026-09-01 00:00:00', cards,
+      description: 'notes about it', repo_url: 'https://github.com/x/y',
+      links: [{ id: 1, kind: 'link', label: 'Staging', value: 'https://s.example.com', href: 'https://s.example.com' },
+              { id: 2, kind: 'link', label: 'bad', value: 'javascript:alert(1)', href: null }],
+      contacts: [{ id: 3, kind: 'contact', label: 'Dana', value: 'mailto:d@e.com', href: 'mailto:d@e.com' }],
+      updates: [{ id: 1, text: 'shipped it', created_at: '2026-09-01 10:00:00' }],
       stats: {
         total: cards.length, open: cards.length - by_column.done, by_column,
         flagged: cards.filter((c) => c.flagged).length,
@@ -66,6 +71,9 @@ function fakeFetch(url, opts = {}) {
       },
     });
   }
+  if (/\/links$/.test(path)) return json({ id: 9, kind: 'link', label: 'a', value: 'b', href: null }, 201);
+  if (/\/updates$/.test(path)) return json({ id: 9, text: 'x', created_at: '2026-09-01 11:00:00' }, 201);
+  if (path.startsWith('/links/') || path.startsWith('/updates/')) return json({ deleted: true });
   if (path.startsWith('/projects')) return json({ id: 3 }, 201);
   return json({ error: 'not found' }, 404);
 }
@@ -381,6 +389,55 @@ await step('project panel Save stays off until something changes', async () => {
   await settle();
   if (save.disabled) throw new Error('Save should enable after an edit');
   const close = [...panel.querySelectorAll('.btn')].find((b) => b.textContent === 'Close');
+  await click(close);
+});
+
+await step('project panel holds notes, repo, links, contacts and the log', async () => {
+  await click(q('.row-label .name')[0]);
+  const panel = document.querySelector('.modal-wide');
+  if (!panel) throw new Error('panel did not open');
+  const labels = [...panel.querySelectorAll('.field label')].map((n) => n.textContent);
+  for (const want of ['About this project', 'GitHub repo', 'Links', 'Contacts', 'Update log']) {
+    if (!labels.some((l) => l.startsWith(want))) throw new Error(`missing section: ${want}`);
+  }
+  if (panel.querySelectorAll('.link-row').length !== 3) throw new Error('links/contacts not listed');
+  if (!panel.querySelector('.log-row')) throw new Error('update log missing');
+  if (!panel.textContent.includes('shipped it')) throw new Error('log entry text missing');
+});
+
+await step('an unsafe link is shown as text, never as a clickable link', async () => {
+  const panel = document.querySelector('.modal-wide');
+  const anchors = [...panel.querySelectorAll('.link-value')];
+  const bad = anchors.find((a) => a.textContent.includes('javascript:'));
+  if (!bad) throw new Error('the unsafe row is missing');
+  if (bad.tagName === 'A') throw new Error('unsafe value was rendered as a link');
+  const safe = anchors.find((a) => a.textContent.includes('s.example.com'));
+  if (safe.tagName !== 'A') throw new Error('a safe URL should be a link');
+});
+
+await step('adding a link needs both fields', async () => {
+  const panel = document.querySelector('.modal-wide');
+  const add = [...panel.querySelectorAll('.link-add')][0];
+  const btn = add.querySelector('.btn');
+  if (!btn.disabled) throw new Error('Add should start disabled');
+  const [labelInput, valueInput] = add.querySelectorAll('.input');
+  await act(async () => { setNativeValue(labelInput, 'Docs'); });
+  await settle();
+  if (!btn.disabled) throw new Error('Add should stay disabled with only a label');
+  await act(async () => { setNativeValue(valueInput, 'https://docs.example.com'); });
+  await settle();
+  if (btn.disabled) throw new Error('Add should enable once both are filled');
+});
+
+await step('editing the notes turns Save on', async () => {
+  const panel = document.querySelector('.modal-wide');
+  const save = [...panel.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Save');
+  if (!save.disabled) throw new Error('Save should start disabled');
+  const notes = panel.querySelector('.textarea');
+  await act(async () => { setNativeValue(notes, 'new notes'); });
+  await settle();
+  if (save.disabled) throw new Error('Save should enable after editing notes');
+  const close = [...panel.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Close');
   await click(close);
 });
 

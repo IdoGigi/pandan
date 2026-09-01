@@ -41,11 +41,57 @@ db.exec(`
     position REAL    NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS project_links (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    kind       TEXT    NOT NULL DEFAULT 'link',
+    label      TEXT    NOT NULL,
+    value      TEXT    NOT NULL,
+    position   REAL    NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS project_updates (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    text       TEXT    NOT NULL,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_cards_project ON cards(project_id, column_key, position);
   CREATE INDEX IF NOT EXISTS idx_checks_card   ON checks(card_id, position);
+  CREATE INDEX IF NOT EXISTS idx_links_project ON project_links(project_id, kind, position);
+  CREATE INDEX IF NOT EXISTS idx_updates_project ON project_updates(project_id, id DESC);
 `);
 
+/**
+ * Adds a column only if it is missing, so an existing board upgrades in place
+ * instead of being rebuilt. SQLite has no "ADD COLUMN IF NOT EXISTS".
+ */
+function addColumn(table, name, definition) {
+  const existing = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (existing.some((c) => c.name === name)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
+  console.log(`[db] added ${table}.${name}`);
+}
+
+addColumn('projects', 'description', "TEXT NOT NULL DEFAULT ''");
+addColumn('projects', 'repo_url', "TEXT NOT NULL DEFAULT ''");
+
 export const COLUMNS = ['todo', 'next', 'doing', 'done'];
+export const LINK_KINDS = ['link', 'contact'];
+
+/**
+ * Only these schemes become clickable links. Anything else is kept as plain
+ * text so a stored "javascript:" value can never run.
+ */
+export function safeUrl(value) {
+  try {
+    const url = new URL(String(value).trim());
+    return ['http:', 'https:', 'mailto:', 'tel:'].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Position for a new item at the end of a list. Gaps of 1000 leave room to insert between. */
 export function nextPosition(table, whereSql, params) {

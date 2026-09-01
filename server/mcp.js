@@ -64,7 +64,8 @@ export function buildMcpServer() {
     description:
       'Everything about a single project: its name and colour, all of its cards, and counts — ' +
       'how many cards sit in each column, how many are flagged, checklist progress, and the ' +
-      'percent done. Use this when you need the detail of one project rather than the whole board.',
+      'percent done. Also returns the project description, repo link, saved links and contacts, ' +
+      'and the update log. Use this when you need the detail of one project rather than the whole board.',
     inputSchema: { project_id: z.number().int().describe('Which project to read.') },
     annotations: { readOnlyHint: true },
   }, tool(({ project_id }) => callApi('GET', `/projects/${project_id}`)));
@@ -85,9 +86,42 @@ export function buildMcpServer() {
       project_id: z.number().int().describe('Which project to change.'),
       name: z.string().min(1).optional().describe('New name.'),
       color: z.string().optional().describe('New hex colour.'),
+      description: z.string().optional().describe('Free notes about the project. Replaces what is there.'),
+      repo_url: z.string().optional().describe('Link to the code repo, for example a GitHub URL.'),
       archived: z.boolean().optional().describe('True hides the project from the board.'),
     },
   }, tool(({ project_id, ...rest }) => callApi('PATCH', `/projects/${project_id}`, rest)));
+
+  server.registerTool('add_project_link', {
+    title: 'Add a link or contact to a project',
+    description:
+      'Attach a named link or a contact to a project. Use kind "link" for a URL such as a repo, ' +
+      'dashboard or doc, and kind "contact" for a person, an email or a phone number.',
+    inputSchema: {
+      project_id: z.number().int().describe('Which project to attach it to.'),
+      kind: z.enum(['link', 'contact']).describe('"link" for a URL, "contact" for a person.'),
+      label: z.string().min(1).describe('Short name, for example "Staging" or "Dana".'),
+      value: z.string().min(1).describe('The URL, email or phone number.'),
+    },
+  }, tool(({ project_id, ...rest }) => callApi('POST', `/projects/${project_id}/links`, rest)));
+
+  server.registerTool('delete_project_link', {
+    title: 'Remove a link or contact',
+    description: 'Remove one link or contact from a project. Get its id from get_project.',
+    inputSchema: { link_id: z.number().int().describe('Which link or contact to remove.') },
+    annotations: { destructiveHint: true },
+  }, tool(({ link_id }) => callApi('DELETE', `/links/${link_id}`)));
+
+  server.registerTool('add_project_update', {
+    title: 'Write a project update',
+    description:
+      'Add a dated entry to the project update log — a short note about what happened or changed. ' +
+      'The log is the project history, newest first. Good for recording progress after doing work.',
+    inputSchema: {
+      project_id: z.number().int().describe('Which project the update belongs to.'),
+      text: z.string().min(1).describe('What happened, in a sentence or two.'),
+    },
+  }, tool(({ project_id, text }) => callApi('POST', `/projects/${project_id}/updates`, { text })));
 
   server.registerTool('create_card', {
     title: 'Add a card',
