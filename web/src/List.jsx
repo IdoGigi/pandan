@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Card } from './Card.jsx';
 
 /** One grid cell: the cards of a single project in a single column. */
-export function List({ projectId, columnKey, cards, drag, onOpenCard, onAddCard, onDropCard }) {
+export function List({ projectId, columnKey, cards, drag, onOpenCard, onCardMenu, onAddCard, onDropCard }) {
   const ref = useRef(null);
   const [dropIndex, setDropIndex] = useState(null);
   const [adding, setAdding] = useState(false);
@@ -57,6 +57,7 @@ export function List({ projectId, columnKey, cards, drag, onOpenCard, onAddCard,
             card={card}
             dragging={drag.current?.id === card.id}
             onOpen={onOpenCard}
+            onMenu={onCardMenu}
             onDragStart={(e) => {
               drag.current = card;
               e.dataTransfer.effectAllowed = 'move';

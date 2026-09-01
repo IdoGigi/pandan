@@ -589,6 +589,88 @@ await step('losing the stream shows offline, not a crash', async () => {
   }
 });
 
+const rightClick = async (el, x = 100, y = 100) => {
+  await act(async () => {
+    const ev = new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    Object.defineProperty(ev, 'clientX', { value: x });
+    Object.defineProperty(ev, 'clientY', { value: y });
+    el.dispatchEvent(ev);
+  });
+  await settle();
+};
+
+await step('right-clicking a card opens the colour menu', async () => {
+  await rightClick(q('.card')[0]);
+  const ctx = document.querySelector('.ctx');
+  if (!ctx) throw new Error('menu did not open');
+  if (ctx.querySelectorAll('.ctx-swatch').length !== 6) throw new Error('expected 6 colours');
+  if (!ctx.querySelector('.ctx-item')) throw new Error('flag option missing');
+  const on = ctx.querySelectorAll('.ctx-swatch.on');
+  if (on.length !== 1) throw new Error(`the current colour should be marked once, got ${on.length}`);
+});
+
+await step('picking a colour changes the card and closes the menu', async () => {
+  let patched = null;
+  const prev = g.fetch;
+  const spy = (url, opts = {}) => {
+    if ((opts.method || 'GET') === 'PATCH' && /\/cards\/\d+$/.test(String(url))) {
+      patched = JSON.parse(opts.body);
+    }
+    return prev(url, opts);
+  };
+  g.fetch = spy; dom.window.fetch = spy;
+
+  const ctx = document.querySelector('.ctx');
+  const target = [...ctx.querySelectorAll('.ctx-swatch')].find((b) => !b.className.includes('on'));
+  await click(target);
+
+  g.fetch = prev; dom.window.fetch = prev;
+  if (document.querySelector('.ctx')) throw new Error('menu should close after picking');
+  if (!patched || !patched.color) throw new Error('no colour was sent to the server');
+  if (Object.keys(patched).length !== 1) throw new Error('only the colour should be sent');
+});
+
+await step('the menu can flag and unflag a card', async () => {
+  let patched = null;
+  const prev = g.fetch;
+  const spy = (url, opts = {}) => {
+    if ((opts.method || 'GET') === 'PATCH' && /\/cards\/\d+$/.test(String(url))) {
+      patched = JSON.parse(opts.body);
+    }
+    return prev(url, opts);
+  };
+  g.fetch = spy; dom.window.fetch = spy;
+
+  await rightClick(q('.card')[0]);
+  await click(document.querySelector('.ctx-item'));
+
+  g.fetch = prev; dom.window.fetch = prev;
+  if (!patched || patched.flagged === undefined) throw new Error('flag was not sent');
+});
+
+await step('Escape closes the menu, and it stays on screen', async () => {
+  await rightClick(q('.card')[0], 99999, 99999);
+  const ctx = document.querySelector('.ctx');
+  if (!ctx) throw new Error('menu did not open');
+  const left = parseFloat(ctx.style.left);
+  const top = parseFloat(ctx.style.top);
+  if (left > dom.window.innerWidth || top > dom.window.innerHeight) {
+    throw new Error(`menu placed off screen at ${left},${top}`);
+  }
+  await act(async () => {
+    dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' }));
+  });
+  await settle();
+  if (document.querySelector('.ctx')) throw new Error('Escape did not close the menu');
+});
+
+await step('a normal left click still opens the card editor', async () => {
+  await click(q('.card')[0]);
+  if (!document.querySelector('.modal')) throw new Error('card editor did not open');
+  const cancel = [...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Cancel');
+  await click(cancel);
+});
+
 await step('headers and the project column stay pinned', async () => {
   const head = q('.head-col')[0];
   if (dom.window.getComputedStyle(head).position !== 'sticky') throw new Error('column headers not sticky');

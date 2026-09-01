@@ -1,6 +1,6 @@
 export const CARD_COLORS = ['plain', 'lime', 'sky', 'amber', 'rose', 'violet'];
 
-export function Card({ card, dragging, onOpen, onDragStart, onDragEnd }) {
+export function Card({ card, dragging, onOpen, onMenu, onDragStart, onDragEnd }) {
   const total = card.checks_total ?? 0;
   const done = card.checks_done ?? 0;
 
@@ -11,6 +11,10 @@ export function Card({ card, dragging, onOpen, onDragStart, onDragEnd }) {
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={() => onOpen(card)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onMenu(card, e.clientX, e.clientY);
+      }}
       title={card.notes || card.title}
     >
       {card.flagged ? <span className="card-flag" /> : null}

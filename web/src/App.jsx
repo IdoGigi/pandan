@@ -5,6 +5,7 @@ import { CardModal } from './CardModal.jsx';
 import { ProjectModal } from './ProjectModal.jsx';
 import { Login } from './Login.jsx';
 import { Dialog } from './Dialog.jsx';
+import { CardMenu } from './ContextMenu.jsx';
 
 const PROJECT_COLORS = ['#c3d117', '#4bb3d4', '#f0b429', '#e2725b', '#9b8ec4', '#57a773'];
 
@@ -33,6 +34,7 @@ export function App() {
   const [openCardId, setOpenCardId] = useState(null);
   const [openProjectId, setOpenProjectId] = useState(null);
   const [dialog, setDialog] = useState(null);
+  const [menu, setMenu] = useState(null);
   const [compact, setCompact] = useState(() => readSetting('compact', true));
   const [rowCap, setRowCap] = useState(() => readSetting('rowCap', 240));
   const [collapsed, setCollapsed] = useState(() => new Set(readSetting('collapsed', [])));
@@ -145,6 +147,13 @@ export function App() {
       () => setCards(before));
   }
 
+  /** Right-click edits show at once, then go to the server. */
+  function quickEdit(card, patch) {
+    const before = cards;
+    setCards((list) => list.map((c) => (c.id === card.id ? { ...c, ...patch } : c)));
+    commit(() => api.updateCard(card.id, patch), () => setCards(before));
+  }
+
   function addProject() {
     setDialog({
       kind: 'prompt',
@@ -223,12 +232,29 @@ export function App() {
             collapsed={collapsed}
             onToggleRow={toggleRow}
             onOpenCard={(card) => typeof card.id === 'number' && setOpenCardId(card.id)}
+            onCardMenu={(card, x, y) => {
+              if (typeof card.id === 'number') setMenu({ card, x, y });
+            }}
             onOpenProject={setOpenProjectId}
             onAddCard={addCard}
             onDropCard={dropCard}
           />
         )}
       </div>
+
+      {menu && (
+        <CardMenu
+          x={menu.x}
+          y={menu.y}
+          card={cards.find((c) => c.id === menu.card.id) || menu.card}
+          onClose={() => setMenu(null)}
+          onPickColor={(color) => { quickEdit(menu.card, { color }); setMenu(null); }}
+          onToggleFlag={() => {
+            quickEdit(menu.card, { flagged: menu.card.flagged ? 0 : 1 });
+            setMenu(null);
+          }}
+        />
+      )}
 
       {dialog && <Dialog {...dialog} onCancel={() => setDialog(null)} />}
 

@@ -595,3 +595,58 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .live.on i { background: #57a773; }
 .live.on { color: #57a773; }
+
+/* ---------------- right-click menu ---------------- */
+
+.ctx {
+  position: fixed;
+  z-index: 40;
+  min-width: 178px;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.18);
+  padding: 7px;
+  animation: fade 0.1s ease;
+}
+
+.ctx-title {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 2px 4px 7px;
+  max-width: 210px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 7px;
+}
+
+.ctx-colors { display: flex; gap: 5px; padding: 0 2px 6px; }
+
+.ctx-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.ctx-swatch:hover { transform: scale(1.15); }
+.ctx-swatch.on { border-color: #2f3437; }
+
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  border: none;
+  background: none;
+  border-radius: var(--radius);
+  padding: 6px 5px;
+  font-size: 12.5px;
+  text-align: left;
+}
+.ctx-item:hover { background: #f0f2f4; }
+.ctx-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--flag); flex: 0 0 auto; }

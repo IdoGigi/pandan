@@ -20,7 +20,7 @@ function Header() {
 
 export function Board({
   projects, cards, compact, rowCap, collapsed,
-  onToggleRow, onOpenCard, onOpenProject, onAddCard, onDropCard, onDeleteProject,
+  onToggleRow, onOpenCard, onCardMenu, onOpenProject, onAddCard, onDropCard,
 }) {
   const drag = useRef(null);
 
@@ -91,6 +91,7 @@ export function Board({
                     cards={byCell.get(`${project.id}:${col}`) || []}
                     drag={drag}
                     onOpenCard={onOpenCard}
+                    onCardMenu={onCardMenu}
                     onAddCard={onAddCard}
                     onDropCard={onDropCard}
                   />
