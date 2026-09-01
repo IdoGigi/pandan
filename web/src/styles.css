@@ -925,3 +925,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 :root[data-theme='dark'] .seg button.on { background: var(--sky); color: #10232b; }
 
 .settings-btn { font-size: 15px; padding: 4px 8px; }
+
+.settings-btn {
+  display: flex;
+  align-items: center;
+  padding: 5px 7px;
+  color: var(--muted);
+}
+.settings-btn:hover { color: var(--text); }

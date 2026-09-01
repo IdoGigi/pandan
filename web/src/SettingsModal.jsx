@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { Logo } from './Logo.jsx';
+import { LabelEditor } from './LabelEditor.jsx';
 
 /**
  * Everything that is not day-to-day board work lives here, so the top bar can
@@ -12,6 +13,7 @@ export function SettingsModal({
   rowCap, setRowCap,
   allFolded, onFoldAll,
   board, onRenameBoard, onDeleteBoard, boardCount,
+  boardId, labels, onLabelsSaved,
   onOpenArchive, onOpenKeys, onLogout, onClose,
 }) {
   const [info, setInfo] = useState(null);
@@ -97,6 +99,11 @@ export function SettingsModal({
               </button>
             </span>
           </div>
+        </section>
+
+        <section className="set-block">
+          <h3>Labels</h3>
+          <LabelEditor boardId={boardId} labels={labels} onSaved={onLabelsSaved} />
         </section>
 
         <section className="set-block">

@@ -923,8 +923,9 @@ await step('project rows have a drag handle', () => {
 });
 
 const openSettings = async () => {
-  const gear = q('.topbar .btn').find((b) => b.textContent.trim() === '⚙');
+  const gear = container.querySelector('.settings-btn');
   if (!gear) throw new Error('no settings button in the header');
+  if (!gear.querySelector('svg')) throw new Error('the gear should be a drawn icon, not a glyph');
   await click(gear);
   const panel = document.querySelector('.settings');
   if (!panel) throw new Error('settings did not open');
@@ -1013,6 +1014,36 @@ await step('settings opens the archive and the keys', async () => {
   await click([...panel.querySelectorAll('.btn')].find((b) => b.textContent === 'Manage keys'));
   if (!document.querySelector('.token-list, .modal-wide')) throw new Error('keys did not open');
   await click([...document.querySelectorAll('.modal-wide .modal-actions .btn')].find((b) => b.textContent === 'Close'));
+});
+
+await step('labels can also be renamed from settings', async () => {
+  let sent = null;
+  const prev = g.fetch;
+  const spy = (url, opts = {}) => {
+    if (/\/labels\//.test(String(url))) sent = JSON.parse(opts.body);
+    return prev(url, opts);
+  };
+  g.fetch = spy; dom.window.fetch = spy;
+
+  const panel = await openSettings();
+  if (!panel.textContent.includes('Labels')) throw new Error('no Labels section in settings');
+  const rows = panel.querySelectorAll('.label-row');
+  if (rows.length !== 6) throw new Error(`expected 6 colours, got ${rows.length}`);
+  if (![...rows].some((r) => r.querySelector('.input').value === 'Blocked')) {
+    throw new Error('existing label name not shown in settings');
+  }
+
+  const input = rows[1].querySelector('.input');
+  await act(async () => { setNativeValue(input, 'Deep work'); });
+  await act(async () => {
+    input.dispatchEvent(new dom.window.Event('blur'));
+    input.dispatchEvent(new dom.window.Event('focusout', { bubbles: true }));
+  });
+  await settle();
+
+  g.fetch = prev; dom.window.fetch = prev;
+  if (sent?.name !== 'Deep work') throw new Error(`name not saved: ${JSON.stringify(sent)}`);
+  await closeSettings();
 });
 
 await step('headers and the project column stay pinned', async () => {

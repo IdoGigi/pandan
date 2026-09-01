@@ -7,6 +7,7 @@ import { Login } from './Login.jsx';
 import { Dialog } from './Dialog.jsx';
 import { CardMenu } from './ContextMenu.jsx';
 import { Logo } from './Logo.jsx';
+import { Gear } from './Icons.jsx';
 import { SettingsModal } from './SettingsModal.jsx';
 import { TokensModal } from './TokensModal.jsx';
 import { ArchiveModal } from './ArchiveModal.jsx';
@@ -354,7 +355,7 @@ export function App() {
           title="Settings"
           aria-label="Settings"
         >
-          ⚙
+          <Gear />
         </button>
       </div>
 
@@ -409,6 +410,9 @@ export function App() {
           onFoldAll={() => setCollapsed((prev) =>
             prev.size === projects.length ? new Set() : new Set(projects.map((p) => p.id)))}
           board={boards.find((b) => b.id === boardId)}
+          boardId={boardId}
+          labels={labels}
+          onLabelsSaved={load}
           boardCount={boards.length}
           onRenameBoard={() => { setSettings(false); renameBoard(); }}
           onDeleteBoard={() => { setSettings(false); deleteBoard(); }}
