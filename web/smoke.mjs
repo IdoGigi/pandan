@@ -888,6 +888,48 @@ await step('search filters cards and hides empty rows', async () => {
   if (q('.card-title').length < 2) throw new Error('clearing search did not bring cards back');
 });
 
+await step('search finds a card by its number', async () => {
+  const box = container.querySelector('.search');
+  const target = state.cards[0];   // "Buy milk", id 10
+
+  // With a hash: only that card, whatever its words are.
+  await act(async () => { setNativeValue(box, `#${target.id}`); });
+  await settle();
+  let titles = q('.card-title').map((n) => n.textContent);
+  if (titles.length !== 1 || titles[0] !== target.title) {
+    throw new Error(`#${target.id} should show only that card, got: ${titles.join(', ')}`);
+  }
+
+  // A number with no hash still finds it.
+  await act(async () => { setNativeValue(box, String(target.id)); });
+  await settle();
+  if (!q('.card-title').map((n) => n.textContent).includes(target.title)) {
+    throw new Error('a bare number should find the card too');
+  }
+
+  // A hash and something that is not a number finds nothing, rather than everything.
+  await act(async () => { setNativeValue(box, '#milk'); });
+  await settle();
+  if (q('.card-title').length !== 0) throw new Error('#milk should match nothing');
+
+  // Words still work as before.
+  await act(async () => { setNativeValue(box, 'milk'); });
+  await settle();
+  if (!q('.card-title').map((n) => n.textContent).includes('Buy milk')) {
+    throw new Error('word search broke');
+  }
+
+  await act(async () => { setNativeValue(box, ''); });
+  await settle();
+});
+
+await step('the search box says you can use a number', () => {
+  const box = container.querySelector('.search');
+  if (!box.getAttribute('placeholder').includes('#')) {
+    throw new Error('the placeholder should hint that numbers work');
+  }
+});
+
 await step('the card editor archives instead of deleting', async () => {
   await click(q('.card')[0]);
   const actions = [...document.querySelectorAll('.modal-actions .btn')].map((b) => b.textContent);

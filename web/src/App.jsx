@@ -283,13 +283,30 @@ export function App() {
   if (authed === null) return <div className="center-note">Loading…</div>;
   if (authed === false) return <Login onSuccess={load} />;
 
-  const needle = search.trim().toLowerCase();
-  let visibleCards = needle
-    ? cards.filter((c) => `${c.title} ${c.notes || ''}`.toLowerCase().includes(needle))
-    : cards;
+  const raw = search.trim();
+  const needle = raw.toLowerCase();
+
+  /**
+   * "#54" looks up a card number and nothing else. A bare number does both, so
+   * typing 24 finds card #24 and also "24 hour support". Numbers match on the
+   * start, so the right card shows up before you finish typing.
+   */
+  const byNumber = (card, digits) => String(card.id).startsWith(digits);
+  const idOnly = raw.startsWith('#');
+  const digits = (idOnly ? raw.slice(1) : raw).trim();
+  const looksNumeric = /^\d+$/.test(digits);
+
+  let visibleCards = cards;
+  if (idOnly) {
+    visibleCards = looksNumeric ? cards.filter((c) => byNumber(c, digits)) : [];
+  } else if (needle) {
+    visibleCards = cards.filter((c) =>
+      `${c.title} ${c.notes || ''}`.toLowerCase().includes(needle) ||
+      (looksNumeric && byNumber(c, digits)));
+  }
   if (agentOnly) visibleCards = visibleCards.filter((c) => c.last_actor_kind === 'agent');
 
-  const filtering = needle || agentOnly;
+  const filtering = raw || agentOnly;
   const needleCount = filtering
     ? `${visibleCards.length} card${visibleCards.length === 1 ? '' : 's'}`
     : null;
@@ -338,7 +355,7 @@ export function App() {
         <input
           className="search"
           value={search}
-          placeholder="Search cards…"
+          placeholder="Search cards or #12…"
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === 'Escape' && setSearch('')}
         />

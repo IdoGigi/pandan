@@ -46,7 +46,8 @@ take, so what you read off the board is what you pass along.
 Cards carry a label colour, a due date, a flag, notes and a checklist. Late
 cards go red. Right-click one to recolour it, and name a colour to turn it into
 a real label such as "Blocked". The search box filters the whole board as you
-type, and rows can be dragged into the order you want.
+type — words, or a card number like `#46` — and rows can be dragged into the
+order you want.
 
 **Nothing is deleted.** Archiving takes a card off the board and keeps it, and
 an agent key cannot delete anything at all — only you can, from the archive.
