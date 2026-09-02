@@ -318,6 +318,35 @@ await step('a card can be dragged into Review', async () => {
   if (moved?.column_key !== 'review') throw new Error(`expected a move to review, got ${JSON.stringify(moved)}`);
 });
 
+await step('every card shows its number', () => {
+  const cards = q('.card');
+  const numbers = q('.card-no').map((n) => n.textContent);
+  if (numbers.length !== cards.length) {
+    throw new Error(`${cards.length} cards but ${numbers.length} numbers`);
+  }
+  if (!numbers.every((t) => /^#\d+$/.test(t))) {
+    throw new Error(`numbers should read like #12, got: ${numbers.join(', ')}`);
+  }
+  // The number must match the real card id, since that is what you pass an agent.
+  const first = q('.card')[0].closest('[data-card]');
+  if (!first) throw new Error('card wrapper missing');
+});
+
+await step('a card being created has no number yet', async () => {
+  const add = q('.add-card')[0];
+  await click(add);
+  const box = q('.quick-input')[0];
+  await act(async () => { setNativeValue(box, 'brand new card'); });
+  await act(async () => {
+    box.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  });
+  // Straight after adding, the optimistic card has a temporary id — showing
+  // "#tmp-123" would be worse than showing nothing.
+  const bad = q('.card-no').map((n) => n.textContent).filter((t) => !/^#\d+$/.test(t));
+  if (bad.length) throw new Error(`bad numbers on a pending card: ${bad.join(', ')}`);
+  await settle();
+});
+
 await step('checklist count shows on card', () => {
   if (!container.textContent.includes('1/2')) throw new Error('checklist badge missing');
 });
@@ -876,6 +905,8 @@ await step('the card editor shows a due date and the label name', async () => {
   await click(q('.card')[0]);
   const modal = document.querySelector('.modal');
   if (!modal.querySelector('input[type="date"]')) throw new Error('no due date field');
+  const heading = modal.querySelector('h2').textContent;
+  if (!/#\d+/.test(heading)) throw new Error(`the editor should show the number, got "${heading}"`);
   const labels = [...modal.querySelectorAll('.field label')].map((n) => n.textContent);
   if (!labels.some((t) => t.startsWith('Label'))) {
     throw new Error(`colour section should be called Label, got: ${labels.join(' | ')}`);

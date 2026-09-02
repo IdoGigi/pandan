@@ -38,7 +38,11 @@ export function Card({ card, dragging, onOpen, onMenu, onDragStart, onDragEnd })
           <Bot size={11} />
         </span>
       )}
-      <div className="card-title">{card.title}</div>
+      <div className="card-line">
+        <span className="card-title">{card.title}</span>
+        {/* A card made a moment ago has no real id yet, so nothing to show. */}
+        {typeof card.id === 'number' && <span className="card-no">#{card.id}</span>}
+      </div>
       {(total > 0 || due) && (
         <div className="card-meta">
           {due && (

@@ -270,6 +270,27 @@ button { font: inherit; color: inherit; cursor: pointer; }
   );
 }
 
+.card-line {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.card-line .card-title { flex: 1; min-width: 0; }
+
+/* The id is what you say to an agent — "archive #23" — so it earns its place,
+   but it must never compete with the title. */
+.card-no {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  color: var(--muted);
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+  user-select: all;
+}
+.card.lime .card-no, .card.amber .card-no { color: rgba(0, 0, 0, 0.5); opacity: 1; }
+.card.sky .card-no, .card.rose .card-no, .card.violet .card-no { color: rgba(255, 255, 255, 0.8); opacity: 1; }
+.card-no.big { font-size: 12px; font-weight: 500; margin-left: 2px; }
+
 .card-title {
   font-size: 12.5px;
   line-height: 1.35;

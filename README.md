@@ -39,6 +39,10 @@ with `Next` and `Doing` grouped under **In progress**.
 not a gate — an agent can still move a card straight to `Done` when the work
 plainly needs no checking. The point is that it can tell you which is which.
 
+Every card shows its number. That number is what you say to an agent — "archive
+#23", "move #17 to done" — and it is the `card_id` the API and the MCP tools
+take, so what you read off the board is what you pass along.
+
 Cards carry a label colour, a due date, a flag, notes and a checklist. Late
 cards go red. Right-click one to recolour it, and name a colour to turn it into
 a real label such as "Blocked". The search box filters the whole board as you
