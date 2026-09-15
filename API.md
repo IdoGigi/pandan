@@ -67,7 +67,7 @@ curl -s -H "$KEY" "$KB/board?board_id=1"
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/projects` | All active projects |
+| GET | `/projects` | All active projects. `?archived=true` lists the archived ones instead |
 | GET | `/projects/:id` | One project in full: cards, counts, links, contacts and the update log |
 | POST | `/projects/:id/links` | `{ "kind": "link"\|"contact", "label", "value" }` |
 | PATCH | `/links/:id` | Change a link or contact |

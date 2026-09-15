@@ -382,6 +382,13 @@ export function App() {
           <i /> {live ? 'live' : 'offline'}
         </span>
         <button
+          className="btn btn-ghost"
+          onClick={() => setArchive(true)}
+          title="Archived cards and projects"
+        >
+          Archive
+        </button>
+        <button
           className="btn btn-ghost settings-btn"
           onClick={() => setSettings(true)}
           title="Settings"

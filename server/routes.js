@@ -156,11 +156,13 @@ api.get('/board', (req, res) => {
 
 /* ---------------- projects ---------------- */
 
+/** Active projects by default; `?archived=true` lists the ones put away instead. */
 api.get('/projects', (req, res) => {
   const boardId = req.query.board_id ? Number(req.query.board_id) : null;
+  const archived = req.query.archived === 'true' ? 1 : 0;
   res.json(boardId
-    ? db.prepare('SELECT * FROM projects WHERE archived = 0 AND board_id = ? ORDER BY position').all(boardId)
-    : db.prepare('SELECT * FROM projects WHERE archived = 0 ORDER BY position').all());
+    ? db.prepare('SELECT * FROM projects WHERE archived = ? AND board_id = ? ORDER BY position').all(archived, boardId)
+    : db.prepare('SELECT * FROM projects WHERE archived = ? ORDER BY position').all(archived));
 });
 
 /** Everything about one project: its details, its cards, and a few counts. */

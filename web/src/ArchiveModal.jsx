@@ -4,11 +4,25 @@ import { Dialog } from './Dialog.jsx';
 
 export function ArchiveModal({ onClose, onChanged }) {
   const [rows, setRows] = useState(null);
+  const [projects, setProjects] = useState([]);
   const [destroying, setDestroying] = useState(null);
   const [error, setError] = useState('');
 
-  const load = () => api.archivedCards().then(setRows).catch((e) => setError(e.message));
+  const load = () =>
+    Promise.all([api.archivedCards(), api.archivedProjects()])
+      .then(([cards, projs]) => { setRows(cards); setProjects(projs); })
+      .catch((e) => setError(e.message));
   useEffect(() => { load(); }, []);
+
+  const restoreProject = async (project) => {
+    try {
+      await api.updateProject(project.id, { archived: false });
+      await load();
+      onChanged();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
 
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && !destroying && onClose();
@@ -18,7 +32,7 @@ export function ArchiveModal({ onClose, onChanged }) {
 
   return (
     <div className="overlay" onMouseDown={onClose}>
-      <div className="modal modal-wide" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal modal-wide archive" onMouseDown={(e) => e.stopPropagation()}>
         <h2>Archive</h2>
         <p className="dialog-msg">
           Cards that were put away, newest first. Nothing here is lost — bring
@@ -26,10 +40,28 @@ export function ArchiveModal({ onClose, onChanged }) {
           never delete one.
         </p>
 
+        {projects.length > 0 && (
+          <>
+            <h3>Projects</h3>
+            <div className="token-list">
+              {projects.map((project) => (
+                <div key={project.id} className="token-row">
+                  <span className="chip" style={{ background: project.color }} />
+                  <span className="token-name">{project.name}</span>
+                  <button className="btn" onClick={() => restoreProject(project)}>Restore</button>
+                </div>
+              ))}
+            </div>
+            <h3>Cards</h3>
+          </>
+        )}
+
         {rows === null ? (
           <div className="center-note">Loading…</div>
         ) : rows.length === 0 ? (
-          <p className="dialog-msg" style={{ margin: 0 }}>The archive is empty.</p>
+          <p className="dialog-msg" style={{ margin: 0 }}>
+            {projects.length === 0 ? 'The archive is empty.' : 'No archived cards.'}
+          </p>
         ) : (
           <div className="token-list">
             {rows.map((card) => (

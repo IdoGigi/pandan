@@ -28,6 +28,9 @@ const state = {
     { id: 77, title: 'an archived card', color: 'rose', project_name: 'House chores',
       archived_at: '2026-09-01 10:00' },
   ],
+  archivedProjects: [
+    { id: 8, name: 'Old garden plan', color: '#8899aa', position: 4000, archived: 1 },
+  ],
   tokens: [
     { id: 1, name: 'laptop agent', prefix: 'pnd_aaa111',
       created_at: '2026-08-01 09:00', last_used_at: '2026-09-01 09:30', revoked_at: null },
@@ -60,6 +63,12 @@ function fakeFetch(url, opts = {}) {
     counts: { projects: 3, cards: 3 },
   });
   if (path === '/cards?archived=true') return json(state.archived);
+  if (path === '/projects?archived=true') return json(state.archivedProjects);
+  if (/^\/projects\/\d+$/.test(path) && method === 'PATCH' && body.archived === false) {
+    const id = Number(path.split('/')[2]);
+    state.archivedProjects = state.archivedProjects.filter((p) => p.id !== id);
+    return json({ id, archived: 0 });
+  }
   if (/\/cards\/\d+\/restore$/.test(path)) {
     const id = Number(path.split('/')[2]);
     state.archived = state.archived.filter((c) => c.id !== id);
@@ -1019,7 +1028,7 @@ const closeSettings = async () => {
 await step('the header is down to the everyday controls', () => {
   const bar = container.querySelector('.topbar');
   const buttons = [...bar.querySelectorAll('.btn')].map((b) => b.textContent.trim());
-  for (const gone of ['About', 'Agent keys', 'Archive', 'Fold all', 'Compact', 'Log out']) {
+  for (const gone of ['About', 'Agent keys', 'Fold all', 'Compact', 'Log out']) {
     if (buttons.includes(gone)) throw new Error(`"${gone}" should have moved into settings`);
   }
   if (!buttons.some((b) => b.includes('Project'))) throw new Error('+ Project should stay');
@@ -1095,6 +1104,20 @@ await step('settings opens the archive and the keys', async () => {
   await click([...document.querySelectorAll('.modal-wide .modal-actions .btn')].find((b) => b.textContent === 'Close'));
 });
 
+await step('the archive opens from the header and can bring a project back', async () => {
+  const bar = container.querySelector('.topbar');
+  await click([...bar.querySelectorAll('.btn')].find((b) => b.textContent.trim() === 'Archive'));
+  const modal = document.querySelector('.modal-wide.archive');
+  if (!modal) throw new Error('archive did not open from the header');
+  await settle();
+  if (!modal.textContent.includes('Old garden plan')) throw new Error('archived project not listed');
+  const row = [...modal.querySelectorAll('.token-row')].find((r) => r.textContent.includes('Old garden plan'));
+  await click([...row.querySelectorAll('.btn')].find((b) => b.textContent === 'Restore'));
+  await settle();
+  if (modal.textContent.includes('Old garden plan')) throw new Error('restored project still listed');
+  await click([...modal.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Close'));
+});
+
 await step('labels can also be renamed from settings', async () => {
   let sent = null;
   const prev = g.fetch;
@@ -1165,9 +1188,9 @@ await step('the card editor says who changed it', async () => {
   await click([...document.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Cancel'));
 });
 
-await step('headers and the project column stay pinned', async () => {
+await step('the project column stays pinned, the headers scroll away', async () => {
   const head = q('.head-col')[0];
-  if (dom.window.getComputedStyle(head).position !== 'sticky') throw new Error('column headers not sticky');
+  if (dom.window.getComputedStyle(head).position === 'sticky') throw new Error('column headers should scroll with the board');
   const label = q('.row-label')[0];
   if (dom.window.getComputedStyle(label).position !== 'sticky') throw new Error('project column not sticky');
 });

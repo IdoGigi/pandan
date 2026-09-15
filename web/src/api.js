@@ -41,6 +41,7 @@ export const api = {
   createProject: (data) => request('POST', '/projects', data),
   updateProject: (id, data) => request('PATCH', `/projects/${id}`, data),
   deleteProject: (id) => request('DELETE', `/projects/${id}`),
+  archivedProjects: () => request('GET', '/projects?archived=true'),
 
   addLink: (projectId, data) => request('POST', `/projects/${projectId}/links`, data),
   updateLink: (id, data) => request('PATCH', `/links/${id}`, data),
