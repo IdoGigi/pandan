@@ -147,21 +147,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .head-col { min-height: 30px; }
 .head-blank { background: var(--head-bg); }
 
-/* headers stay visible while the board scrolls */
-.head-group, .head-col, .head-blank {
-  position: sticky;
-  z-index: 3;
-  background: var(--head-bg);
-}
-.head-group { top: 0; }
-.head-col { top: 0; }
-.board > .head-col[style*="grid-row: 2"] { top: 31px; }
+/* the top-left corner stays with the row labels while the board scrolls sideways */
+.head-blank { position: sticky; left: 0; z-index: 4; }
 
 /* Review is a stage, not a gate — marked, but not walled off. */
 .head-col.review-head { color: var(--amber); }
 .list.review { background: color-mix(in srgb, var(--amber) 6%, var(--panel)); }
 .list.review.drop-active { background: color-mix(in srgb, var(--amber) 14%, var(--panel)); }
-.head-blank, .board > .head-col:first-of-type { left: 0; z-index: 4; }
 
 .row-label {
   flex-direction: column;
