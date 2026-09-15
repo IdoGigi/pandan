@@ -568,6 +568,30 @@ await step('project panel Save stays off until something changes', async () => {
   await click(close);
 });
 
+await step('a whole project can be archived from its panel', async () => {
+  let sent = null;
+  const prev = g.fetch;
+  const spy = (url, opts = {}) => {
+    if (/\/projects\/\d+$/.test(String(url)) && opts.method === 'PATCH') sent = JSON.parse(opts.body);
+    return prev(url, opts);
+  };
+  g.fetch = spy; dom.window.fetch = spy;
+
+  await click(q('.row-label .name')[0]);
+  const panel = document.querySelector('.modal-wide');
+  const archive = [...panel.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Archive project');
+  if (!archive) throw new Error('no Archive project button');
+  await click(archive);
+  const confirm = document.querySelector('.modal-sm');
+  if (!confirm) throw new Error('archive confirm did not open');
+  if (!confirm.textContent.includes('bring it back')) throw new Error('confirm should say it is reversible');
+  await click([...confirm.querySelectorAll('.btn')].find((b) => b.textContent === 'Archive'));
+  if (sent?.archived !== true) throw new Error(`expected archived:true, got ${JSON.stringify(sent)}`);
+  if (document.querySelector('.modal-wide')) throw new Error('project panel should close after archiving');
+
+  g.fetch = prev; dom.window.fetch = prev;
+});
+
 await step('project panel holds notes, repo, links, contacts and the log', async () => {
   await click(q('.row-label .name')[0]);
   const panel = document.querySelector('.modal-wide');

@@ -15,6 +15,7 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
   const [repoUrl, setRepoUrl] = useState('');
   const [note, setNote] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -36,11 +37,12 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
       if (confirmDelete) setConfirmDelete(false);
+      else if (confirmArchive) setConfirmArchive(false);
       else onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, confirmDelete]);
+  }, [onClose, confirmDelete, confirmArchive]);
 
   if (!data) {
     return (
@@ -255,11 +257,35 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
 
         <div className="modal-actions">
           <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>Delete project</button>
+          <button className="btn" onClick={() => setConfirmArchive(true)}>Archive project</button>
           <span className="spacer" />
           <button className="btn" onClick={onClose}>Close</button>
           <button className="btn btn-primary" disabled={!changed || !name.trim()} onClick={save}>Save</button>
         </div>
       </div>
+
+      {confirmArchive && (
+        <Dialog
+          kind="confirm"
+          title={`Archive "${data.name}"?`}
+          message={
+            `The row leaves the board${s.total ? ` with its ${s.total} card${s.total === 1 ? '' : 's'}` : ''}. ` +
+            'Nothing is deleted — you can bring it back from the Archive.'
+          }
+          confirmLabel="Archive"
+          onCancel={() => setConfirmArchive(false)}
+          onConfirm={async () => {
+            setConfirmArchive(false);
+            try {
+              await api.updateProject(data.id, { archived: true });
+              onDeleted();
+              onClose();
+            } catch (e) {
+              setError(e.message);
+            }
+          }}
+        />
+      )}
 
       {confirmDelete && (
         <Dialog
