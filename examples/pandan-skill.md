@@ -30,9 +30,20 @@ board with 40 true ones.
 it, never put it in a message, never pass it as a visible argument.
 
 ```bash
-PW=$(grep '^APP_PASSWORD=' /path/to/pandan/.env | cut -d= -f2-)
+PW=$(grep '^APP_PASSWORD=' /path/to/pandan/.env | cut -d= -f2- | tr -d '\r')
 curl -s -H "Authorization: Bearer $PW" \
   http://localhost:3000/api/board
+```
+
+**Never put text in a curl argument** (`-d '{"text":"..."}'`). On Windows any
+non-ASCII character in an argument arrives broken — an em dash becomes `�`,
+Hebrew becomes `?????`. Send the body on stdin instead:
+
+```bash
+curl -s -H "Authorization: Bearer $PW" -H 'Content-Type: application/json' \
+  --data-binary @- http://localhost:3000/api/projects/1/updates <<'EOF'
+{"text":"One sentence — any characters are safe this way."}
+EOF
 ```
 
 Full endpoint list: `/path/to/pandan/API.md`.
