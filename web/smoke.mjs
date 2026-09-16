@@ -552,6 +552,11 @@ await step('clicking a project name opens the project panel', async () => {
   if (panel.querySelectorAll('.stat').length < 6) throw new Error('stats missing');
   if (!panel.querySelector('.progress-bar span')) throw new Error('progress bar missing');
   if (!panel.querySelector('.mini-card')) throw new Error('card list missing');
+  const cols = panel.querySelectorAll('.project-col');
+  if (cols.length !== 5) throw new Error(`all five columns should show, got ${cols.length}`);
+  const list = panel.querySelector('.project-col-list');
+  const lcss = dom.window.getComputedStyle(list);
+  if (!lcss.maxHeight || lcss.maxHeight === 'none') throw new Error('a column should scroll past a few cards');
 });
 
 await step('project panel shows the right counts', async () => {

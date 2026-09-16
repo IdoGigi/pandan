@@ -82,7 +82,7 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
 
   return (
     <div className="overlay" onMouseDown={onClose}>
-      <div className="modal modal-wide" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="modal modal-wide project-panel" onMouseDown={(e) => e.stopPropagation()}>
         <div className="project-head">
           <span className="dot lg" style={{ background: color }} />
           <input
@@ -108,6 +108,39 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
           {s.checks_total > 0 && (
             <div className="stat"><b>{s.checks_done}/{s.checks_total}</b><span>checklist</span></div>
           )}
+        </div>
+
+        {/* All five columns in one row, each scrolling on its own past a few cards,
+            so a project with sixty cards takes the same room as one with five. */}
+        <div className="field">
+          <label>Cards</label>
+          <div className="project-cards">
+            {COLS.map((c) => {
+              const inCol = data.cards.filter((card) => card.column_key === c);
+              return (
+                <div key={c} className="project-col">
+                  <div className="project-col-head">{COLUMN_LABELS[c]} · {inCol.length}</div>
+                  <div className="project-col-list">
+                    {inCol.length === 0 && <span className="project-col-empty">—</span>}
+                    {inCol.map((card) => (
+                      <button
+                        key={card.id}
+                        className={`mini-card ${card.color || 'plain'}`}
+                        onClick={() => onOpenCard(card.id)}
+                        title="Open this card"
+                      >
+                        {card.flagged ? <span className="card-flag" /> : null}
+                        <span className="mini-title">{card.title}</span>
+                        {card.checks_total > 0 && (
+                          <span className="mini-meta">{card.checks_done}/{card.checks_total}</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="field">
@@ -214,35 +247,6 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
                   >
                     ×
                   </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="field">
-          <label>Cards</label>
-          {data.cards.length === 0 ? (
-            <p className="dialog-msg" style={{ margin: 0 }}>No cards in this project yet.</p>
-          ) : (
-            <div className="project-cards">
-              {COLS.filter((c) => s.by_column[c] > 0).map((c) => (
-                <div key={c} className="project-col">
-                  <div className="project-col-head">{COLUMN_LABELS[c]} · {s.by_column[c]}</div>
-                  {data.cards.filter((card) => card.column_key === c).map((card) => (
-                    <button
-                      key={card.id}
-                      className={`mini-card ${card.color || 'plain'}`}
-                      onClick={() => onOpenCard(card.id)}
-                      title="Open this card"
-                    >
-                      {card.flagged ? <span className="card-flag" /> : null}
-                      <span className="mini-title">{card.title}</span>
-                      {card.checks_total > 0 && (
-                        <span className="mini-meta">{card.checks_done}/{card.checks_total}</span>
-                      )}
-                    </button>
-                  ))}
                 </div>
               ))}
             </div>

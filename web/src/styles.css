@@ -537,12 +537,26 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .stat b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
 .stat span { font-size: 11px; color: var(--muted); }
 
+/* The project panel is wide enough for all five columns in one row. */
+.modal.project-panel { width: min(1080px, 100%); }
+
 .project-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
 }
-.project-col { display: flex; flex-direction: column; gap: 5px; }
+.project-col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+/* About five cards show; the rest scroll inside the column. */
+.project-col-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding-right: 2px;
+}
+.project-col-empty { color: var(--muted); font-size: 12px; padding: 4px 2px; }
 .project-col-head {
   font-size: 11px;
   font-weight: 600;
