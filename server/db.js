@@ -82,7 +82,19 @@ db.exec(`
     revoked_at   TEXT
   );
 
+  CREATE TABLE IF NOT EXISTS notes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    board_id   INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    text       TEXT    NOT NULL DEFAULT '',
+    color      TEXT    NOT NULL DEFAULT 'amber',
+    x          INTEGER NOT NULL DEFAULT 0,
+    y          INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_cards_project ON cards(project_id, column_key, position);
+  CREATE INDEX IF NOT EXISTS idx_notes_board   ON notes(board_id, id);
   CREATE INDEX IF NOT EXISTS idx_checks_card   ON checks(card_id, position);
   CREATE INDEX IF NOT EXISTS idx_links_project ON project_links(project_id, kind, position);
   CREATE INDEX IF NOT EXISTS idx_updates_project ON project_updates(project_id, id DESC);

@@ -131,6 +131,20 @@ curl -s -H "$KEY" -H 'Content-Type: application/json' \
   -d '{"project_id":2,"column_key":"next"}' $KB/cards/7/move
 ```
 
+## Sticky notes
+
+Each board has a note board: loose sticky notes, not tied to any project or
+card. `x` and `y` are where the note sits, in pixels from the top-left.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/boards/:id/notes` | Every note on that board |
+| POST | `/boards/:id/notes` | `{ "text?", "color?", "x?", "y?" }` |
+| PATCH | `/notes/:id` | Any of `text`, `color`, `x`, `y` |
+| DELETE | `/notes/:id` | Really deletes it. Notes have no archive |
+
+`color` uses the card colours, default `amber`. Text is at most 2000 characters.
+
 ## Checklist
 
 | Method | Path | Notes |
