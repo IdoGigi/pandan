@@ -147,39 +147,6 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
           )}
         </div>
 
-        {/* All five columns in one row, each scrolling on its own past a few cards,
-            so a project with sixty cards takes the same room as one with five. */}
-        <div className="field">
-          <label>Cards</label>
-          <div className="project-cards">
-            {COLS.map((c) => {
-              const inCol = data.cards.filter((card) => card.column_key === c);
-              return (
-                <div key={c} className="project-col">
-                  <div className="project-col-head">{COLUMN_LABELS[c]} · {inCol.length}</div>
-                  <div className="project-col-list">
-                    {inCol.length === 0 && <span className="project-col-empty">—</span>}
-                    {inCol.map((card) => (
-                      <button
-                        key={card.id}
-                        className={`mini-card ${card.color || 'plain'}`}
-                        onClick={() => onOpenCard(card.id)}
-                        title="Open this card"
-                      >
-                        {card.flagged ? <span className="card-flag" /> : null}
-                        <span className="mini-title">{card.title}</span>
-                        {card.checks_total > 0 && (
-                          <span className="mini-meta">{card.checks_done}/{card.checks_total}</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
         {/* Details on the left, the update log on the right; they stack on a narrow window. */}
         <div className="project-grid">
         <div className="project-details">
@@ -308,6 +275,39 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
         </div>
         </div>
 
+
+        {/* All five columns in one row, each scrolling on its own past a few cards,
+            so a project with sixty cards takes the same room as one with five. */}
+        <div className="field">
+          <label>Cards</label>
+          <div className="project-cards">
+            {COLS.map((c) => {
+              const inCol = data.cards.filter((card) => card.column_key === c);
+              return (
+                <div key={c} className="project-col">
+                  <div className="project-col-head">{COLUMN_LABELS[c]} · {inCol.length}</div>
+                  <div className="project-col-list">
+                    {inCol.length === 0 && <span className="project-col-empty">—</span>}
+                    {inCol.map((card) => (
+                      <button
+                        key={card.id}
+                        className={`mini-card ${card.color || 'plain'}`}
+                        onClick={() => onOpenCard(card.id)}
+                        title="Open this card"
+                      >
+                        {card.flagged ? <span className="card-flag" /> : null}
+                        <span className="mini-title">{card.title}</span>
+                        {card.checks_total > 0 && (
+                          <span className="mini-meta">{card.checks_done}/{card.checks_total}</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
         <p className="dialog-msg" style={{ marginBottom: 0 }}>
           Created {data.created_at}. Last change {s.last_activity}.
         </p>
