@@ -122,8 +122,44 @@ function Note({ note, onChange, onDelete }) {
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
+  // Drag anywhere on the paper (not the text or the buttons) to move the note.
+  // The position is local while dragging and saved once, on release.
+  const [drag, setDrag] = useState(null);
+  const startDrag = (e) => {
+    if (e.button !== 0 && e.button !== undefined) return;
+    if (e.target.closest('button, textarea')) return;
+    const startX = e.clientX ?? 0;
+    const startY = e.clientY ?? 0;
+    const from = { x: note.x, y: note.y };
+    let pos = from;
+    const move = (ev) => {
+      pos = {
+        x: Math.max(0, from.x + (ev.clientX ?? 0) - startX),
+        y: Math.max(0, from.y + (ev.clientY ?? 0) - startY),
+      };
+      setDrag(pos);
+    };
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
+      setDrag(null);
+      if (pos.x !== from.x || pos.y !== from.y) onChange({ x: pos.x, y: pos.y });
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+    window.addEventListener('pointercancel', stop);
+    e.preventDefault();
+  };
+  const left = drag ? drag.x : note.x;
+  const top = drag ? drag.y : note.y;
+
   return (
-    <div className={`note ${note.color || 'amber'}`} style={{ left: note.x, top: note.y }}>
+    <div
+      className={`note ${note.color || 'amber'}${drag ? ' dragging' : ''}`}
+      style={{ left, top }}
+      onPointerDown={startDrag}
+    >
       <div className="note-head">
         <div className="note-colors">
           {CARD_COLORS.map((c) => (

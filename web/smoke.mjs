@@ -1176,7 +1176,7 @@ await step('the Notes view switches in, hides the card tools, and adds a note', 
   if (state.notes.length !== 1) throw new Error('note was not sent to the server');
 });
 
-await step('a note takes text, a colour, and can be deleted', async () => {
+await step('a note takes text, a colour, moves by drag, and can be deleted', async () => {
   const sent = [];
   const prev = g.fetch;
   const spy = (url, opts = {}) => {
@@ -1203,6 +1203,34 @@ await step('a note takes text, a colour, and can be deleted', async () => {
   const colorSave = sent.find((s) => s.method === 'PATCH' && s.body?.color === 'sky');
   if (!colorSave) throw new Error('colour was not saved');
   if (!container.querySelector('.note.sky')) throw new Error('note did not change colour');
+
+  // Drag the paper 120px right and 50px down; the new spot is saved on release.
+  const before = { x: state.notes[0].x, y: state.notes[0].y };
+  const pointer = (type, target, x, y) => act(async () => {
+    target.dispatchEvent(new dom.window.MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 }));
+  });
+  await pointer('pointerdown', note, 100, 100);
+  await pointer('pointermove', dom.window, 160, 120);
+  if (!note.classList.contains('dragging')) throw new Error('note should look lifted while dragging');
+  await pointer('pointermove', dom.window, 220, 150);
+  await pointer('pointerup', dom.window, 220, 150);
+  await settle();
+  const moveSave = sent.find((s) => s.method === 'PATCH' && s.body?.x !== undefined);
+  if (!moveSave) throw new Error('position was not saved');
+  if (moveSave.body.x !== before.x + 120 || moveSave.body.y !== before.y + 50) {
+    throw new Error(`wrong spot saved: ${JSON.stringify(moveSave.body)} from ${JSON.stringify(before)}`);
+  }
+  if (note.style.left !== `${before.x + 120}px`) throw new Error('note did not stay where it was dropped');
+  if (note.classList.contains('dragging')) throw new Error('note still looks lifted after drop');
+
+  // Pressing on the text must not start a drag.
+  await pointer('pointerdown', input, 10, 10);
+  await pointer('pointermove', dom.window, 500, 500);
+  await pointer('pointerup', dom.window, 500, 500);
+  await settle();
+  if (sent.filter((s) => s.method === 'PATCH' && s.body?.x !== undefined).length !== 1) {
+    throw new Error('pressing on the text should not move the note');
+  }
 
   await click(note.querySelector('.note-delete'));
   const confirm = document.querySelector('.modal-sm');
