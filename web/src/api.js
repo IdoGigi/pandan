@@ -60,6 +60,11 @@ export const api = {
   archivedCards: () => request('GET', '/cards?archived=true'),
   setLabel: (boardId, color, name) => request('PUT', `/boards/${boardId}/labels/${color}`, { name }),
 
+  notes: (boardId) => request('GET', `/boards/${boardId}/notes`),
+  addNote: (boardId, data) => request('POST', `/boards/${boardId}/notes`, data),
+  updateNote: (id, data) => request('PATCH', `/notes/${id}`, data),
+  deleteNote: (id) => request('DELETE', `/notes/${id}`),
+
   addCheck: (cardId, text) => request('POST', `/cards/${cardId}/checks`, { text }),
   updateCheck: (id, data) => request('PATCH', `/checks/${id}`, data),
   deleteCheck: (id) => request('DELETE', `/checks/${id}`),

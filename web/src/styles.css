@@ -973,3 +973,47 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-color: var(--sky);
   color: #fff;
 }
+
+/* ---------------- sticky notes ---------------- */
+
+.view-switch { flex: 0 0 auto; }
+
+.noteboard-wrap { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.noteboard-bar { display: flex; align-items: center; gap: 10px; padding: 12px 18px 0; }
+.noteboard-bar .set-hint { margin: 0; }
+
+/* A cork board: dotted, scrolls both ways, notes sit where you leave them. */
+.noteboard {
+  flex: 1 1 auto;
+  position: relative;
+  overflow: auto;
+  margin: 10px 18px 18px;
+  min-height: 320px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  background-image: radial-gradient(var(--line-strong) 1px, transparent 1px);
+  background-size: 22px 22px;
+  box-shadow: var(--shadow);
+}
+
+.note {
+  position: absolute;
+  width: 200px;
+  min-height: 120px;
+  padding: 10px 12px 12px;
+  border-radius: 3px;
+  color: #2f3437;
+  box-shadow: 0 3px 10px rgba(16, 24, 40, 0.18);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.note-text { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 60px; }
+
+/* Lighter than the card colours, so dark text reads like ink on paper. */
+.note.plain  { background: #f1f2f4; }
+.note.lime   { background: color-mix(in srgb, var(--lime) 55%, #fff); }
+.note.sky    { background: color-mix(in srgb, var(--sky) 45%, #fff); }
+.note.amber  { background: color-mix(in srgb, var(--amber) 60%, #fff); }
+.note.rose   { background: color-mix(in srgb, var(--rose) 45%, #fff); }
+.note.violet { background: color-mix(in srgb, var(--violet) 50%, #fff); }

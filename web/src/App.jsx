@@ -11,6 +11,7 @@ import { Gear, Bot } from './Icons.jsx';
 import { SettingsModal } from './SettingsModal.jsx';
 import { TokensModal } from './TokensModal.jsx';
 import { ArchiveModal } from './ArchiveModal.jsx';
+import { NoteBoard } from './NoteBoard.jsx';
 
 const PROJECT_COLORS = ['#c3d117', '#4bb3d4', '#f0b429', '#e2725b', '#9b8ec4', '#57a773'];
 
@@ -58,6 +59,10 @@ export function App() {
   const [collapsed, setCollapsed] = useState(() => new Set(readSetting('collapsed', [])));
   const [busy, setBusy] = useState(false);
   const [live, setLive] = useState(false);
+  // 'board' is the kanban, 'notes' the sticky notes. Remembered per browser.
+  const [view, setView] = useState(() => (readSetting('view', 'board') === 'notes' ? 'notes' : 'board'));
+  // Counts up on every reload, so the notes view knows to re-read too.
+  const [tick, setTick] = useState(0);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -72,6 +77,7 @@ export function App() {
       setCards(data.cards);
       setLabels(data.labels || {});
       setAuthed(true);
+      setTick((t) => t + 1);
     } catch (err) {
       if (err.unauthorized) setAuthed(false);
       else setError(err.message);
@@ -114,6 +120,7 @@ export function App() {
   }, [theme]);
 
   useEffect(() => { if (boardId) writeSetting('boardId', boardId); }, [boardId]);
+  useEffect(() => { writeSetting('view', view); }, [view]);
 
   useEffect(() => { writeSetting('compact', compact); }, [compact]);
   useEffect(() => { writeSetting('rowCap', rowCap); }, [rowCap]);
@@ -341,37 +348,60 @@ export function App() {
           <option value="__new">+ New board…</option>
         </select>
 
-        <select
-          className="filter-select project-filter"
-          value={focus}
-          onChange={(e) => setFocus(e.target.value)}
-        >
-          <option value="all">All projects</option>
-          {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+        <div className="seg view-switch" role="tablist" aria-label="View">
+          <button
+            role="tab"
+            aria-selected={view === 'board'}
+            className={view === 'board' ? 'on' : ''}
+            onClick={() => setView('board')}
+          >
+            Board
+          </button>
+          <button
+            role="tab"
+            aria-selected={view === 'notes'}
+            className={view === 'notes' ? 'on' : ''}
+            onClick={() => setView('notes')}
+          >
+            Notes
+          </button>
+        </div>
 
-        <button className="btn" onClick={addProject}>+ Project</button>
+        {view === 'board' && (
+          <>
+            <select
+              className="filter-select project-filter"
+              value={focus}
+              onChange={(e) => setFocus(e.target.value)}
+            >
+              <option value="all">All projects</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
 
-        <input
-          className="search"
-          value={search}
-          placeholder="Search cards or #12…"
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Escape' && setSearch('')}
-        />
-        <button
-          className={`btn agent-filter${agentOnly ? ' on' : ''}`}
-          onClick={() => setAgentOnly((v) => !v)}
-          title={agentOnly
-            ? 'Showing only cards an agent changed — click to show all'
-            : 'Show only the cards an agent changed'}
-        >
-          <Bot size={14} /> Agent changes
-        </button>
-        {needleCount !== null && (
-          <span className="search-count">
-            {agentOnly ? `${needleCount} changed by an agent` : needleCount}
-          </span>
+            <button className="btn" onClick={addProject}>+ Project</button>
+
+            <input
+              className="search"
+              value={search}
+              placeholder="Search cards or #12…"
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Escape' && setSearch('')}
+            />
+            <button
+              className={`btn agent-filter${agentOnly ? ' on' : ''}`}
+              onClick={() => setAgentOnly((v) => !v)}
+              title={agentOnly
+                ? 'Showing only cards an agent changed — click to show all'
+                : 'Show only the cards an agent changed'}
+            >
+              <Bot size={14} /> Agent changes
+            </button>
+            {needleCount !== null && (
+              <span className="search-count">
+                {agentOnly ? `${needleCount} changed by an agent` : needleCount}
+              </span>
+            )}
+          </>
         )}
 
         <span className={`saving${busy ? ' on' : ''}`}>Saving…</span>
@@ -398,6 +428,9 @@ export function App() {
         </button>
       </div>
 
+      {view === 'notes' ? (
+        <NoteBoard boardId={boardId} tick={tick} onError={setError} />
+      ) : (
       <div className="board-scroll">
         {shown.length === 0 ? (
           <div className="center-note">No projects yet. Use “+ Project” to add one.</div>
@@ -420,6 +453,7 @@ export function App() {
           />
         )}
       </div>
+      )}
 
       {menu && (
         <CardMenu

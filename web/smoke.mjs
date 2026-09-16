@@ -31,6 +31,7 @@ const state = {
   archivedProjects: [
     { id: 8, name: 'Old garden plan', color: '#8899aa', position: 4000, archived: 1 },
   ],
+  notes: [],
   tokens: [
     { id: 1, name: 'laptop agent', prefix: 'pnd_aaa111',
       created_at: '2026-08-01 09:00', last_used_at: '2026-09-01 09:30', revoked_at: null },
@@ -68,6 +69,23 @@ function fakeFetch(url, opts = {}) {
     const id = Number(path.split('/')[2]);
     state.archivedProjects = state.archivedProjects.filter((p) => p.id !== id);
     return json({ id, archived: 0 });
+  }
+  if (/^\/boards\/\d+\/notes$/.test(path) && method === 'GET') return json(state.notes);
+  if (/^\/boards\/\d+\/notes$/.test(path) && method === 'POST') {
+    const note = { id: 300 + state.notes.length, board_id: 1, text: body.text || '',
+      color: body.color || 'amber', x: body.x || 0, y: body.y || 0 };
+    state.notes = [...state.notes, note];
+    return json(note, 201);
+  }
+  if (/^\/notes\/\d+$/.test(path) && method === 'PATCH') {
+    const id = Number(path.split('/')[2]);
+    state.notes = state.notes.map((n) => (n.id === id ? { ...n, ...body } : n));
+    return json(state.notes.find((n) => n.id === id));
+  }
+  if (/^\/notes\/\d+$/.test(path) && method === 'DELETE') {
+    const id = Number(path.split('/')[2]);
+    state.notes = state.notes.filter((n) => n.id !== id);
+    return json({ deleted: true });
   }
   if (/\/cards\/\d+\/restore$/.test(path)) {
     const id = Number(path.split('/')[2]);
@@ -1140,6 +1158,30 @@ await step('the archive opens from the header and can bring a project back', asy
   await settle();
   if (modal.textContent.includes('Old garden plan')) throw new Error('restored project still listed');
   await click([...modal.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Close'));
+});
+
+const viewTab = (name) => [...container.querySelectorAll('.view-switch button')].find((b) => b.textContent === name);
+
+await step('the Notes view switches in, hides the card tools, and adds a note', async () => {
+  if (!viewTab('Notes')) throw new Error('no Board / Notes switch in the header');
+  await click(viewTab('Notes'));
+  if (!container.querySelector('.noteboard')) throw new Error('note board did not show');
+  if (container.querySelector('.board')) throw new Error('kanban should be hidden in the Notes view');
+  if (container.querySelector('.search')) throw new Error('card search should hide in the Notes view');
+  if (!container.textContent.includes('No notes yet')) throw new Error('empty note board should say so');
+
+  await click([...container.querySelectorAll('.noteboard-bar .btn')].find((b) => b.textContent === '+ Note'));
+  if (container.querySelectorAll('.note').length !== 1) throw new Error('note was not added');
+  if (!container.textContent.includes('1 note')) throw new Error('note count missing');
+  if (state.notes.length !== 1) throw new Error('note was not sent to the server');
+});
+
+await step('the view is remembered, and Board brings the kanban back', async () => {
+  await remount();
+  if (!container.querySelector('.noteboard')) throw new Error('Notes view was not remembered');
+  await click(viewTab('Board'));
+  if (!container.querySelector('.board')) throw new Error('kanban did not come back');
+  if (!container.querySelector('.search')) throw new Error('card search did not come back');
 });
 
 await step('labels can also be renamed from settings', async () => {
