@@ -503,39 +503,61 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .project-name:hover { border-color: var(--line); }
 .project-name:focus { border-color: var(--sky); background: var(--panel); }
 
-.progress { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
-.progress-bar {
-  flex: 1;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--plain);
-  overflow: hidden;
-}
-.progress-bar span {
-  display: block;
-  height: 100%;
-  background: var(--lime);
-  border-radius: 3px;
-  transition: width 0.25s ease;
-}
-.progress-text { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* ---------------- project pipeline bar ---------------- */
 
-.stat-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 18px;
+/* One hue per column, in a fixed order that passed the palette checks in both modes. */
+:root {
+  --pipe-todo: #2a78d6; --pipe-next: #eb6834; --pipe-doing: #1baf7a;
+  --pipe-review: #eda100; --pipe-done: #e87ba4;
 }
-.stat {
-  flex: 1 1 68px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 8px 6px;
-  text-align: center;
+:root[data-theme='dark'] {
+  --pipe-todo: #3987e5; --pipe-next: #d95926; --pipe-doing: #199e70;
+  --pipe-review: #c98500; --pipe-done: #d55181;
+}
+
+.pipeline { margin-bottom: 16px; }
+.pipeline-bar {
+  display: flex;
+  gap: 2px;                      /* a sliver of surface between segments */
+  height: 26px;
+  border-radius: 4px;
+  overflow: hidden;
   background: var(--head-bg);
 }
-.stat b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
-.stat span { font-size: 11px; color: var(--muted); }
+.pipe-seg {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  overflow: hidden;              /* a thin segment just drops its number; the legend has it */
+  white-space: nowrap;
+}
+.pipe-seg.pipe-review { color: #2f3437; }   /* dark ink on the yellow */
+.pipe-todo   { background: var(--pipe-todo); }
+.pipe-next   { background: var(--pipe-next); }
+.pipe-doing  { background: var(--pipe-doing); }
+.pipe-review { background: var(--pipe-review); }
+.pipe-done   { background: var(--pipe-done); }
+.pipe-empty { align-self: center; padding: 0 10px; font-size: 12px; color: var(--muted); }
+
+.pipeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pipeline-legend .spacer { flex: 1; }
+.pipe-key { white-space: nowrap; }
+.pipe-key b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.pipe-dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.pipeline-facts { white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* The project panel is wide enough for all five columns in one row. */
 .modal.project-panel { width: min(1080px, 100%); }

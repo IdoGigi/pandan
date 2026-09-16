@@ -549,8 +549,8 @@ await step('clicking a project name opens the project panel', async () => {
   const panel = document.querySelector('.modal-wide');
   if (!panel) throw new Error('project panel did not open');
   if (!panel.querySelector('.project-name')) throw new Error('name field missing');
-  if (panel.querySelectorAll('.stat').length < 6) throw new Error('stats missing');
-  if (!panel.querySelector('.progress-bar span')) throw new Error('progress bar missing');
+  if (!panel.querySelector('.pipeline-bar')) throw new Error('pipeline bar missing');
+  if (panel.querySelectorAll('.pipe-key').length !== 5) throw new Error('legend should name all five columns');
   if (!panel.querySelector('.mini-card')) throw new Error('card list missing');
   const cols = panel.querySelectorAll('.project-col');
   if (cols.length !== 5) throw new Error(`all five columns should show, got ${cols.length}`);
@@ -561,12 +561,18 @@ await step('clicking a project name opens the project panel', async () => {
 
 await step('project panel shows the right counts', async () => {
   const panel = document.querySelector('.modal-wide');
-  const stats = [...panel.querySelectorAll('.stat')].map((n) => n.textContent);
-  const expected = state.cards.filter((c) => c.project_id === 1).length;
-  if (!stats.some((t) => t.startsWith(`${expected}cards`))) {
-    throw new Error(`card count wrong, expected ${expected}: ${stats.join(' | ')}`);
-  }
-  if (!panel.textContent.includes('% done')) throw new Error('percent missing');
+  const mine = state.cards.filter((c) => c.project_id === 1);
+  const facts = panel.querySelector('.pipeline-facts').textContent;
+  if (!facts.startsWith(`${mine.length} cards`)) throw new Error(`card count wrong, expected ${mine.length}: ${facts}`);
+  if (!facts.includes('% done')) throw new Error('percent missing');
+  // One segment per column that has cards, sized by its count; empty columns get none.
+  const segs = [...panel.querySelectorAll('.pipe-seg')];
+  const inTodo = mine.filter((c) => c.column_key === 'todo').length;
+  const todoSeg = segs.find((el) => el.classList.contains('pipe-todo'));
+  if (!todoSeg || todoSeg.textContent !== String(inTodo)) throw new Error('To do segment wrong');
+  if (todoSeg.style.flexGrow !== String(inTodo)) throw new Error('segment should be sized by its count');
+  if (segs.some((el) => el.classList.contains('pipe-next'))) throw new Error('an empty column should have no segment');
+  if (!todoSeg.getAttribute('title')?.includes('To do')) throw new Error('segment should name its column on hover');
 });
 
 await step('a card in the panel opens that card', async () => {

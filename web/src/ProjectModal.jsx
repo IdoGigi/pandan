@@ -130,21 +130,40 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
           />
         </div>
 
-        <div className="progress">
-          <div className="progress-bar"><span style={{ width: `${s.percent_done}%` }} /></div>
-          <span className="progress-text">{s.percent_done}% done</span>
-        </div>
-
-        <div className="stat-row">
-          <div className="stat"><b>{s.total}</b><span>cards</span></div>
-          <div className="stat"><b>{s.open}</b><span>open</span></div>
-          {COLS.map((c) => (
-            <div className="stat" key={c}><b>{s.by_column[c]}</b><span>{COLUMN_LABELS[c]}</span></div>
-          ))}
-          <div className="stat"><b>{s.flagged}</b><span>flagged</span></div>
-          {s.checks_total > 0 && (
-            <div className="stat"><b>{s.checks_done}/{s.checks_total}</b><span>checklist</span></div>
-          )}
+        {/* One bar is the whole project; each segment is a column, in board order.
+            The Done segment is the percent done, so there is no second bar. */}
+        <div className="pipeline">
+          <div
+            className="pipeline-bar"
+            role="img"
+            aria-label={COLS.map((c) => `${COLUMN_LABELS[c]} ${s.by_column[c]}`).join(', ')}
+          >
+            {s.total === 0 && <span className="pipe-empty">No cards yet</span>}
+            {COLS.map((c) => s.by_column[c] > 0 && (
+              <span
+                key={c}
+                className={`pipe-seg pipe-${c}`}
+                style={{ flex: s.by_column[c] }}
+                title={`${COLUMN_LABELS[c]} · ${s.by_column[c]} of ${s.total} (${Math.round((s.by_column[c] / s.total) * 100)}%)`}
+              >
+                {s.by_column[c]}
+              </span>
+            ))}
+          </div>
+          <div className="pipeline-legend">
+            {COLS.map((c) => (
+              <span key={c} className="pipe-key">
+                <i className={`pipe-dot pipe-${c}`} />{COLUMN_LABELS[c]} <b>{s.by_column[c]}</b>
+              </span>
+            ))}
+            <span className="spacer" />
+            <span className="pipeline-facts">
+              {s.total} cards · {s.open} open
+              {s.flagged > 0 && ` · ${s.flagged} flagged`}
+              {s.checks_total > 0 && ` · checklist ${s.checks_done}/${s.checks_total}`}
+              {` · ${s.percent_done}% done`}
+            </span>
+          </div>
         </div>
 
         {/* Details on the left, the update log on the right; they stack on a narrow window. */}
