@@ -1008,7 +1008,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-size: 13px;
   line-height: 1.4;
 }
-.note-text { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 60px; }
 
 /* Lighter than the card colours, so dark text reads like ink on paper. */
 .note.plain  { background: #f1f2f4; }
@@ -1017,3 +1016,50 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .note.amber  { background: color-mix(in srgb, var(--amber) 60%, #fff); }
 .note.rose   { background: color-mix(in srgb, var(--rose) 45%, #fff); }
 .note.violet { background: color-mix(in srgb, var(--violet) 50%, #fff); }
+
+.note-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: -4px -6px 4px 0;
+  min-height: 18px;
+}
+.note-colors { display: flex; gap: 4px; opacity: 0; transition: opacity 0.12s; }
+.note:hover .note-colors, .note:focus-within .note-colors { opacity: 1; }
+.note-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(47, 52, 55, 0.25);
+  padding: 0;
+  cursor: pointer;
+}
+.note-swatch.on { border-color: #2f3437; }
+.note-delete {
+  border: none;
+  background: none;
+  color: rgba(47, 52, 55, 0.55);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.note:hover .note-delete, .note:focus-within .note-delete { opacity: 1; }
+.note-delete:hover { color: var(--flag); }
+
+/* The text is a textarea that looks like ink on the note. */
+.note-input {
+  display: block;
+  width: 100%;
+  min-height: 84px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+  outline: none;
+  padding: 0;
+  field-sizing: content;
+}
+.note-input::placeholder { color: rgba(47, 52, 55, 0.4); }

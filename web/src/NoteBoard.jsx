@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
+import { Dialog } from './Dialog.jsx';
+import { CARD_COLORS } from './Card.jsx';
+import { SWATCH, NAMES } from './ContextMenu.jsx';
 
 /**
  * Loose sticky notes for one board — a cork board next to the kanban.
@@ -8,6 +11,7 @@ import { api } from './api.js';
  */
 export function NoteBoard({ boardId, tick, onError }) {
   const [notes, setNotes] = useState(null);
+  const [deleting, setDeleting] = useState(null);
 
   const load = useCallback(() => {
     if (!boardId) return;
@@ -27,6 +31,26 @@ export function NoteBoard({ boardId, tick, onError }) {
     }
   };
 
+  /** Sends one change to the server and keeps the list in step with the reply. */
+  const change = async (note, patch) => {
+    try {
+      const saved = await api.updateNote(note.id, patch);
+      setNotes((list) => list.map((n) => (n.id === saved.id ? saved : n)));
+    } catch (e) {
+      onError(e.message);
+    }
+  };
+
+  const remove = async (note) => {
+    setDeleting(null);
+    try {
+      await api.deleteNote(note.id);
+      setNotes((list) => list.filter((n) => n.id !== note.id));
+    } catch (e) {
+      onError(e.message);
+    }
+  };
+
   return (
     <div className="noteboard-wrap">
       <div className="noteboard-bar">
@@ -41,17 +65,90 @@ export function NoteBoard({ boardId, tick, onError }) {
         ) : notes.length === 0 ? (
           <div className="center-note">No notes yet. Use “+ Note” to add one.</div>
         ) : (
-          notes.map((note) => <Note key={note.id} note={note} />)
+          notes.map((note) => (
+            <Note
+              key={note.id}
+              note={note}
+              onChange={(patch) => change(note, patch)}
+              onDelete={() => setDeleting(note)}
+            />
+          ))
         )}
       </div>
+
+      {deleting && (
+        <Dialog
+          kind="confirm"
+          title="Delete this note?"
+          message={deleting.text.trim()
+            ? `"${deleting.text.trim().slice(0, 80)}${deleting.text.trim().length > 80 ? '…' : ''}" will be gone. Notes have no archive.`
+            : 'The note is empty. It will be gone.'}
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => remove(deleting)}
+        />
+      )}
     </div>
   );
 }
 
-function Note({ note }) {
+const SAVE_AFTER_MS = 600;
+
+/** One sticky note: colour dots and a delete cross on top, the text below. */
+function Note({ note, onChange, onDelete }) {
+  const [draft, setDraft] = useState(note.text);
+  const dirty = useRef(false);
+  const timer = useRef(null);
+
+  // Text that arrives from the server (another tab, an agent) replaces the
+  // draft — unless you are in the middle of typing here.
+  useEffect(() => {
+    if (!dirty.current) setDraft(note.text);
+  }, [note.text]);
+
+  const save = useCallback((text) => {
+    clearTimeout(timer.current);
+    dirty.current = false;
+    if (text !== note.text) onChange({ text });
+  }, [note.text, onChange]);
+
+  const type = (text) => {
+    setDraft(text);
+    dirty.current = true;
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => save(text), SAVE_AFTER_MS);
+  };
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+
   return (
     <div className={`note ${note.color || 'amber'}`} style={{ left: note.x, top: note.y }}>
-      <div className="note-text">{note.text}</div>
+      <div className="note-head">
+        <div className="note-colors">
+          {CARD_COLORS.map((c) => (
+            <button
+              key={c}
+              className={`note-swatch${note.color === c ? ' on' : ''}`}
+              style={{ background: SWATCH[c] }}
+              title={NAMES[c]}
+              aria-label={NAMES[c]}
+              onClick={() => note.color !== c && onChange({ color: c })}
+            />
+          ))}
+        </div>
+        <button className="note-delete" title="Delete note" aria-label="Delete note" onClick={onDelete}>
+          ×
+        </button>
+      </div>
+      <textarea
+        className="note-input"
+        value={draft}
+        placeholder="Write something…"
+        maxLength={2000}
+        onChange={(e) => type(e.target.value)}
+        onBlur={() => save(draft)}
+      />
     </div>
   );
 }

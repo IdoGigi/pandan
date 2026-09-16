@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CARD_COLORS } from './Card.jsx';
 
-const SWATCH = {
+export const SWATCH = {
   plain: '#eaebed', lime: '#c3d117', sky: '#4bb3d4',
   amber: '#f0b429', rose: '#e2725b', violet: '#9b8ec4',
 };
-const NAMES = {
+export const NAMES = {
   plain: 'None', lime: 'Lime', sky: 'Blue',
   amber: 'Amber', rose: 'Red', violet: 'Purple',
 };

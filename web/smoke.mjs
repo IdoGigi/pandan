@@ -1176,6 +1176,46 @@ await step('the Notes view switches in, hides the card tools, and adds a note', 
   if (state.notes.length !== 1) throw new Error('note was not sent to the server');
 });
 
+await step('a note takes text, a colour, and can be deleted', async () => {
+  const sent = [];
+  const prev = g.fetch;
+  const spy = (url, opts = {}) => {
+    if (/\/notes\/\d+$/.test(String(url))) sent.push({ method: opts.method, body: opts.body ? JSON.parse(opts.body) : null });
+    return prev(url, opts);
+  };
+  g.fetch = spy; dom.window.fetch = spy;
+
+  const note = container.querySelector('.note');
+  const input = note.querySelector('.note-input');
+  if (!input) throw new Error('note has no text field');
+  await act(async () => { setNativeValue(input, 'Call Dana — Tuesday'); });
+  await act(async () => {
+    input.dispatchEvent(new dom.window.Event('blur'));
+    input.dispatchEvent(new dom.window.Event('focusout', { bubbles: true }));
+  });
+  await settle();
+  const textSave = sent.find((s) => s.method === 'PATCH' && s.body?.text !== undefined);
+  if (textSave?.body.text !== 'Call Dana — Tuesday') throw new Error(`text was not saved: ${JSON.stringify(sent)}`);
+
+  const swatch = note.querySelector('.note-swatch[aria-label="Blue"]');
+  if (!swatch) throw new Error('colour dots missing');
+  await click(swatch);
+  const colorSave = sent.find((s) => s.method === 'PATCH' && s.body?.color === 'sky');
+  if (!colorSave) throw new Error('colour was not saved');
+  if (!container.querySelector('.note.sky')) throw new Error('note did not change colour');
+
+  await click(note.querySelector('.note-delete'));
+  const confirm = document.querySelector('.modal-sm');
+  if (!confirm) throw new Error('delete confirm did not open');
+  if (!confirm.textContent.includes('Call Dana')) throw new Error('confirm should quote the note');
+  await click([...confirm.querySelectorAll('.btn')].find((b) => b.textContent === 'Delete'));
+  if (!sent.some((s) => s.method === 'DELETE')) throw new Error('note was not deleted on the server');
+  if (container.querySelector('.note')) throw new Error('note still on the board');
+  if (state.notes.length !== 0) throw new Error('fake server still has the note');
+
+  g.fetch = prev; dom.window.fetch = prev;
+});
+
 await step('the view is remembered, and Board brings the kanban back', async () => {
   await remount();
   if (!container.querySelector('.noteboard')) throw new Error('Notes view was not remembered');
