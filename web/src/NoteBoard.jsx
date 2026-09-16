@@ -13,6 +13,8 @@ import { renderMarks, stripMarks } from './marks.jsx';
 export function NoteBoard({ boardId, tick, onError }) {
   const [notes, setNotes] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  // The note just added here opens straight into its editor; nothing else does.
+  const [freshId, setFreshId] = useState(null);
 
   const load = useCallback(() => {
     if (!boardId) return;
@@ -26,6 +28,7 @@ export function NoteBoard({ boardId, tick, onError }) {
     const step = ((notes?.length ?? 0) % 8) * 28;
     try {
       const note = await api.addNote(boardId, { x: 24 + step, y: 24 + step });
+      setFreshId(note.id);
       setNotes((list) => [...(list || []), note]);
     } catch (e) {
       onError(e.message);
@@ -76,6 +79,7 @@ export function NoteBoard({ boardId, tick, onError }) {
             <Note
               key={note.id}
               note={note}
+              fresh={note.id === freshId}
               onChange={(patch) => change(note, patch)}
               onDelete={() => setDeleting(note)}
             />
@@ -138,13 +142,14 @@ function useDraft(value, onSave) {
 }
 
 /** One sticky note: colour dots and a delete cross on top, then a title and the text. */
-function Note({ note, onChange, onDelete }) {
+function Note({ note, fresh = false, onChange, onDelete }) {
   const title = useDraft(note.title || '', (t) => onChange({ title: t }));
   const text = useDraft(note.text, (t) => onChange({ text: t }));
 
-  // A note shows its text formatted until you click it; an empty note opens
-  // straight into the editor, since there is nothing to show yet.
-  const [editing, setEditing] = useState(note.text === '');
+  // A note shows its text formatted until you click it. Only a note you just
+  // added opens in the editor by itself — a note with a title and no text
+  // must not keep its toolbar open every time the board loads.
+  const [editing, setEditing] = useState(fresh);
   const inputRef = useRef(null);
   useEffect(() => {
     if (editing) inputRef.current?.focus();
