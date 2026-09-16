@@ -24,6 +24,16 @@ kanban. Switch with **Board | Notes** in the top bar.
   archive, so deleting is for a person only. There are no MCP tools for notes
   yet.
 
+### Project panel
+
+- **Cards in one row.** The panel is wider, and a project's cards sit in
+  all five columns side by side, each scrolling on its own past a few cards.
+  A project with sixty cards no longer stretches the panel down the page.
+- **Export the update log.** Copy it as Markdown, or download it as
+  `<project>-updates.md`.
+- **Two columns.** Details on the left, the update log on the right; they
+  stack on a narrow window.
+
 ### Board
 
 - **Archive in the top bar.** The archive was only reachable from the bottom
