@@ -505,14 +505,21 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* ---------------- project pipeline bar ---------------- */
 
-/* One hue per column, in a fixed order that passed the palette checks in both modes. */
+/* One hue — the app's sky blue — from light (not started) to dark (done), so the
+   bar reads as progress. Ink flips where the step gets dark enough. */
 :root {
-  --pipe-todo: #2a78d6; --pipe-next: #eb6834; --pipe-doing: #1baf7a;
-  --pipe-review: #eda100; --pipe-done: #e87ba4;
+  --pipe-todo: #d9edf4;   --pipe-todo-ink: #2f3437;
+  --pipe-next: #a8d6e6;   --pipe-next-ink: #2f3437;
+  --pipe-doing: #6fbcd6;  --pipe-doing-ink: #2f3437;
+  --pipe-review: #237a9b; --pipe-review-ink: #ffffff;
+  --pipe-done: #165a72;   --pipe-done-ink: #ffffff;
 }
 :root[data-theme='dark'] {
-  --pipe-todo: #3987e5; --pipe-next: #d95926; --pipe-doing: #199e70;
-  --pipe-review: #c98500; --pipe-done: #d55181;
+  --pipe-todo: #2b3d47;   --pipe-todo-ink: #e6e8ea;
+  --pipe-next: #2f5566;   --pipe-next-ink: #e6e8ea;
+  --pipe-doing: #337287;  --pipe-doing-ink: #ffffff;
+  --pipe-review: #3f97b4; --pipe-review-ink: #10232b;
+  --pipe-done: #6cc0dc;   --pipe-done-ink: #10232b;
 }
 
 .pipeline { margin-bottom: 16px; }
@@ -536,12 +543,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
   overflow: hidden;              /* a thin segment just drops its number; the legend has it */
   white-space: nowrap;
 }
-.pipe-seg.pipe-review { color: #2f3437; }   /* dark ink on the yellow */
-.pipe-todo   { background: var(--pipe-todo); }
-.pipe-next   { background: var(--pipe-next); }
-.pipe-doing  { background: var(--pipe-doing); }
-.pipe-review { background: var(--pipe-review); }
-.pipe-done   { background: var(--pipe-done); }
+.pipe-todo   { background: var(--pipe-todo);   color: var(--pipe-todo-ink); }
+.pipe-next   { background: var(--pipe-next);   color: var(--pipe-next-ink); }
+.pipe-doing  { background: var(--pipe-doing);  color: var(--pipe-doing-ink); }
+.pipe-review { background: var(--pipe-review); color: var(--pipe-review-ink); }
+.pipe-done   { background: var(--pipe-done);   color: var(--pipe-done-ink); }
 .pipe-empty { align-self: center; padding: 0 10px; font-size: 12px; color: var(--muted); }
 
 .pipeline-legend {
