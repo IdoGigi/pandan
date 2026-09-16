@@ -91,7 +91,7 @@ export function Board({
                 </button>
                 <span className="dot" style={{ background: project.color }} />
                 <button
-                  className="name"
+                  className="name" dir="auto"
                   onClick={() => onOpenProject(project.id)}
                   title={project.name}
                 >

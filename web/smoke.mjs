@@ -954,7 +954,11 @@ await step('text picks its own direction, so Hebrew reads right to left', () => 
     const css = dom.window.getComputedStyle(el);
     if (css.unicodeBidi !== 'plaintext') throw new Error(`${name} should pick its own direction`);
     if (css.textAlign === 'left') throw new Error(`${name} should align to the start, not left`);
+    // dir="auto" is what makes a field line its text up on the right for Hebrew.
+    if (el.getAttribute('dir') !== 'auto') throw new Error(`${name} should carry dir="auto"`);
   }
+  const addBox = container.querySelector('.add-card textarea, textarea');
+  if (addBox && addBox.getAttribute('dir') !== 'auto') throw new Error('text areas should carry dir="auto"');
 });
 
 await step('search filters cards and hides empty rows', async () => {

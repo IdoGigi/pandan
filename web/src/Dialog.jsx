@@ -55,7 +55,7 @@ export function Dialog({
         {message && <p className="dialog-msg">{message}</p>}
 
         {kind === 'prompt' && (
-          <input
+          <input dir="auto"
             ref={inputRef}
             className="input"
             value={value}

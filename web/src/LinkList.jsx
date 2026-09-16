@@ -19,13 +19,13 @@ export function LinkList({ kind, rows, placeholderLabel, placeholderValue, onAdd
     <div className="link-list">
       {rows.map((row) => (
         <div key={row.id} className="link-row">
-          <span className="link-label">{row.label}</span>
+          <span className="link-label" dir="auto">{row.label}</span>
           {row.href ? (
-            <a className="link-value" href={row.href} target="_blank" rel="noreferrer noopener">
+            <a className="link-value" dir="auto" href={row.href} target="_blank" rel="noreferrer noopener">
               {row.value}
             </a>
           ) : (
-            <span className="link-value plain">{row.value}</span>
+            <span className="link-value plain" dir="auto">{row.value}</span>
           )}
           <button
             className="btn btn-ghost"
@@ -39,14 +39,14 @@ export function LinkList({ kind, rows, placeholderLabel, placeholderValue, onAdd
       ))}
 
       <div className="link-add">
-        <input
+        <input dir="auto"
           className="input"
           value={label}
           placeholder={placeholderLabel}
           onChange={(e) => setLabel(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), submit())}
         />
-        <input
+        <input dir="auto"
           className="input"
           value={value}
           placeholder={placeholderValue}

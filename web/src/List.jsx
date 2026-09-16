@@ -74,7 +74,7 @@ export function List({ projectId, columnKey, cards, drag, onOpenCard, onCardMenu
       {dropIndex === cards.length && <div className="drop-line" />}
 
       {adding ? (
-        <textarea
+        <textarea dir="auto"
           className="quick-input"
           autoFocus
           rows={2}

@@ -380,7 +380,7 @@ export function App() {
 
             <button className="btn" onClick={addProject}>+ Project</button>
 
-            <input
+            <input dir="auto"
               className="search"
               value={search}
               placeholder="Search cards or #12…"

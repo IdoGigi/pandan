@@ -122,7 +122,7 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
       <div className="modal modal-wide project-panel" onMouseDown={(e) => e.stopPropagation()}>
         <div className="project-head">
           <span className="dot lg" style={{ background: color }} />
-          <input
+          <input dir="auto"
             className="project-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -186,7 +186,7 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
 
         <div className="field">
           <label>About this project</label>
-          <textarea
+          <textarea dir="auto"
             className="textarea"
             style={{ minHeight: 84 }}
             value={description}
@@ -198,7 +198,7 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
         <div className="field">
           <label>GitHub repo</label>
           <div className="repo-row">
-            <input
+            <input dir="auto"
               className="input"
               value={repoUrl}
               placeholder="https://github.com/you/your-repo"
@@ -249,7 +249,7 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
             </button>
           </div>
           <div className="log-add">
-            <textarea
+            <textarea dir="auto"
               className="textarea"
               style={{ minHeight: 52 }}
               value={note}
@@ -277,7 +277,7 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
                     {u.created_at}
                     {u.actor && u.actor !== 'you' && <><br /><b>{u.actor}</b></>}
                   </div>
-                  <div className="log-text">{u.text}</div>
+                  <div className="log-text" dir="auto">{u.text}</div>
                   <button
                     className="btn btn-ghost"
                     style={{ padding: '0 6px' }}
@@ -315,7 +315,7 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
                         title="Open this card"
                       >
                         {card.flagged ? <span className="card-flag" /> : null}
-                        <span className="mini-title">{card.title}</span>
+                        <span className="mini-title" dir="auto">{card.title}</span>
                         {card.checks_total > 0 && (
                           <span className="mini-meta">{card.checks_done}/{card.checks_total}</span>
                         )}

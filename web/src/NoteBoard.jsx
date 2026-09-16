@@ -273,7 +273,7 @@ function Note({ note, fresh = false, onChange, onDelete }) {
           ×
         </button>
       </div>
-      <input
+      <input dir="auto"
         className="note-title"
         value={title.draft}
         placeholder="Title"
@@ -290,7 +290,7 @@ function Note({ note, fresh = false, onChange, onDelete }) {
             <button className="note-tool" title="Strike through" onClick={() => mark('~~')}><s>S</s></button>
             <button className="note-tool" title="Bullet list" onClick={() => mark('list')}>• List</button>
           </div>
-          <textarea
+          <textarea dir="auto"
             ref={inputRef}
             className="note-input"
             value={text.draft}
@@ -302,7 +302,7 @@ function Note({ note, fresh = false, onChange, onDelete }) {
           />
         </>
       ) : (
-        <div className="note-view">{renderMarks(text.draft)}</div>
+        <div className="note-view" dir="auto">{renderMarks(text.draft)}</div>
       )}
     </div>
   );

@@ -31,7 +31,7 @@ export function LabelEditor({ boardId, labels, onSaved }) {
       {CARD_COLORS.map((c) => (
         <div key={c} className="label-row">
           <span className="swatch on" style={{ background: SWATCH[c], cursor: 'default' }} />
-          <input
+          <input dir="auto"
             className="input"
             value={names[c] ?? ''}
             placeholder={`no name — ${c}`}

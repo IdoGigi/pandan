@@ -94,7 +94,7 @@ export function CardModal({ cardId, projects, labels = {}, boardId, onClose, onS
 
         <div className="field">
           <label>Title</label>
-          <textarea
+          <textarea dir="auto"
             className="textarea"
             style={{ minHeight: 52 }}
             value={card.title}
@@ -105,7 +105,7 @@ export function CardModal({ cardId, projects, labels = {}, boardId, onClose, onS
 
         <div className="field">
           <label>Notes</label>
-          <textarea className="textarea" value={card.notes} onChange={(e) => set({ notes: e.target.value })} />
+          <textarea dir="auto" className="textarea" value={card.notes} onChange={(e) => set({ notes: e.target.value })} />
         </div>
 
         <div style={{ display: 'flex', gap: 12 }}>
@@ -157,7 +157,7 @@ export function CardModal({ cardId, projects, labels = {}, boardId, onClose, onS
                   onClick={() => set({ color: c })}
                 />
               ))}
-              {labels[card.color] && <span className="label-name">{labels[card.color]}</span>}
+              {labels[card.color] && <span className="label-name" dir="auto">{labels[card.color]}</span>}
             </div>
           )}
         </div>
@@ -197,11 +197,11 @@ export function CardModal({ cardId, projects, labels = {}, boardId, onClose, onS
             {checks.map((row) => (
               <div key={row.id} className={`check-row${row.done ? ' done' : ''}`}>
                 <input type="checkbox" checked={!!row.done} onChange={() => toggleCheck(row)} />
-                <span className="txt">{row.text}</span>
+                <span className="txt" dir="auto">{row.text}</span>
                 <button className="btn btn-ghost" style={{ padding: '0 6px' }} onClick={() => removeCheck(row)}>×</button>
               </div>
             ))}
-            <input
+            <input dir="auto"
               className="input"
               value={newCheck}
               placeholder="Add an item, then Enter"

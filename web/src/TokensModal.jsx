@@ -79,7 +79,7 @@ export function TokensModal({ onClose }) {
         <div className="field">
           <label>New key</label>
           <div className="link-add">
-            <input
+            <input dir="auto"
               className="input"
               value={name}
               placeholder="What is it for, e.g. Claude Code on my laptop"
@@ -104,7 +104,7 @@ export function TokensModal({ onClose }) {
                 <div className="token-list">
                   {live.map((t) => (
                     <div key={t.id} className="token-row">
-                      <span className="token-name">{t.name}</span>
+                      <span className="token-name" dir="auto">{t.name}</span>
                       <code className="token-prefix">{t.prefix}…</code>
                       <span className="token-when">last used {when(t.last_used_at)}</span>
                       <button className="btn btn-danger" onClick={() => setRevoking(t)}>Revoke</button>
@@ -120,7 +120,7 @@ export function TokensModal({ onClose }) {
                 <div className="token-list">
                   {dead.map((t) => (
                     <div key={t.id} className="token-row dead">
-                      <span className="token-name">{t.name}</span>
+                      <span className="token-name" dir="auto">{t.name}</span>
                       <code className="token-prefix">{t.prefix}…</code>
                       <span className="token-when">revoked {when(t.revoked_at)}</span>
                     </div>
