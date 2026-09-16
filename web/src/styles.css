@@ -1072,3 +1072,20 @@ button { font: inherit; color: inherit; cursor: pointer; }
   box-shadow: 0 8px 22px rgba(16, 24, 40, 0.28);
   transform: scale(1.02);
 }
+
+.note-title {
+  display: block;
+  width: 100%;
+  margin: 0 0 5px;
+  padding: 0 0 3px;
+  border: none;
+  border-bottom: 1px solid rgba(47, 52, 55, 0.15);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  outline: none;
+  cursor: text;
+  user-select: text;
+}
+.note-title::placeholder { color: rgba(47, 52, 55, 0.4); font-weight: 500; }

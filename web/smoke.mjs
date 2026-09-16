@@ -1197,6 +1197,17 @@ await step('a note takes text, a colour, moves by drag, and can be deleted', asy
   const textSave = sent.find((s) => s.method === 'PATCH' && s.body?.text !== undefined);
   if (textSave?.body.text !== 'Call Dana — Tuesday') throw new Error(`text was not saved: ${JSON.stringify(sent)}`);
 
+  const titleField = note.querySelector('.note-title');
+  if (!titleField) throw new Error('note has no title field');
+  await act(async () => { setNativeValue(titleField, 'Dana'); });
+  await act(async () => {
+    titleField.dispatchEvent(new dom.window.Event('blur'));
+    titleField.dispatchEvent(new dom.window.Event('focusout', { bubbles: true }));
+  });
+  await settle();
+  const titleSave = sent.find((s) => s.method === 'PATCH' && s.body?.title !== undefined);
+  if (titleSave?.body.title !== 'Dana') throw new Error('title was not saved');
+
   const swatch = note.querySelector('.note-swatch[aria-label="Blue"]');
   if (!swatch) throw new Error('colour dots missing');
   await click(swatch);

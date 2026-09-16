@@ -120,6 +120,7 @@ addColumn('cards', 'due_date', 'TEXT');
 addColumn('cards', 'last_actor', 'TEXT');
 addColumn('cards', 'last_actor_kind', 'TEXT');
 addColumn('project_updates', 'actor', 'TEXT');
+addColumn('notes', 'title', "TEXT NOT NULL DEFAULT ''");
 
 /**
  * There is always at least one board. An older database has projects with no

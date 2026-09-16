@@ -363,6 +363,7 @@ api.put('/boards/:id/labels/:color', (req, res) => {
 /* ---------------- sticky notes ---------------- */
 
 const NOTE_TEXT_MAX = 2000;
+const NOTE_TITLE_MAX = 120;
 const NOTE_POS_MAX = 20000;
 /** A whole number inside the note board; anything else keeps the old value. */
 const cleanPos = (v, fallback) => {
@@ -383,23 +384,25 @@ api.post('/boards/:id/notes', (req, res) => {
   if (!db.prepare('SELECT id FROM boards WHERE id = ?').get(boardId)) {
     return res.status(404).json({ error: 'board not found' });
   }
+  const title = clean(req.body?.title, NOTE_TITLE_MAX);
   const text = clean(req.body?.text, NOTE_TEXT_MAX);
   const color = req.body?.color === undefined ? 'amber' : clean(req.body.color, 20);
   if (!CARD_COLORS.includes(color)) return bad(res, `color must be one of: ${CARD_COLORS.join(', ')}`);
   const { lastInsertRowid } = db
-    .prepare('INSERT INTO notes (board_id, text, color, x, y) VALUES (?, ?, ?, ?, ?)')
-    .run(boardId, text, color, cleanPos(req.body?.x, 0), cleanPos(req.body?.y, 0));
+    .prepare('INSERT INTO notes (board_id, title, text, color, x, y) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(boardId, title, text, color, cleanPos(req.body?.x, 0), cleanPos(req.body?.y, 0));
   res.status(201).json(db.prepare('SELECT * FROM notes WHERE id = ?').get(lastInsertRowid));
 });
 
 api.patch('/notes/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM notes WHERE id = ?').get(Number(req.params.id));
   if (!row) return res.status(404).json({ error: 'note not found' });
+  const title = req.body?.title === undefined ? row.title : clean(req.body.title, NOTE_TITLE_MAX);
   const text = req.body?.text === undefined ? row.text : clean(req.body.text, NOTE_TEXT_MAX);
   const color = req.body?.color === undefined ? row.color : clean(req.body.color, 20);
   if (!CARD_COLORS.includes(color)) return bad(res, `color must be one of: ${CARD_COLORS.join(', ')}`);
-  db.prepare(`UPDATE notes SET text = ?, color = ?, x = ?, y = ?, updated_at = ${NOW} WHERE id = ?`)
-    .run(text, color, cleanPos(req.body?.x, row.x), cleanPos(req.body?.y, row.y), row.id);
+  db.prepare(`UPDATE notes SET title = ?, text = ?, color = ?, x = ?, y = ?, updated_at = ${NOW} WHERE id = ?`)
+    .run(title, text, color, cleanPos(req.body?.x, row.x), cleanPos(req.body?.y, row.y), row.id);
   res.json(db.prepare('SELECT * FROM notes WHERE id = ?').get(row.id));
 });
 

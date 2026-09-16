@@ -95,23 +95,25 @@ export function NoteBoard({ boardId, tick, onError }) {
 
 const SAVE_AFTER_MS = 600;
 
-/** One sticky note: colour dots and a delete cross on top, the text below. */
-function Note({ note, onChange, onDelete }) {
-  const [draft, setDraft] = useState(note.text);
+/**
+ * A field you type into that saves a moment after you stop, and at once when
+ * you leave it. Text that arrives from the server (another tab, an agent)
+ * replaces the draft — unless you are in the middle of typing here.
+ */
+function useDraft(value, onSave) {
+  const [draft, setDraft] = useState(value);
   const dirty = useRef(false);
   const timer = useRef(null);
 
-  // Text that arrives from the server (another tab, an agent) replaces the
-  // draft — unless you are in the middle of typing here.
   useEffect(() => {
-    if (!dirty.current) setDraft(note.text);
-  }, [note.text]);
+    if (!dirty.current) setDraft(value);
+  }, [value]);
 
   const save = useCallback((text) => {
     clearTimeout(timer.current);
     dirty.current = false;
-    if (text !== note.text) onChange({ text });
-  }, [note.text, onChange]);
+    if (text !== value) onSave(text);
+  }, [value, onSave]);
 
   const type = (text) => {
     setDraft(text);
@@ -122,12 +124,20 @@ function Note({ note, onChange, onDelete }) {
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
+  return { draft, type, save: () => save(draft) };
+}
+
+/** One sticky note: colour dots and a delete cross on top, then a title and the text. */
+function Note({ note, onChange, onDelete }) {
+  const title = useDraft(note.title || '', (t) => onChange({ title: t }));
+  const text = useDraft(note.text, (t) => onChange({ text: t }));
+
   // Drag anywhere on the paper (not the text or the buttons) to move the note.
   // The position is local while dragging and saved once, on release.
   const [drag, setDrag] = useState(null);
   const startDrag = (e) => {
     if (e.button !== 0 && e.button !== undefined) return;
-    if (e.target.closest('button, textarea')) return;
+    if (e.target.closest('button, textarea, input')) return;
     const startX = e.clientX ?? 0;
     const startY = e.clientY ?? 0;
     const from = { x: note.x, y: note.y };
@@ -177,13 +187,21 @@ function Note({ note, onChange, onDelete }) {
           ×
         </button>
       </div>
+      <input
+        className="note-title"
+        value={title.draft}
+        placeholder="Title"
+        maxLength={120}
+        onChange={(e) => title.type(e.target.value)}
+        onBlur={title.save}
+      />
       <textarea
         className="note-input"
-        value={draft}
+        value={text.draft}
         placeholder="Write something…"
         maxLength={2000}
-        onChange={(e) => type(e.target.value)}
-        onBlur={() => save(draft)}
+        onChange={(e) => text.type(e.target.value)}
+        onBlur={text.save}
       />
     </div>
   );
