@@ -902,7 +902,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* ---------------- settings ---------------- */
 
 .settings { width: min(440px, 100%); }
-.settings h3, .archive h3 {
+.settings h3, .archive h3, .project-panel h3 {
   margin: 0 0 9px;
   font-size: 11.5px;
   font-weight: 600;
@@ -1127,3 +1127,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .field-head label { margin: 0; }
 .field-head .spacer { flex: 1; }
 .btn-xs { padding: 2px 7px; font-size: 12px; }
+
+/* Project panel: details left, history right. One column when there is no room. */
+.project-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 22px;
+  margin-bottom: 14px;
+}
+.project-grid > div { min-width: 0; }
+.project-log .log { max-height: 440px; }
+@media (max-width: 860px) {
+  .project-grid { grid-template-columns: minmax(0, 1fr); }
+}

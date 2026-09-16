@@ -180,6 +180,10 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
           </div>
         </div>
 
+        {/* Details on the left, the update log on the right; they stack on a narrow window. */}
+        <div className="project-grid">
+        <div className="project-details">
+        <h3>Details</h3>
         <div className="field">
           <label>Colour</label>
           <div className="swatches">
@@ -243,7 +247,10 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
             onRemove={async (id) => { await api.deleteLink(id); await refresh(); }}
           />
         </div>
+        </div>
 
+        <div className="project-log">
+        <h3>History</h3>
         <div className="field">
           <div className="field-head">
             <label>Update log</label>
@@ -297,6 +304,8 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
               ))}
             </div>
           )}
+        </div>
+        </div>
         </div>
 
         <p className="dialog-msg" style={{ marginBottom: 0 }}>
