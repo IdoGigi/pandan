@@ -1121,3 +1121,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   line-height: 1.4;
 }
 .note-tool:hover { background: rgba(255, 255, 255, 0.75); }
+
+/* A field label with small actions on its right, like Copy / Download on the log. */
+.field-head { display: flex; align-items: center; gap: 4px; margin-bottom: 5px; }
+.field-head label { margin: 0; }
+.field-head .spacer { flex: 1; }
+.btn-xs { padding: 2px 7px; font-size: 12px; }

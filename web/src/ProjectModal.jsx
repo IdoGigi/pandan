@@ -7,6 +7,18 @@ import { LinkList } from './LinkList.jsx';
 const PROJECT_COLORS = ['#c3d117', '#4bb3d4', '#f0b429', '#e2725b', '#9b8ec4', '#57a773', '#94a3b8'];
 const COLS = ['todo', 'next', 'doing', 'review', 'done'];
 
+/** The update log as Markdown: a heading, then one line per entry, newest first. */
+export function logAsMarkdown(project) {
+  const lines = (project.updates || []).map((u) => {
+    const who = u.actor && u.actor !== 'you' ? ` _(${u.actor})_` : '';
+    return `- **${u.created_at}** — ${u.text.replace(/\r?\n/g, ' ')}${who}`;
+  });
+  return `# ${project.name} — update log\n\n${lines.length ? lines.join('\n') : '_No updates yet._'}\n`;
+}
+
+/** A safe file name from the project name: letters, digits and dashes only. */
+const fileSlug = (name) => (name.toLowerCase().replace(/[^a-z0-9֐-׿]+/g, '-').replace(/^-|-$/g, '') || 'project');
+
 export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCard }) {
   const [data, setData] = useState(null);
   const [name, setName] = useState('');
@@ -14,6 +26,7 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
   const [description, setDescription] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
   const [note, setNote] = useState('');
+  const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [error, setError] = useState('');
@@ -66,6 +79,30 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
     const fresh = await api.getProject(data.id);
     setData(fresh);
     onSaved();
+  };
+
+  const copyLog = async () => {
+    try {
+      await navigator.clipboard.writeText(logAsMarkdown(data));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setError('Could not copy. Use Download instead.');
+    }
+  };
+
+  /** Saves the log as a .md file through a short-lived link, the way browsers allow. */
+  const downloadLog = () => {
+    if (typeof URL.createObjectURL !== 'function') return setError('Download is not available here.');
+    const blob = new Blob([logAsMarkdown(data)], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${fileSlug(data.name)}-updates.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   async function save() {
@@ -208,7 +245,16 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
         </div>
 
         <div className="field">
-          <label>Update log</label>
+          <div className="field-head">
+            <label>Update log</label>
+            <span className="spacer" />
+            <button className="btn btn-ghost btn-xs" onClick={copyLog} title="Copy the log as Markdown">
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+            <button className="btn btn-ghost btn-xs" onClick={downloadLog} title="Save the log as a .md file">
+              Download
+            </button>
+          </div>
           <div className="log-add">
             <textarea
               className="textarea"

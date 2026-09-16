@@ -628,6 +628,26 @@ await step('project panel holds notes, repo, links, contacts and the log', async
   if (!panel.textContent.includes('shipped it')) throw new Error('log entry text missing');
 });
 
+await step('the update log can be copied as Markdown', async () => {
+  const panel = document.querySelector('.modal-wide');
+  let copied = null;
+  const prevClip = dom.window.navigator.clipboard;
+  Object.defineProperty(dom.window.navigator, 'clipboard', {
+    value: { writeText: async (t) => { copied = t; } }, configurable: true,
+  });
+  const copy = [...panel.querySelectorAll('.field-head .btn')].find((b) => b.textContent === 'Copy');
+  if (!copy) throw new Error('no Copy button on the log');
+  if (![...panel.querySelectorAll('.field-head .btn')].some((b) => b.textContent === 'Download')) {
+    throw new Error('no Download button on the log');
+  }
+  await click(copy);
+  if (!copied) throw new Error('nothing was put on the clipboard');
+  if (!copied.startsWith('# House chores — update log')) throw new Error(`bad heading: ${copied.split('\n')[0]}`);
+  if (!copied.includes('- **2026-09-01 10:00:00** — shipped it')) throw new Error(`entry missing: ${copied}`);
+  if (copy.textContent !== 'Copied') throw new Error('button should say Copied');
+  Object.defineProperty(dom.window.navigator, 'clipboard', { value: prevClip, configurable: true });
+});
+
 await step('an unsafe link is shown as text, never as a clickable link', async () => {
   const panel = document.querySelector('.modal-wide');
   const anchors = [...panel.querySelectorAll('.link-value')];
