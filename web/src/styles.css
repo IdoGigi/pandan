@@ -1095,3 +1095,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .note-view ul { margin: 0; padding-left: 18px; }
 .note-view .mark-line { min-height: 1.4em; }
 .note-view u { text-decoration-thickness: 1.5px; }
+
+.note-tools { display: flex; gap: 2px; margin: 0 0 4px; }
+.note-tool {
+  border: 1px solid rgba(47, 52, 55, 0.18);
+  background: rgba(255, 255, 255, 0.45);
+  color: #2f3437;
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.note-tool:hover { background: rgba(255, 255, 255, 0.75); }

@@ -154,6 +154,62 @@ function Note({ note, onChange, onDelete }) {
     setEditing(false);
   };
 
+  // The toolbar edits the draft around the selection, then puts the caret
+  // back once React has shown the new text.
+  const pendingCaret = useRef(null);
+  useEffect(() => {
+    if (!pendingCaret.current || !inputRef.current) return;
+    const [start, end] = pendingCaret.current;
+    pendingCaret.current = null;
+    inputRef.current.focus();
+    inputRef.current.setSelectionRange(start, end);
+  }, [text.draft]);
+
+  const mark = (which) => {
+    const el = inputRef.current;
+    if (!el) return;
+    const v = text.draft;
+    const s = el.selectionStart ?? v.length;
+    const e = el.selectionEnd ?? s;
+    let next;
+    if (which === 'list') {
+      // Bullets work on whole lines: every selected line gets "- ", or loses it if all have it.
+      const from = v.lastIndexOf('\n', s - 1) + 1;
+      const nl = v.indexOf('\n', e);
+      const to = nl === -1 ? v.length : nl;
+      const lines = v.slice(from, to).split('\n');
+      const all = lines.every((l) => l.startsWith('- '));
+      const block = lines.map((l) => (all ? l.slice(2) : l.startsWith('- ') ? l : `- ${l}`)).join('\n');
+      next = v.slice(0, from) + block + v.slice(to);
+      pendingCaret.current = [from, from + block.length];
+    } else {
+      const n = which.length;
+      const sel = v.slice(s, e);
+      if (sel.length >= n * 2 && sel.startsWith(which) && sel.endsWith(which)) {
+        // The marks are inside the selection: take them off.
+        const inner = sel.slice(n, -n);
+        next = v.slice(0, s) + inner + v.slice(e);
+        pendingCaret.current = [s, s + inner.length];
+      } else if (v.slice(s - n, s) === which && v.slice(e, e + n) === which) {
+        // The marks sit just around the selection, as they do right after wrapping: take them off.
+        next = v.slice(0, s - n) + sel + v.slice(e + n);
+        pendingCaret.current = [s - n, e - n];
+      } else {
+        next = `${v.slice(0, s)}${which}${sel}${which}${v.slice(e)}`;
+        pendingCaret.current = [s + n, e + n];
+      }
+    }
+    text.type(next);
+  };
+
+  const onKey = (e) => {
+    if (e.key === 'Escape') return e.currentTarget.blur();
+    if (!(e.ctrlKey || e.metaKey)) return;
+    const key = e.key.toLowerCase();
+    if (key === 'b') { e.preventDefault(); mark('**'); }
+    else if (key === 'u') { e.preventDefault(); mark('__'); }
+  };
+
   // Drag anywhere on the paper (not the fields or the buttons) to move the
   // note. The position is local while dragging and saved once, on release.
   // A press on the shown text that does not move opens the editor instead.
@@ -221,16 +277,25 @@ function Note({ note, onChange, onDelete }) {
         onBlur={title.save}
       />
       {editing ? (
-        <textarea
-          ref={inputRef}
-          className="note-input"
-          value={text.draft}
-          placeholder="Write something…"
-          maxLength={2000}
-          onChange={(e) => text.type(e.target.value)}
-          onBlur={stopEditing}
-          onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}
-        />
+        <>
+          {/* mousedown is stopped so a click here never takes focus from the text */}
+          <div className="note-tools" onMouseDown={(e) => e.preventDefault()}>
+            <button className="note-tool" title="Bold (Ctrl+B)" onClick={() => mark('**')}><b>B</b></button>
+            <button className="note-tool" title="Underline (Ctrl+U)" onClick={() => mark('__')}><u>U</u></button>
+            <button className="note-tool" title="Strike through" onClick={() => mark('~~')}><s>S</s></button>
+            <button className="note-tool" title="Bullet list" onClick={() => mark('list')}>• List</button>
+          </div>
+          <textarea
+            ref={inputRef}
+            className="note-input"
+            value={text.draft}
+            placeholder="Write something…"
+            maxLength={2000}
+            onChange={(e) => text.type(e.target.value)}
+            onBlur={stopEditing}
+            onKeyDown={onKey}
+          />
+        </>
       ) : (
         <div className="note-view">{renderMarks(text.draft)}</div>
       )}

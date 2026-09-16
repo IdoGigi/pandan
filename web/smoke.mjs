@@ -1252,10 +1252,39 @@ await step('a note takes text, a colour, moves by drag, and can be deleted', asy
   if (sent.filter((s) => s.method === 'PATCH' && s.body?.x !== undefined).length !== 1) {
     throw new Error('a click on the text should not move the note');
   }
+
+  // The toolbar wraps the selection in marks; Ctrl+U does the same from the keyboard.
+  const editor = note.querySelector('.note-input');
+  const tools = [...note.querySelectorAll('.note-tool')].map((b) => b.textContent);
+  for (const t of ['B', 'U', 'S', '• List']) {
+    if (!tools.includes(t)) throw new Error(`toolbar is missing ${t}`);
+  }
+  await act(async () => { setNativeValue(editor, 'plain words\nsecond line'); });
+  editor.setSelectionRange(0, 5);
+  await click([...note.querySelectorAll('.note-tool')].find((b) => b.textContent === 'B'));
+  if (editor.value !== '**plain** words\nsecond line') throw new Error(`bold did not wrap: ${JSON.stringify(editor.value)}`);
+  if (editor.selectionStart !== 2 || editor.selectionEnd !== 7) throw new Error('selection should stay on the word');
+  await click([...note.querySelectorAll('.note-tool')].find((b) => b.textContent === 'B'));
+  if (editor.value !== 'plain words\nsecond line') throw new Error('bold again should unwrap');
+
+  editor.setSelectionRange(6, 11);
+  await act(async () => {
+    editor.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'u', ctrlKey: true, bubbles: true, cancelable: true }));
+  });
+  await settle();
+  if (editor.value !== 'plain __words__\nsecond line') throw new Error(`Ctrl+U did not underline: ${JSON.stringify(editor.value)}`);
+
+  editor.setSelectionRange(0, editor.value.length);
+  await click([...note.querySelectorAll('.note-tool')].find((b) => b.textContent === '• List'));
+  if (editor.value !== '- plain __words__\n- second line') throw new Error(`list did not bullet every line: ${JSON.stringify(editor.value)}`);
+  await click([...note.querySelectorAll('.note-tool')].find((b) => b.textContent === '• List'));
+  if (editor.value !== 'plain __words__\nsecond line') throw new Error('list again should remove the bullets');
+
   await act(async () => {
     note.querySelector('.note-input').dispatchEvent(new dom.window.Event('focusout', { bubbles: true }));
   });
   await settle();
+  if (!note.querySelector('.note-view u')) throw new Error('underline from the toolbar should show formatted');
 
   await click(note.querySelector('.note-delete'));
   const confirm = document.querySelector('.modal-sm');
