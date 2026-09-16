@@ -51,12 +51,33 @@ order you want.
 
 **Nothing is deleted.** Archiving takes a card off the board and keeps it, and
 an agent key cannot delete anything at all — only you can, from the archive.
+The archive has its own button in the top bar. A whole project can be archived
+too, from its panel, and comes back from the same place.
 
 Each project also holds notes, a repo link, links, contacts, and a dated update
 log, so the context lives next to the work.
 
 Rows fold away and every column scrolls on its own, so a project with fifty
 cards takes the same room as one with five.
+
+## The note board
+
+Some things are not tasks: a phone number, a thought, a list for the shop.
+Every board has a second view for those — **Board | Notes** in the top bar.
+
+It is a cork board. **+ Note** puts a sticky note on it; drag it anywhere and
+it stays there. A note has a title, a text, and one of the six card colours.
+Click the text to write; click away, or press Escape, to see it formatted.
+
+The text takes light marks: `**bold**`, `__underline__`, `~~struck~~`, and a
+line starting with `- ` is a bullet. While you write, a small toolbar (B, U,
+S, List) puts the marks around the selected words, and Ctrl+B / Ctrl+U do the
+same. The marks stay plain text — never HTML — so a note can carry nothing
+that runs.
+
+Notes update live like cards, and they are on the API (`/boards/:id/notes`),
+so an agent can leave you one. It cannot delete one: notes have no archive, so
+deleting is for a person only. There are no MCP tools for notes yet.
 
 ## Run it
 

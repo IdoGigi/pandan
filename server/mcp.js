@@ -41,7 +41,7 @@ const colorField = z.enum(COLORS).describe('Card colour. "plain" is the default 
 
 export function buildMcpServer() {
   const server = new McpServer(
-    { name: 'pandan', version: '1.0.0' },
+    { name: 'pandan', version: '1.1.0' },
     {
       instructions:
         'Pandan, a personal kanban board. There may be several boards, for example work and ' +
