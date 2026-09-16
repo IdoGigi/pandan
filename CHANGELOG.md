@@ -32,7 +32,11 @@ kanban. Switch with **Board | Notes** in the top bar.
 - **Export the update log.** Copy it as Markdown, or download it as
   `<project>-updates.md`.
 - **Two columns.** Details on the left, the update log on the right; they
-  stack on a narrow window.
+  stack on a narrow window. The cards row sits at the bottom, since the board
+  already shows those cards.
+- **One bar instead of nine pills.** The counts per column are one stacked
+  bar in board order, with a legend and a single line for total, open,
+  flagged and checklist. The Done segment is the percent done.
 
 ### Board
 
