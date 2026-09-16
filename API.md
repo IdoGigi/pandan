@@ -141,7 +141,7 @@ card. `x` and `y` are where the note sits, in pixels from the top-left.
 | GET | `/boards/:id/notes` | Every note on that board |
 | POST | `/boards/:id/notes` | `{ "text?", "color?", "x?", "y?" }` |
 | PATCH | `/notes/:id` | Any of `text`, `color`, `x`, `y` |
-| DELETE | `/notes/:id` | Really deletes it. Notes have no archive |
+| DELETE | `/notes/:id` | Really deletes it. Notes have no archive, so this needs the password — an agent key gets `403` |
 
 `color` uses the card colours, default `amber`. Text is at most 2000 characters.
 

@@ -403,7 +403,8 @@ api.patch('/notes/:id', (req, res) => {
   res.json(db.prepare('SELECT * FROM notes WHERE id = ?').get(row.id));
 });
 
-api.delete('/notes/:id', (req, res) => {
+// Notes have no archive, so deleting is final — and final is for a person only.
+api.delete('/notes/:id', requireOwner, (req, res) => {
   const info = db.prepare('DELETE FROM notes WHERE id = ?').run(Number(req.params.id));
   if (!info.changes) return res.status(404).json({ error: 'note not found' });
   res.json({ deleted: true });
