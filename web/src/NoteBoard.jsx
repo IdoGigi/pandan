@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { Dialog } from './Dialog.jsx';
 import { CARD_COLORS } from './Card.jsx';
 import { SWATCH, NAMES } from './ContextMenu.jsx';
+import { renderMarks, stripMarks } from './marks.jsx';
 
 /**
  * Loose sticky notes for one board — a cork board next to the kanban.
@@ -31,13 +32,19 @@ export function NoteBoard({ boardId, tick, onError }) {
     }
   };
 
-  /** Sends one change to the server and keeps the list in step with the reply. */
+  /**
+   * Shows a change at once, then sends it. A dropped note must not jump back
+   * to its old spot while the server is answering. If the save fails, the
+   * list is re-read so the screen is true again.
+   */
   const change = async (note, patch) => {
+    setNotes((list) => list.map((n) => (n.id === note.id ? { ...n, ...patch } : n)));
     try {
       const saved = await api.updateNote(note.id, patch);
       setNotes((list) => list.map((n) => (n.id === saved.id ? saved : n)));
     } catch (e) {
       onError(e.message);
+      load();
     }
   };
 
@@ -80,9 +87,12 @@ export function NoteBoard({ boardId, tick, onError }) {
         <Dialog
           kind="confirm"
           title="Delete this note?"
-          message={deleting.text.trim()
-            ? `"${deleting.text.trim().slice(0, 80)}${deleting.text.trim().length > 80 ? '…' : ''}" will be gone. Notes have no archive.`
-            : 'The note is empty. It will be gone.'}
+          message={(() => {
+            const words = (deleting.title || stripMarks(deleting.text)).trim();
+            return words
+              ? `"${words.slice(0, 80)}${words.length > 80 ? '…' : ''}" will be gone. Notes have no archive.`
+              : 'The note is empty. It will be gone.';
+          })()}
           confirmLabel="Delete"
           danger
           onCancel={() => setDeleting(null)}
@@ -132,12 +142,26 @@ function Note({ note, onChange, onDelete }) {
   const title = useDraft(note.title || '', (t) => onChange({ title: t }));
   const text = useDraft(note.text, (t) => onChange({ text: t }));
 
-  // Drag anywhere on the paper (not the text or the buttons) to move the note.
-  // The position is local while dragging and saved once, on release.
+  // A note shows its text formatted until you click it; an empty note opens
+  // straight into the editor, since there is nothing to show yet.
+  const [editing, setEditing] = useState(note.text === '');
+  const inputRef = useRef(null);
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+  const stopEditing = () => {
+    text.save();
+    setEditing(false);
+  };
+
+  // Drag anywhere on the paper (not the fields or the buttons) to move the
+  // note. The position is local while dragging and saved once, on release.
+  // A press on the shown text that does not move opens the editor instead.
   const [drag, setDrag] = useState(null);
   const startDrag = (e) => {
     if (e.button !== 0 && e.button !== undefined) return;
     if (e.target.closest('button, textarea, input')) return;
+    const onText = Boolean(e.target.closest('.note-view'));
     const startX = e.clientX ?? 0;
     const startY = e.clientY ?? 0;
     const from = { x: note.x, y: note.y };
@@ -155,6 +179,7 @@ function Note({ note, onChange, onDelete }) {
       window.removeEventListener('pointercancel', stop);
       setDrag(null);
       if (pos.x !== from.x || pos.y !== from.y) onChange({ x: pos.x, y: pos.y });
+      else if (onText) setEditing(true);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', stop);
@@ -195,14 +220,20 @@ function Note({ note, onChange, onDelete }) {
         onChange={(e) => title.type(e.target.value)}
         onBlur={title.save}
       />
-      <textarea
-        className="note-input"
-        value={text.draft}
-        placeholder="Write something…"
-        maxLength={2000}
-        onChange={(e) => text.type(e.target.value)}
-        onBlur={text.save}
-      />
+      {editing ? (
+        <textarea
+          ref={inputRef}
+          className="note-input"
+          value={text.draft}
+          placeholder="Write something…"
+          maxLength={2000}
+          onChange={(e) => text.type(e.target.value)}
+          onBlur={stopEditing}
+          onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}
+        />
+      ) : (
+        <div className="note-view">{renderMarks(text.draft)}</div>
+      )}
     </div>
   );
 }

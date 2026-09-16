@@ -1187,15 +1187,25 @@ await step('a note takes text, a colour, moves by drag, and can be deleted', asy
 
   const note = container.querySelector('.note');
   const input = note.querySelector('.note-input');
-  if (!input) throw new Error('note has no text field');
-  await act(async () => { setNativeValue(input, 'Call Dana — Tuesday'); });
+  if (!input) throw new Error('a new, empty note should open in the editor');
+  await act(async () => { setNativeValue(input, 'Call **Dana** — __Tuesday__\n- milk\n- ~~eggs~~'); });
   await act(async () => {
     input.dispatchEvent(new dom.window.Event('blur'));
     input.dispatchEvent(new dom.window.Event('focusout', { bubbles: true }));
   });
   await settle();
   const textSave = sent.find((s) => s.method === 'PATCH' && s.body?.text !== undefined);
-  if (textSave?.body.text !== 'Call Dana — Tuesday') throw new Error(`text was not saved: ${JSON.stringify(sent)}`);
+  if (!textSave?.body.text.startsWith('Call **Dana**')) throw new Error(`text was not saved: ${JSON.stringify(sent)}`);
+
+  // Leaving the editor shows the text formatted: marks become b/u/s, "- " lines a list.
+  const view = note.querySelector('.note-view');
+  if (!view) throw new Error('note should show its text once you leave the editor');
+  if (note.querySelector('.note-input')) throw new Error('editor should close when you leave it');
+  if (view.querySelector('b')?.textContent !== 'Dana') throw new Error('bold mark not shown');
+  if (view.querySelector('u')?.textContent !== 'Tuesday') throw new Error('underline mark not shown');
+  if (view.querySelector('s')?.textContent !== 'eggs') throw new Error('strike mark not shown');
+  if (view.querySelectorAll('li').length !== 2) throw new Error('bullet lines not shown as a list');
+  if (view.textContent.includes('**')) throw new Error('marks should not show as text');
 
   const titleField = note.querySelector('.note-title');
   if (!titleField) throw new Error('note has no title field');
@@ -1234,19 +1244,23 @@ await step('a note takes text, a colour, moves by drag, and can be deleted', asy
   if (note.style.left !== `${before.x + 120}px`) throw new Error('note did not stay where it was dropped');
   if (note.classList.contains('dragging')) throw new Error('note still looks lifted after drop');
 
-  // Pressing on the text must not start a drag.
-  await pointer('pointerdown', input, 10, 10);
-  await pointer('pointermove', dom.window, 500, 500);
-  await pointer('pointerup', dom.window, 500, 500);
+  // A press on the shown text that does not move opens the editor, and does not move the note.
+  await pointer('pointerdown', note.querySelector('.note-view'), 10, 10);
+  await pointer('pointerup', dom.window, 10, 10);
   await settle();
+  if (!note.querySelector('.note-input')) throw new Error('clicking the text should open the editor');
   if (sent.filter((s) => s.method === 'PATCH' && s.body?.x !== undefined).length !== 1) {
-    throw new Error('pressing on the text should not move the note');
+    throw new Error('a click on the text should not move the note');
   }
+  await act(async () => {
+    note.querySelector('.note-input').dispatchEvent(new dom.window.Event('focusout', { bubbles: true }));
+  });
+  await settle();
 
   await click(note.querySelector('.note-delete'));
   const confirm = document.querySelector('.modal-sm');
   if (!confirm) throw new Error('delete confirm did not open');
-  if (!confirm.textContent.includes('Call Dana')) throw new Error('confirm should quote the note');
+  if (!confirm.textContent.includes('"Dana"')) throw new Error('confirm should quote the note title');
   await click([...confirm.querySelectorAll('.btn')].find((b) => b.textContent === 'Delete'));
   if (!sent.some((s) => s.method === 'DELETE')) throw new Error('note was not deleted on the server');
   if (container.querySelector('.note')) throw new Error('note still on the board');

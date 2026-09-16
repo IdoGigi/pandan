@@ -1089,3 +1089,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   user-select: text;
 }
 .note-title::placeholder { color: rgba(47, 52, 55, 0.4); font-weight: 500; }
+
+/* The shown text: same size as the editor, so nothing jumps when you click it. */
+.note-view { min-height: 84px; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
+.note-view ul { margin: 0; padding-left: 18px; }
+.note-view .mark-line { min-height: 1.4em; }
+.note-view u { text-decoration-thickness: 1.5px; }
