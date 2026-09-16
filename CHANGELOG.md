@@ -40,6 +40,9 @@ kanban. Switch with **Board | Notes** in the top bar.
 
 ### Board
 
+- **Hebrew reads right to left.** Every card, note, field and log entry
+  picks its own direction from its first letter, so Hebrew and English sit
+  side by side on the same board.
 - **Archive in the top bar.** The archive was only reachable from the bottom
   of Settings. It now has its own button, and it lists archived projects with
   a Restore button — before, an archived project could not come back.

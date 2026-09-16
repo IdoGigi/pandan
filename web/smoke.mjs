@@ -947,6 +947,16 @@ await step('an overdue card shows a late badge', () => {
   if (!late.textContent.includes('⚠')) throw new Error('overdue should be marked');
 });
 
+await step('text picks its own direction, so Hebrew reads right to left', () => {
+  const title = container.querySelector('.card-title');
+  const box = container.querySelector('.search');
+  for (const [name, el] of [['card title', title], ['search box', box]]) {
+    const css = dom.window.getComputedStyle(el);
+    if (css.unicodeBidi !== 'plaintext') throw new Error(`${name} should pick its own direction`);
+    if (css.textAlign === 'left') throw new Error(`${name} should align to the start, not left`);
+  }
+});
+
 await step('search filters cards and hides empty rows', async () => {
   const box = container.querySelector('.search');
   if (!box) throw new Error('no search box');

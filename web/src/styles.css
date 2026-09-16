@@ -159,7 +159,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
-  text-align: left;
+  text-align: start;
   gap: 2px;
   font-size: 13px;
   color: var(--text);
@@ -340,7 +340,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border: none;
   background: transparent;
   color: var(--muted);
-  text-align: left;
+  text-align: start;
   font-size: 12.5px;
   padding: 5px 4px;
   border-radius: var(--radius);
@@ -476,7 +476,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: 0;
   font: inherit;
   color: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -602,7 +602,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-radius: var(--radius);
   background: var(--plain);
   padding: 7px 9px;
-  text-align: left;
+  text-align: start;
   font-size: 12.5px;
   line-height: 1.35;
 }
@@ -738,7 +738,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-radius: var(--radius);
   padding: 6px 5px;
   font-size: 12.5px;
-  text-align: left;
+  text-align: start;
 }
 .ctx-item:hover { background: var(--hover); }
 .ctx-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--flag); flex: 0 0 auto; }
@@ -1167,4 +1167,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .project-log .log { max-height: 440px; }
 @media (max-width: 860px) {
   .project-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------------- Hebrew and English side by side ----------------
+   Every piece of text picks its own direction from its first letter, the
+   way dir="auto" does: a Hebrew card reads right to left, an English one
+   left to right, on the same board. text-align: start follows along. */
+input:not([type]), input[type='text'], input[type='search'], input[type='url'], textarea,
+.card-title, .card-no, .mini-title, .log-text, .note-view, .note-title, .note-input,
+.check-row .txt, .link-label, .link-value, .row-label .name, .ctx-title,
+.dialog-msg, .modal h2, .label-name, .token-name, .project-col-head {
+  unicode-bidi: plaintext;
+  text-align: start;
 }
