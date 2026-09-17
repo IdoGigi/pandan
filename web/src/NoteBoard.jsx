@@ -227,11 +227,14 @@ function Note({ note, fresh = false, onChange, onDelete }) {
     const startY = e.clientY ?? 0;
     const from = { x: note.x, y: note.y };
     let pos = from;
+    let moving = false;
     const move = (ev) => {
-      pos = {
-        x: Math.max(0, from.x + (ev.clientX ?? 0) - startX),
-        y: Math.max(0, from.y + (ev.clientY ?? 0) - startY),
-      };
+      const dx = (ev.clientX ?? 0) - startX;
+      const dy = (ev.clientY ?? 0) - startY;
+      // A finger wobbles a little on a tap; only a real move starts the drag.
+      if (!moving && Math.hypot(dx, dy) < 5) return;
+      moving = true;
+      pos = { x: Math.max(0, from.x + dx), y: Math.max(0, from.y + dy) };
       setDrag(pos);
     };
     const stop = () => {

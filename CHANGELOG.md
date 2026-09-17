@@ -2,6 +2,29 @@
 
 Newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
+## Unreleased
+
+### On a phone
+
+Pandan now works on a phone screen (640px wide or less), and with a finger.
+
+- **Top bar fits.** It wraps onto lines instead of running off the screen, so
+  the page no longer scrolls sideways. On a phone: board and settings first,
+  then the view and project tools, then search.
+- **One column at a time.** Tabs above the board (To do, Next, Doing, Review,
+  Done) pick the column shown next to the project names. It starts on Doing.
+  A computer still shows all five.
+- **Long press on a card** opens its menu, which now has **Move to** with the
+  five columns. Right-click on a computer shows the same list. The menu opens
+  above the finger when it does not fit below, so lifting the finger picks
+  nothing. On touch screens cards can no longer be dragged; the menu replaces
+  that.
+- **Notes drag with a finger.** A finger on a note moves it instead of
+  scrolling the board, and a tap with a little wobble still opens the text.
+- **Nothing hides behind hover.** On touch screens "+ Add", a note's colour
+  dots and its delete button always show, and menu rows are bigger.
+- **Project panel** stacks its five card columns on a phone.
+
 ## 1.1.0 — 2026-09-16
 
 ### The note board

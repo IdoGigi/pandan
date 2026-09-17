@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CARD_COLORS } from './Card.jsx';
+import { COLUMN_LABELS } from './Board.jsx';
 
 export const SWATCH = {
   plain: '#eaebed', lime: '#c3d117', sky: '#4bb3d4',
@@ -10,19 +11,22 @@ export const NAMES = {
   amber: 'Amber', rose: 'Red', violet: 'Purple',
 };
 
-/** Small menu at the pointer for the quick visual changes to a card. */
-export function CardMenu({ x, y, card, onPickColor, onToggleFlag, onClose }) {
+/** Small menu at the pointer for the quick changes to a card: colour, flag, column. */
+export function CardMenu({ x, y, card, onPickColor, onToggleFlag, onMove, onClose }) {
   const ref = useRef(null);
   const [pos, setPos] = useState({ left: x, top: y, visible: false });
 
-  // Measure first, then place, so the menu never hangs off the screen.
+  // Measure first, then place, so the menu never hangs off the screen. When it
+  // does not fit below the pointer it opens above it, never on top of it: after
+  // a long press the finger is still there, and lifting it must not pick a row.
   useLayoutEffect(() => {
     const box = ref.current?.getBoundingClientRect();
     const w = box?.width || 190;
     const h = box?.height || 120;
+    const fitsBelow = y + h + 6 <= window.innerHeight;
     setPos({
       left: Math.max(6, Math.min(x, window.innerWidth - w - 6)),
-      top: Math.max(6, Math.min(y, window.innerHeight - h - 6)),
+      top: Math.max(6, Math.min(fitsBelow ? y : y - h, window.innerHeight - h - 6)),
       visible: true,
     });
   }, [x, y]);
@@ -77,6 +81,18 @@ export function CardMenu({ x, y, card, onPickColor, onToggleFlag, onClose }) {
         <span className="ctx-dot" style={{ opacity: card.flagged ? 1 : 0.25 }} />
         {card.flagged ? 'Remove flag' : 'Flag this card'}
       </button>
+
+      <div className="ctx-label">Move to</div>
+      {Object.entries(COLUMN_LABELS).map(([key, label]) => (
+        <button
+          key={key}
+          className="ctx-item ctx-move"
+          disabled={card.column_key === key}
+          onClick={() => onMove(key)}
+        >
+          {label}{card.column_key === key && ' ✓'}
+        </button>
+      ))}
     </div>
   );
 }

@@ -466,6 +466,14 @@ export function App() {
             quickEdit(menu.card, { flagged: menu.card.flagged ? 0 : 1 });
             setMenu(null);
           }}
+          onMove={(columnKey) => {
+            // Same as dropping it at the bottom of that column.
+            const card = cards.find((c) => c.id === menu.card.id) || menu.card;
+            const end = cards.filter((c) => c.id !== card.id
+              && c.project_id === card.project_id && c.column_key === columnKey).length;
+            dropCard(card, card.project_id, columnKey, end);
+            setMenu(null);
+          }}
         />
       )}
 

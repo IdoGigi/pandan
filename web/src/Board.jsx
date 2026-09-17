@@ -28,6 +28,8 @@ export function Board({
   const drag = useRef(null);
   const rowDrag = useRef(null);
   const [overRow, setOverRow] = useState(null);
+  // A phone has room for one column; the tabs above the board pick which.
+  const [phoneCol, setPhoneCol] = useState('doing');
 
   const byCell = new Map();
   const counts = new Map();
@@ -39,6 +41,20 @@ export function Board({
   }
 
   return (
+    <>
+    <div className="seg col-tabs" role="tablist" aria-label="Column">
+      {COLS.map((col) => (
+        <button
+          key={col}
+          role="tab"
+          aria-selected={col === phoneCol}
+          className={col === phoneCol ? 'on' : ''}
+          onClick={() => setPhoneCol(col)}
+        >
+          {COLUMN_LABELS[col]}
+        </button>
+      ))}
+    </div>
     <div className={`board${compact ? ' compact' : ''}`} style={{ '--row-cap': `${rowCap}px` }}>
       <Header />
 
@@ -117,7 +133,7 @@ export function Board({
               COLS.map((col, c) => (
                 <div
                   key={col}
-                  className={`cell${c === COLS.length - 1 ? ' last-col' : ''}`}
+                  className={`cell${c === COLS.length - 1 ? ' last-col' : ''}${col === phoneCol ? ' phone-col' : ' phone-off'}`}
                   style={{ gridColumn: c + 2, gridRow: row }}
                 >
                   <List
@@ -137,5 +153,6 @@ export function Board({
         );
       })}
     </div>
+    </>
   );
 }

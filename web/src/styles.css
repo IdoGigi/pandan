@@ -68,6 +68,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   padding: 10px 18px;
@@ -741,6 +742,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   text-align: start;
 }
 .ctx-item:hover { background: var(--hover); }
+.ctx-item:disabled { color: var(--muted); background: none; cursor: default; }
+.ctx-label {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 7px 5px 2px;
+  margin-top: 6px;
+  border-top: 1px solid var(--line);
+}
 .ctx-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--flag); flex: 0 0 auto; }
 
 /* the logo sits with the wordmark in the top bar */
@@ -1049,6 +1058,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   box-shadow: 0 3px 10px rgba(16, 24, 40, 0.18);
   font-size: 13px;
   line-height: 1.4;
+  touch-action: none; /* a finger on a note moves it, instead of scrolling the board */
 }
 
 /* Lighter than the card colours, so dark text reads like ink on paper. */
@@ -1179,4 +1189,52 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
 .dialog-msg, .modal h2, .label-name, .token-name, .project-col-head {
   unicode-bidi: plaintext;
   text-align: start;
+}
+
+/* ---------------- phone ----------------
+   Every phone rule uses this one width. */
+.seg.col-tabs { display: none; } /* the column tabs are for a phone only */
+
+@media (max-width: 640px) {
+  /* The top bar in three lines: logo, board, live, Archive and settings;
+     then the view switch and project tools; then search. The two empty
+     full-width pseudo items are the line breaks. */
+  .topbar { padding: 8px 12px; gap: 4px 8px; }
+  .topbar::before, .topbar::after { content: ''; flex: 0 0 100%; }
+  .topbar .brand, .topbar .board-select, .topbar > .live, .topbar > .btn-ghost,
+  .topbar::after { order: -1; }
+  .topbar::before { order: 1; }
+  .topbar .search, .topbar .agent-filter, .topbar .search-count, .topbar .saving,
+  .topbar > .error { order: 2; }
+  .topbar:not(:has(.search))::before { display: none; }
+  .topbar .brand { font-size: 0; } /* the panda alone; the word needs the room */
+  .topbar > .spacer { display: none; }
+  .topbar > .live { margin-left: auto; }
+  /* A zero basis never pushes a line to wrap; the field grows into what is left. */
+  .topbar .board-select, .topbar .project-filter, .topbar .search { flex: 1 1 0; min-width: 0; }
+  .topbar .search { width: auto; }
+
+  /* The board: project names and one column, picked with the tabs above it. */
+  .board-scroll { padding: 12px; }
+  .seg.col-tabs { display: flex; position: sticky; top: 0; z-index: 5; margin-bottom: 8px; }
+  .seg.col-tabs button { flex: 1 1 0; padding: 7px 0; }
+  .board { grid-template-columns: 120px minmax(0, 1fr); min-width: 0; }
+  .board .head-blank, .board .head-col, .board .head-group,
+  .board .phone-off, .row-label .row-grip { display: none; }
+  .row-label .name { white-space: normal; } /* the narrow column wraps a long name */
+  /* The cells set their desktop column inline; on a phone every one uses the second. */
+  .board .phone-col, .board .row-collapsed { grid-column: 2 !important; }
+
+  /* The project panel stacks its five card columns; each still scrolls on its own. */
+  .project-cards { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+}
+
+/* A touch screen has no hover, so the controls that wait for one always show.
+   Some phones claim hover anyway; a coarse (finger) pointer gives them away. */
+@media (hover: none), (pointer: coarse) {
+  .add-card, .note-colors, .note-delete { opacity: 1; }
+  /* A long press on a card opens its menu, so the phone's own press-and-hold
+     popup, text selection and drag stay out of the way. */
+  .card { -webkit-touch-callout: none; -webkit-user-select: none; -webkit-user-drag: none; }
+  .ctx-item { padding: 9px 6px; font-size: 14px; } /* rows a finger can hit */
 }

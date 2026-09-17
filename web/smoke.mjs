@@ -855,6 +855,36 @@ await step('the menu can flag and unflag a card', async () => {
   if (!patched || patched.flagged === undefined) throw new Error('flag was not sent');
 });
 
+await step('the menu moves a card to another column', async () => {
+  let moved = null;
+  const prev = g.fetch;
+  const spy = (url, opts = {}) => {
+    if (/\/cards\/\d+\/move$/.test(String(url))) moved = { url: String(url), body: JSON.parse(opts.body) };
+    return prev(url, opts);
+  };
+  g.fetch = spy; dom.window.fetch = spy;
+
+  const card = q('.card')[0];
+  const from = card.closest('.list').className.split(' ')[1];
+  const id = card.querySelector('.card-no').textContent.slice(1);
+  await rightClick(card);
+  const items = [...document.querySelectorAll('.ctx-move')];
+  if (items.map((b) => b.textContent.replace(' ✓', '')).join() !== 'To do,Next,Doing,Review,Done') {
+    throw new Error('move options missing');
+  }
+  const keys = ['todo', 'next', 'doing', 'review', 'done'];
+  const here = items.filter((b) => b.disabled);
+  if (here.length !== 1 || here[0] !== items[keys.indexOf(from)]) throw new Error('the current column should be the one marked');
+  const to = from === 'next' ? 'review' : 'next';
+  await click(items[keys.indexOf(to)]);
+
+  g.fetch = prev; dom.window.fetch = prev;
+  if (document.querySelector('.ctx')) throw new Error('menu should close after moving');
+  if (!moved?.url.endsWith(`/cards/${id}/move`) || moved.body.column_key !== to) {
+    throw new Error(`expected card ${id} to move to ${to}, got ${JSON.stringify(moved)}`);
+  }
+});
+
 await step('Escape closes the menu, and it stays on screen', async () => {
   await rightClick(q('.card')[0], 99999, 99999);
   const ctx = document.querySelector('.ctx');
@@ -869,6 +899,60 @@ await step('Escape closes the menu, and it stays on screen', async () => {
   });
   await settle();
   if (document.querySelector('.ctx')) throw new Error('Escape did not close the menu');
+});
+
+await step('on a phone a long press opens the card menu, a tap still opens the card', async () => {
+  const card = q('.card')[0];
+  const wait = (ms) => act(async () => { await new Promise((r) => setTimeout(r, ms)); });
+  const finger = (type, x, y) => act(async () => {
+    const ev = new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, detail: 1 });
+    Object.defineProperty(ev, 'pointerType', { value: 'touch' });
+    card.dispatchEvent(ev);
+  });
+  const escape = () => act(async () => {
+    dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' }));
+  });
+
+  // A finger that moves is scrolling, not pressing.
+  await finger('pointerdown', 50, 50);
+  await finger('pointermove', 50, 90);
+  await wait(650);
+  if (document.querySelector('.ctx')) throw new Error('a moving finger opened the menu');
+  await finger('pointercancel', 50, 90);
+
+  // Held still, it opens the menu; lifting it neither opens the card nor closes the menu.
+  await finger('pointerdown', 50, 50);
+  await wait(650);
+  if (!document.querySelector('.ctx .ctx-move')) throw new Error('a finger held still did not open the menu');
+  await finger('pointerup', 50, 50);
+  await finger('click', 50, 50);
+  await settle();
+  if (document.querySelector('.modal')) throw new Error('lifting the finger also opened the card');
+  if (!document.querySelector('.ctx')) throw new Error('lifting the finger closed the menu');
+  await escape();
+  await settle();
+
+  // A short tap is still a tap.
+  await finger('pointerdown', 50, 50);
+  await wait(100);
+  await finger('pointerup', 50, 50);
+  await finger('click', 50, 50);
+  await settle();
+  if (document.querySelector('.ctx')) throw new Error('a short tap opened the menu');
+  const editor = document.querySelector('.modal');
+  if (!editor) throw new Error('a short tap did not open the card');
+  await click([...editor.querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === 'Cancel'));
+});
+
+await step('near the bottom the menu opens above the pointer, not under it', async () => {
+  const y = dom.window.innerHeight - 10;
+  await rightClick(q('.card')[0], 40, y);
+  const top = parseFloat(document.querySelector('.ctx').style.top);
+  if (!(top + 120 <= y)) throw new Error(`menu covers the pointer: top ${top}, pointer at ${y}`);
+  await act(async () => {
+    dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' }));
+  });
+  await settle();
 });
 
 await step('a normal left click still opens the card editor', async () => {
@@ -1271,6 +1355,9 @@ await step('a note takes text, a colour, moves by drag, and can be deleted', asy
   if (!container.querySelector('.note.sky')) throw new Error('note did not change colour');
 
   // Drag the paper 120px right and 50px down; the new spot is saved on release.
+  if (dom.window.getComputedStyle(note).getPropertyValue('touch-action') !== 'none') {
+    throw new Error('a finger on a note would scroll the board instead of dragging');
+  }
   const before = { x: state.notes[0].x, y: state.notes[0].y };
   const pointer = (type, target, x, y) => act(async () => {
     target.dispatchEvent(new dom.window.MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 }));
@@ -1289,9 +1376,12 @@ await step('a note takes text, a colour, moves by drag, and can be deleted', asy
   if (note.style.left !== `${before.x + 120}px`) throw new Error('note did not stay where it was dropped');
   if (note.classList.contains('dragging')) throw new Error('note still looks lifted after drop');
 
-  // A press on the shown text that does not move opens the editor, and does not move the note.
+  // A press on the shown text that barely moves (a finger's wobble) opens the
+  // editor, and does not move the note.
   await pointer('pointerdown', note.querySelector('.note-view'), 10, 10);
-  await pointer('pointerup', dom.window, 10, 10);
+  await pointer('pointermove', dom.window, 13, 11);
+  if (note.classList.contains('dragging')) throw new Error('a 3px wobble should not start a drag');
+  await pointer('pointerup', dom.window, 13, 11);
   await settle();
   if (!note.querySelector('.note-input')) throw new Error('clicking the text should open the editor');
   if (sent.filter((s) => s.method === 'PATCH' && s.body?.x !== undefined).length !== 1) {
@@ -1426,6 +1516,16 @@ await step('the project column stays pinned, the headers scroll away', async () 
   if (dom.window.getComputedStyle(head).position === 'sticky') throw new Error('column headers should scroll with the board');
   const label = q('.row-label')[0];
   if (dom.window.getComputedStyle(label).position !== 'sticky') throw new Error('project column not sticky');
+});
+
+await step('on a phone, the column tabs pick the one column shown', async () => {
+  const tabs = q('.col-tabs button');
+  if (tabs.map((t) => t.textContent).join() !== 'To do,Next,Doing,Review,Done') throw new Error('column tabs missing');
+  const shown = () => [...new Set(q('.board .phone-col .list').map((l) => l.className.split(' ')[1]))];
+  if (shown().join() !== 'doing') throw new Error(`Doing should be shown first, got ${shown()}`);
+  await click(tabs.find((t) => t.textContent === 'Review'));
+  if (shown().join() !== 'review') throw new Error(`Review tab showed ${shown()}`);
+  if (q('.board .phone-off .list.review').length) throw new Error('Review cells still marked hidden');
 });
 
 console.log('');
