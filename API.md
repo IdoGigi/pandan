@@ -26,18 +26,34 @@ export KEY="Authorization: Bearer YOUR_PASSWORD"
   always at least one, and you cannot delete your last.
 - A **project** is one row (swimlane) on a board.
 - A **card** belongs to one project and sits in one column.
-- Columns are fixed: `todo`, `next`, `doing`, `done`.
+- Columns are fixed: `todo`, `next`, `doing`, `review`, `done`.
   On screen, `next` and `doing` sit under the "In progress" header.
 - `position` orders cards inside a column. Lower comes first. You rarely set it
   by hand — use the move endpoint with an `index`.
+
+## Card references
+
+Each board has a **key**, such as `WRK`, and numbers its cards from 1. A card's
+**reference** is the two together — `WRK-7` — and it is what the board shows.
+
+- Every `/cards/:id…` route takes the reference, in any case, or the card's
+  numeric `id`: `/cards/WRK-7`, `/cards/wrk-7` and `/cards/52` can all be the
+  same card. A bare number is always the `id`.
+- Cards come back with `number` (7) and `ref` (`"WRK-7"`) next to `id`.
+- A key is 2 to 6 letters or digits, starting with a letter, and no two boards
+  share one. Leave it out when making a board and one is made from the name.
+- A new key changes the reference of every card on the board; the numbers stay.
+- A card that moves to a project on another board, or with its project, takes
+  that board's next number. Numbers are never reused, so an old reference
+  points at nothing rather than at the wrong card.
 
 ## Boards
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| GET | `/boards` | Every board with its project count |
-| POST | `/boards` | `{ "name" }` |
-| PATCH | `/boards/:id` | `{ "name?", "position?" }` |
+| GET | `/boards` | Every board with its `key` and project count |
+| POST | `/boards` | `{ "name", "key?" }` |
+| PATCH | `/boards/:id` | `{ "name?", "key?", "position?" }` |
 | DELETE | `/boards/:id` | Also deletes its projects and their cards. Refuses on the last board |
 
 ## Read one board
@@ -51,11 +67,12 @@ curl -s -H "$KEY" "$KB/board?board_id=1"
 
 ```json
 {
-  "columns": ["todo", "next", "doing", "done"],
+  "columns": ["todo", "next", "doing", "review", "done"],
+  "board": { "id": 1, "name": "Work", "key": "WRK" },
   "projects": [{ "id": 1, "name": "House chores", "color": "#c3d117", "position": 1000 }],
   "cards": [
     {
-      "id": 7, "project_id": 1, "column_key": "todo",
+      "id": 52, "number": 7, "ref": "WRK-7", "project_id": 1, "column_key": "todo",
       "title": "Buy milk", "notes": "", "color": "lime", "flagged": 0,
       "position": 1000, "checks_total": 2, "checks_done": 1
     }
@@ -88,7 +105,7 @@ curl -s -H "$KEY" -H 'Content-Type: application/json' \
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/cards` | Filter with `?project_id=1&column=todo` |
-| GET | `/cards/:id` | Includes the `checklist` array |
+| GET | `/cards/:id` | `:id` is the reference (`WRK-7`) or the id. Includes the `checklist` array |
 | POST | `/cards` | `{ "project_id", "title", "column_key?", "notes?", "color?", "flagged?", "due_date?" }` |
 | PATCH | `/cards/:id` | Any field. Changing project/column without a `position` sends it to the end |
 | POST | `/cards/:id/move` | `{ "column_key?", "project_id?", "index?" }` |
@@ -121,14 +138,14 @@ leave it out to drop it at the bottom:
 
 ```bash
 curl -s -H "$KEY" -H 'Content-Type: application/json' \
-  -d '{"column_key":"doing","index":0}' $KB/cards/7/move
+  -d '{"column_key":"doing","index":0}' $KB/cards/WRK-7/move
 ```
 
 Move it to another project too:
 
 ```bash
 curl -s -H "$KEY" -H 'Content-Type: application/json' \
-  -d '{"project_id":2,"column_key":"next"}' $KB/cards/7/move
+  -d '{"project_id":2,"column_key":"next"}' $KB/cards/WRK-7/move
 ```
 
 ## Sticky notes
@@ -160,7 +177,7 @@ The board view shows the progress as `done/total` on the card.
 
 ```bash
 curl -s -H "$KEY" -H 'Content-Type: application/json' \
-  -d '{"text":"call the plumber"}' $KB/cards/7/checks
+  -d '{"text":"call the plumber"}' $KB/cards/WRK-7/checks
 
 curl -s -X PATCH -H "$KEY" -H 'Content-Type: application/json' \
   -d '{"done":true}' $KB/checks/3
@@ -281,6 +298,9 @@ Keep the password in an environment variable, never in the file:
 | `set_label` | Give a colour a meaning, e.g. rose = "Blocked" |
 | `add_check` | Add a checklist item to a card |
 | `update_check` | Tick, untick, or reword a checklist item |
+
+Every card tool takes the card's reference (`WRK-7`) as `card_id`, so an agent
+can act on what you read off the board. The numeric id works too.
 
 Each tool carries its own description and typed arguments, so an agent can read
 `tools/list` and work out what to do without any extra prompting. Bad input is

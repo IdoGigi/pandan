@@ -39,15 +39,19 @@ with `Next` and `Doing` grouped under **In progress**.
 not a gate — an agent can still move a card straight to `Done` when the work
 plainly needs no checking. The point is that it can tell you which is which.
 
-Every card shows its number. That number is what you say to an agent — "archive
-#23", "move #17 to done" — and it is the `card_id` the API and the MCP tools
-take, so what you read off the board is what you pass along.
+Every card shows its reference: the board's key and the card's number on that
+board, so a School board counts `SCH-1`, `SCH-2`… from its first card. That
+reference is what you say to an agent — "archive SCH-23", "move SCH-17 to
+done" — and it is the `card_id` the API and the MCP tools take, so what you
+read off the board is what you pass along. A board makes its key from its name;
+change it under Settings. A card moved to another board takes that board's next
+number, and a number is never handed out twice.
 
 Cards carry a label colour, a due date, a flag, notes and a checklist. Late
 cards go red. Right-click one to recolour it, and name a colour to turn it into
 a real label such as "Blocked". The search box filters the whole board as you
-type — words, or a card number like `#46` — and rows can be dragged into the
-order you want.
+type — words, or a card like `#46` or `SCH-46` — and rows can be dragged into
+the order you want.
 
 **Nothing is deleted.** Archiving takes a card off the board and keeps it, and
 an agent key cannot delete anything at all — only you can, from the archive.
@@ -213,6 +217,7 @@ of that makes it a multi-user app.
 npm run dev                  # server with reload
 npm --prefix web run dev     # UI on :5173, proxies /api to :3000
 npm run check                # syntax check the server
+npm test                     # server tests: the real server on a throwaway database
 npm run smoke                # headless UI test
 ```
 
