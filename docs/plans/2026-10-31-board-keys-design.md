@@ -43,8 +43,14 @@ existing integration keeps working.
 
 - A new card takes its board's next number.
 - A card that moves to a project on **another board** takes that board's next
-  number (`SCH-3` → `PER-9`). The old reference then points at nothing; since
-  numbers are never reused, it can never point at the wrong card.
+  number (`SCH-3` → `PER-9`). The old reference then points at nothing: numbers
+  are never reused on a board. Keys are a different matter — a key given up by a
+  rename or a deleted board can be taken by another board, and its old
+  references then name that board's cards. Accepted for now; a table of retired
+  keys would close it.
+- A bare number is always the internal id, never the number on the card, so
+  existing callers keep working. The MCP field description says so, because an
+  agent told "card 14" must pass `SCH-14`, not `14`.
 - A project moved to another board takes its cards along; they are numbered
   on the new board in the order they were made, archived cards included.
 - Moving within a board keeps the number.
@@ -59,7 +65,8 @@ Runs on every start and only touches rows that need it:
 3. Each board's counter is raised to at least its highest card number.
 
 On the first start this numbers every existing card from 1 per board, in the
-order they were made. Steps 2 and 3 also repair anything an older version wrote
+order they were made. When the repair finds two cards with one number, the
+older card keeps it — the database does not record which one moved. Steps 2 and 3 also repair anything an older version wrote
 after a rollback (it creates cards with no number and moves cards between
 boards without renumbering), so rolling back and forward again is safe.
 

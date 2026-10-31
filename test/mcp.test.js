@@ -45,6 +45,8 @@ test('every card tool says it takes a reference', async () => {
     assert.match(schema, /"string"/, `${t.name} must accept a string`);
     assert.match(schema, /"(integer|number)"/, `${t.name} must still accept an id`);
     assert.match(schema, /SCH-3/, `${t.name} should show an example reference`);
+    // "card 14" off the board is SCH-14; the bare number 14 is some other card's id.
+    assert.match(schema, /not the number shown on the card/, `${t.name} must warn that a bare number is an id`);
   }
 });
 

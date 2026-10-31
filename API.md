@@ -44,8 +44,8 @@ Each board has a **key**, such as `WRK`, and numbers its cards from 1. A card's
   share one. Leave it out when making a board and one is made from the name.
 - A new key changes the reference of every card on the board; the numbers stay.
 - A card that moves to a project on another board, or with its project, takes
-  that board's next number. Numbers are never reused, so an old reference
-  points at nothing rather than at the wrong card.
+  that board's next number. Numbers are never reused on a board, so the old
+  reference points at nothing — unless its key is later given to another board.
 
 ## Boards
 

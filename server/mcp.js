@@ -41,7 +41,9 @@ const colorField = z.enum(COLORS).describe('Card colour. "plain" is the default 
 
 /** What a person reads off the board and says — "SCH-3" — or the card's numeric id. */
 const cardField = (what) => z.union([z.string().min(1), z.number().int()]).describe(
-  `${what} Use the card's reference as shown on the board, like "SCH-3". Its numeric id works too.`
+  `${what} Use the card's reference as shown on the board, like "SCH-3". A bare number is the ` +
+  'card\'s internal id from get_board, not the number shown on the card: for "card 3" on the ' +
+  'School board, pass "SCH-3".'
 );
 const cardPath = (cardId, rest = '') => `/cards/${encodeURIComponent(cardId)}${rest}`;
 
