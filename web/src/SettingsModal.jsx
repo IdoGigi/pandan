@@ -12,7 +12,7 @@ export function SettingsModal({
   compact, setCompact,
   rowCap, setRowCap,
   allFolded, onFoldAll,
-  board, onRenameBoard, onDeleteBoard, boardCount,
+  board, onRenameBoard, onChangeBoardKey, onDeleteBoard, boardCount,
   boardId, labels, onLabelsSaved,
   onOpenArchive, onOpenKeys, onLogout, onClose,
 }) {
@@ -99,6 +99,14 @@ export function SettingsModal({
               </button>
             </span>
           </div>
+          <div className="set-row">
+            <span>Key <b>{board?.key || '—'}</b></span>
+            <button className="btn" onClick={onChangeBoardKey}>Change key</button>
+          </div>
+          <p className="set-hint">
+            Cards here read {board?.key || 'KEY'}-1, {board?.key || 'KEY'}-2… That is what you
+            say to an agent.
+          </p>
         </section>
 
         <section className="set-block">

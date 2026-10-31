@@ -16,8 +16,8 @@ const problems = [];
 /* ---- fake board data ---- */
 const state = {
   boards: [
-    { id: 1, name: 'Work', position: 1000, created_at: '2026-08-01', projects: 3 },
-    { id: 2, name: 'Personal', position: 2000, created_at: '2026-08-02', projects: 0 },
+    { id: 1, name: 'Work', key: 'WRK', position: 1000, created_at: '2026-08-01', projects: 3 },
+    { id: 2, name: 'Personal', key: 'PER', position: 2000, created_at: '2026-08-02', projects: 0 },
   ],
   projects: [
     { id: 1, name: 'House chores', color: '#c3d117', position: 1000, archived: 0 },
@@ -25,7 +25,7 @@ const state = {
     { id: 3, name: 'smart-city-dashboard', color: '#e2725b', position: 3000, archived: 0 },
   ],
   archived: [
-    { id: 77, title: 'an archived card', color: 'rose', project_name: 'House chores',
+    { id: 77, number: 9, ref: 'WRK-9', title: 'an archived card', color: 'rose', project_name: 'House chores',
       archived_at: '2026-09-01 10:00' },
   ],
   archivedProjects: [
@@ -37,14 +37,15 @@ const state = {
       created_at: '2026-08-01 09:00', last_used_at: '2026-09-01 09:30', revoked_at: null },
   ],
   cards: [
-    { id: 10, project_id: 1, column_key: 'todo', title: 'Buy milk', notes: '', color: 'lime',
+    // Ids are global, numbers are per board — so they differ on purpose here.
+    { id: 10, number: 1, ref: 'WRK-1', project_id: 1, column_key: 'todo', title: 'Buy milk', notes: '', color: 'lime',
       flagged: 0, position: 1000, checks_total: 2, checks_done: 1 },
-    { id: 11, project_id: 1, column_key: 'doing', title: 'Fix the sink', notes: 'call plumber',
+    { id: 11, number: 2, ref: 'WRK-2', project_id: 1, column_key: 'doing', title: 'Fix the sink', notes: 'call plumber',
       color: 'plain', flagged: 1, position: 1000, checks_total: 0, checks_done: 0,
       due_date: '2020-01-01' },
-    { id: 12, project_id: 2, column_key: 'done', title: 'Sort donations', notes: '', color: 'sky',
-      flagged: 0, position: 1000, checks_total: 0, checks_done: 0 },
-    { id: 13, project_id: 1, column_key: 'review', title: 'Written by an agent', notes: '',
+    { id: 12, number: 3, ref: 'WRK-3', project_id: 2, column_key: 'done', title: 'Sort donations',
+      notes: 'covid-19 drive', color: 'sky', flagged: 0, position: 1000, checks_total: 0, checks_done: 0 },
+    { id: 13, number: 4, ref: 'WRK-4', project_id: 1, column_key: 'review', title: 'Written by an agent', notes: '',
       color: 'plain', flagged: 0, position: 1000, checks_total: 0, checks_done: 0,
       last_actor: 'Claude on laptop', last_actor_kind: 'agent' },
   ],
@@ -115,7 +116,7 @@ function fakeFetch(url, opts = {}) {
   if (path === '/logout') return json({ ok: true });
   if (path === '/boards' && method === 'GET') return json(state.boards);
   if (path === '/boards' && method === 'POST') {
-    const row = { id: 3, name: body.name, position: 3000, created_at: '2026-09-01', projects: 0 };
+    const row = { id: 3, name: body.name, key: 'NEW', position: 3000, created_at: '2026-09-01', projects: 0 };
     state.boards = [...state.boards, row];
     return json(row, 201);
   }
@@ -124,7 +125,7 @@ function fakeFetch(url, opts = {}) {
     state.boards = state.boards.filter((b) => b.id !== id);
     return json({ deleted: true });
   }
-  if (path.startsWith('/boards/')) return json({ id: 1, name: body.name || 'Work' });
+  if (path.startsWith('/boards/')) return json({ id: 1, name: body.name || 'Work', key: body.key || 'WRK' });
   if (path.startsWith('/board')) {
     const id = Number((path.match(/board_id=(\d+)/) || [])[1] || 1);
     const board = state.boards.find((b) => b.id === id) || state.boards[0];
@@ -132,7 +133,7 @@ function fakeFetch(url, opts = {}) {
     const empty = board.id !== 1;
     return json({
       columns: ['todo', 'next', 'doing', 'review', 'done'],
-      board: { id: board.id, name: board.name },
+      board: { id: board.id, name: board.name, key: board.key },
       projects: empty ? [] : state.projects,
       cards: empty ? [] : state.cards,
       labels: { rose: 'Blocked' },
@@ -345,16 +346,17 @@ await step('a card can be dragged into Review', async () => {
   if (moved?.column_key !== 'review') throw new Error(`expected a move to review, got ${JSON.stringify(moved)}`);
 });
 
-await step('every card shows its number', () => {
+await step('every card shows its reference', () => {
   const cards = q('.card');
-  const numbers = q('.card-no').map((n) => n.textContent);
-  if (numbers.length !== cards.length) {
-    throw new Error(`${cards.length} cards but ${numbers.length} numbers`);
+  const refs = q('.card-no').map((n) => n.textContent);
+  if (refs.length !== cards.length) {
+    throw new Error(`${cards.length} cards but ${refs.length} references`);
   }
-  if (!numbers.every((t) => /^#\d+$/.test(t))) {
-    throw new Error(`numbers should read like #12, got: ${numbers.join(', ')}`);
+  // The reference, not the id, since that is what you say to an agent.
+  const expected = new Set(state.cards.map((c) => c.ref));
+  if (!refs.every((t) => expected.has(t))) {
+    throw new Error(`references should read like WRK-1, got: ${refs.join(', ')}`);
   }
-  // The number must match the real card id, since that is what you pass an agent.
   const first = q('.card')[0].closest('[data-card]');
   if (!first) throw new Error('card wrapper missing');
 });
@@ -367,9 +369,9 @@ await step('a card being created has no number yet', async () => {
   await act(async () => {
     box.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   });
-  // Straight after adding, the optimistic card has a temporary id — showing
-  // "#tmp-123" would be worse than showing nothing.
-  const bad = q('.card-no').map((n) => n.textContent).filter((t) => !/^#\d+$/.test(t));
+  // Straight after adding, the optimistic card has no reference yet — showing
+  // "tmp-123" or "WRK-undefined" would be worse than showing nothing.
+  const bad = q('.card-no').map((n) => n.textContent).filter((t) => !/^WRK-\d+$/.test(t));
   if (bad.length) throw new Error(`bad numbers on a pending card: ${bad.join(', ')}`);
   await settle();
 });
@@ -866,7 +868,7 @@ await step('the menu moves a card to another column', async () => {
 
   const card = q('.card')[0];
   const from = card.closest('.list').className.split(' ')[1];
-  const id = card.querySelector('.card-no').textContent.slice(1);
+  const id = state.cards.find((c) => c.title === card.querySelector('.card-title').textContent).id;
   await rightClick(card);
   const items = [...document.querySelectorAll('.ctx-move')];
   if (items.map((b) => b.textContent.replace(' ✓', '')).join() !== 'To do,Next,Doing,Review,Done') {
@@ -1068,23 +1070,46 @@ await step('search filters cards and hides empty rows', async () => {
   if (q('.card-title').length < 2) throw new Error('clearing search did not bring cards back');
 });
 
-await step('search finds a card by its number', async () => {
+await step('search finds a card by its number or its reference', async () => {
   const box = container.querySelector('.search');
-  const target = state.cards[0];   // "Buy milk", id 10
+  const target = state.cards[0];   // "Buy milk", id 10, WRK-1
+  const only = async (text) => {
+    await act(async () => { setNativeValue(box, text); });
+    await settle();
+    const titles = q('.card-title').map((n) => n.textContent);
+    if (titles.length !== 1 || titles[0] !== target.title) {
+      throw new Error(`"${text}" should show only ${target.ref}, got: ${titles.join(', ')}`);
+    }
+  };
 
-  // With a hash: only that card, whatever its words are.
+  // With a hash, or as a whole reference in any case: only that card.
+  await only(`#${target.number}`);
+  await only(target.ref);
+  await only(target.ref.toLowerCase());
+  await only(`#${target.ref}`);
+
+  // The id is not what the board shows, so it finds nothing.
   await act(async () => { setNativeValue(box, `#${target.id}`); });
   await settle();
-  let titles = q('.card-title').map((n) => n.textContent);
-  if (titles.length !== 1 || titles[0] !== target.title) {
-    throw new Error(`#${target.id} should show only that card, got: ${titles.join(', ')}`);
-  }
+  if (q('.card-title').length !== 0) throw new Error(`#${target.id} is an id, not a number on this board`);
 
   // A number with no hash still finds it.
-  await act(async () => { setNativeValue(box, String(target.id)); });
+  await act(async () => { setNativeValue(box, String(target.number)); });
   await settle();
   if (!q('.card-title').map((n) => n.textContent).includes(target.title)) {
     throw new Error('a bare number should find the card too');
+  }
+
+  // Another board's reference is not on this board.
+  await act(async () => { setNativeValue(box, 'PER-1'); });
+  await settle();
+  if (q('.card-title').length !== 0) throw new Error('PER-1 is on another board');
+
+  // A word with a dash and a number is still a word when it is not this board's key.
+  await act(async () => { setNativeValue(box, 'covid-19'); });
+  await settle();
+  if (!q('.card-title').map((n) => n.textContent).includes('Sort donations')) {
+    throw new Error('covid-19 should be a word search');
   }
 
   // A hash and something that is not a number finds nothing, rather than everything.
@@ -1128,7 +1153,7 @@ await step('the card editor shows a due date and the label name', async () => {
   const modal = document.querySelector('.modal');
   if (!modal.querySelector('input[type="date"]')) throw new Error('no due date field');
   const heading = modal.querySelector('h2').textContent;
-  if (!/#\d+/.test(heading)) throw new Error(`the editor should show the number, got "${heading}"`);
+  if (!/WRK-\d+/.test(heading)) throw new Error(`the editor should show the reference, got "${heading}"`);
   const labels = [...modal.querySelectorAll('.field label')].map((n) => n.textContent);
   if (!labels.some((t) => t.startsWith('Label'))) {
     throw new Error(`colour section should be called Label, got: ${labels.join(' | ')}`);
@@ -1275,6 +1300,31 @@ await step('settings opens the archive and the keys', async () => {
   await click([...document.querySelectorAll('.modal-wide .modal-actions .btn')].find((b) => b.textContent === 'Close'));
 });
 
+await step('settings shows the board key and can change it', async () => {
+  let sent = null;
+  const prev = g.fetch;
+  const spy = (url, opts = {}) => {
+    if (/\/boards\/1$/.test(String(url)) && opts.method === 'PATCH') sent = JSON.parse(opts.body);
+    return prev(url, opts);
+  };
+  g.fetch = spy; dom.window.fetch = spy;
+
+  const panel = await openSettings();
+  if (!panel.textContent.includes('WRK')) throw new Error('settings should show the board key');
+  await click([...panel.querySelectorAll('.btn')].find((b) => b.textContent === 'Change key'));
+  const dlg = [...document.querySelectorAll('.modal-sm')].find((m) => m.textContent.includes('Board key'));
+  if (!dlg) throw new Error('no key dialog');
+  if (!dlg.textContent.includes('WRK-1')) throw new Error('the dialog should say what references look like');
+  const input = dlg.querySelector('input');
+  if (input.value !== 'WRK') throw new Error(`the dialog should start from the key, got "${input.value}"`);
+  await act(async () => { setNativeValue(input, 'job'); });
+  await click([...dlg.querySelectorAll('.btn')].find((b) => b.textContent === 'Save'));
+
+  g.fetch = prev; dom.window.fetch = prev;
+  if (sent?.key !== 'job') throw new Error(`expected key "job" to be sent, got ${JSON.stringify(sent)}`);
+  if (document.querySelector('.settings')) await closeSettings();
+});
+
 await step('the archive opens from the header and can bring a project back', async () => {
   const bar = container.querySelector('.topbar');
   await click([...bar.querySelectorAll('.btn')].find((b) => b.textContent.trim() === 'Archive'));
@@ -1282,6 +1332,7 @@ await step('the archive opens from the header and can bring a project back', asy
   if (!modal) throw new Error('archive did not open from the header');
   await settle();
   if (!modal.textContent.includes('Old garden plan')) throw new Error('archived project not listed');
+  if (!modal.textContent.includes('WRK-9')) throw new Error('an archived card should show its reference');
   const row = [...modal.querySelectorAll('.token-row')].find((r) => r.textContent.includes('Old garden plan'));
   await click([...row.querySelectorAll('.btn')].find((b) => b.textContent === 'Restore'));
   await settle();

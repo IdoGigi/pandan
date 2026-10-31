@@ -90,7 +90,7 @@ export function CardModal({ cardId, projects, labels = {}, boardId, onClose, onS
   return (
     <div className="overlay" onMouseDown={onClose}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-        <h2>Edit card <span className="card-no big">#{card.id}</span></h2>
+        <h2>Edit card {card.ref && <span className="card-no big">{card.ref}</span>}</h2>
 
         <div className="field">
           <label>Title</label>

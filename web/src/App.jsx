@@ -227,6 +227,24 @@ export function App() {
     });
   }
 
+  function changeBoardKey() {
+    const current = boards.find((b) => b.id === boardId);
+    if (!current) return;
+    setDialog({
+      kind: 'prompt',
+      title: 'Board key',
+      message: `Cards on this board read ${current.key}-1, ${current.key}-2… A new key changes every one ` +
+        'of them; the numbers stay. 2 to 6 letters or digits, starting with a letter.',
+      initialValue: current.key,
+      confirmLabel: 'Save',
+      onConfirm: (key) => {
+        setDialog(null);
+        if (key.toUpperCase() === current.key) return;
+        commit(() => api.updateBoard(current.id, { key }));
+      },
+    });
+  }
+
   function deleteBoard() {
     const current = boards.find((b) => b.id === boardId);
     if (!current) return;
@@ -294,22 +312,24 @@ export function App() {
   const needle = raw.toLowerCase();
 
   /**
-   * "#54" looks up a card number and nothing else. A bare number does both, so
-   * typing 24 finds card #24 and also "24 hour support". Numbers match on the
-   * start, so the right card shows up before you finish typing.
+   * "#54" or "WRK-54" looks up a card number on this board and nothing else. A
+   * bare number does both, so typing 24 finds card 24 and also "24 hour
+   * support". Numbers match on the start, so the right card shows up before you
+   * finish typing. "covid-19" stays a word search, since COVID is not this
+   * board's key.
    */
-  const byNumber = (card, digits) => String(card.id).startsWith(digits);
-  const idOnly = raw.startsWith('#');
-  const digits = (idOnly ? raw.slice(1) : raw).trim();
-  const looksNumeric = /^\d+$/.test(digits);
+  const boardKey = boards.find((b) => b.id === boardId)?.key;
+  const ref = /^#?(?:([a-z][a-z0-9]*)-)?(\d+)$/i.exec(raw);
+  const digits = ref && (!ref[1] || ref[1].toUpperCase() === boardKey) ? ref[2] : null;
+  const numberOnly = raw.startsWith('#') || Boolean(digits && ref[1]);
+  const byNumber = (card) => digits !== null && String(card.number).startsWith(digits);
 
   let visibleCards = cards;
-  if (idOnly) {
-    visibleCards = looksNumeric ? cards.filter((c) => byNumber(c, digits)) : [];
+  if (numberOnly) {
+    visibleCards = cards.filter(byNumber);
   } else if (needle) {
     visibleCards = cards.filter((c) =>
-      `${c.title} ${c.notes || ''}`.toLowerCase().includes(needle) ||
-      (looksNumeric && byNumber(c, digits)));
+      `${c.title} ${c.notes || ''}`.toLowerCase().includes(needle) || byNumber(c));
   }
   if (agentOnly) visibleCards = visibleCards.filter((c) => c.last_actor_kind === 'agent');
 
@@ -496,6 +516,7 @@ export function App() {
           onLabelsSaved={load}
           boardCount={boards.length}
           onRenameBoard={() => { setSettings(false); renameBoard(); }}
+          onChangeBoardKey={() => { setSettings(false); changeBoardKey(); }}
           onDeleteBoard={() => { setSettings(false); deleteBoard(); }}
           onOpenArchive={() => { setSettings(false); setArchive(true); }}
           onOpenKeys={() => { setSettings(false); setTokens(true); }}
