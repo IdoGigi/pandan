@@ -118,11 +118,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .board {
   display: grid;
-  grid-template-columns: 156px repeat(5, minmax(168px, 1fr));
+  grid-template-columns: 156px repeat(6, minmax(168px, 1fr));
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 6px;
-  min-width: 1040px;
+  min-width: 1208px;
   box-shadow: var(--shadow);
 }
 
@@ -144,7 +144,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--head-bg);
 }
 
-.head-group { grid-column: span 2; }
+.head-group { grid-column: span 3; }
 .head-col { min-height: 30px; }
 .head-blank { background: var(--head-bg); }
 
@@ -512,6 +512,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   --pipe-todo: #d9edf4;   --pipe-todo-ink: #2f3437;
   --pipe-next: #a8d6e6;   --pipe-next-ink: #2f3437;
   --pipe-doing: #6fbcd6;  --pipe-doing-ink: #2f3437;
+  --pipe-waiting: #499bb8; --pipe-waiting-ink: #2f3437;
   --pipe-review: #237a9b; --pipe-review-ink: #ffffff;
   --pipe-done: #165a72;   --pipe-done-ink: #ffffff;
 }
@@ -519,6 +520,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   --pipe-todo: #2b3d47;   --pipe-todo-ink: #e6e8ea;
   --pipe-next: #2f5566;   --pipe-next-ink: #e6e8ea;
   --pipe-doing: #337287;  --pipe-doing-ink: #ffffff;
+  --pipe-waiting: #39849d; --pipe-waiting-ink: #ffffff;
   --pipe-review: #3f97b4; --pipe-review-ink: #10232b;
   --pipe-done: #6cc0dc;   --pipe-done-ink: #10232b;
 }
@@ -547,6 +549,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .pipe-todo   { background: var(--pipe-todo);   color: var(--pipe-todo-ink); }
 .pipe-next   { background: var(--pipe-next);   color: var(--pipe-next-ink); }
 .pipe-doing  { background: var(--pipe-doing);  color: var(--pipe-doing-ink); }
+.pipe-waiting { background: var(--pipe-waiting); color: var(--pipe-waiting-ink); }
 .pipe-review { background: var(--pipe-review); color: var(--pipe-review-ink); }
 .pipe-done   { background: var(--pipe-done);   color: var(--pipe-done-ink); }
 .pipe-empty { align-self: center; padding: 0 10px; font-size: 12px; color: var(--muted); }
@@ -566,12 +569,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .pipe-dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
 .pipeline-facts { white-space: nowrap; font-variant-numeric: tabular-nums; }
 
-/* The project panel is wide enough for all five columns in one row. */
-.modal.project-panel { width: min(1080px, 100%); }
+/* The project panel is wide enough for all six columns in one row. */
+.modal.project-panel { width: min(1240px, 100%); }
 
 .project-cards {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
 }
 .project-col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
@@ -1225,7 +1228,7 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
   /* The cells set their desktop column inline; on a phone every one uses the second. */
   .board .phone-col, .board .row-collapsed { grid-column: 2 !important; }
 
-  /* The project panel stacks its five card columns; each still scrolls on its own. */
+  /* The project panel stacks its six card columns; each still scrolls on its own. */
   .project-cards { grid-template-columns: minmax(0, 1fr); gap: 14px; }
 }
 

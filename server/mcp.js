@@ -35,6 +35,7 @@ const tool = (fn) => async (args) => {
 
 const columnField = z.enum(COLUMNS).describe(
   'Which column. "todo" = not started, "next" and "doing" are in progress, ' +
+  '"waiting" = started but held up by someone or something else (say who or what in the notes), ' +
   '"review" = finished but wants a human look, "done" = finished and settled.'
 );
 const colorField = z.enum(COLORS).describe('Card colour. "plain" is the default grey.');
@@ -53,7 +54,7 @@ export function buildMcpServer() {
     {
       instructions:
         'Pandan, a personal kanban board. There may be several boards, for example work and ' +
-        'personal. On a board, rows are projects and columns are todo, next, doing, review and done. ' +
+        'personal. On a board, rows are projects and columns are todo, next, doing, waiting, review and done. ' +
         'Call get_boards then get_board to see the projects and cards with their ids, then use the other ' +
         'tools with those ids. Every card has a reference like "SCH-3": its board key and its number on ' +
         'that board. It is shown on the card and it is what a person will say, so pass it straight to ' +

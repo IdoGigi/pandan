@@ -230,7 +230,7 @@ if (db.prepare('SELECT COUNT(*) AS n FROM boards').get().n === 1) {
 }
 backfillRefs();
 
-export const COLUMNS = ['todo', 'next', 'doing', 'review', 'done'];
+export const COLUMNS = ['todo', 'next', 'doing', 'waiting', 'review', 'done'];
 export const CARD_COLORS = ['plain', 'lime', 'sky', 'amber', 'rose', 'violet'];
 
 /** A date the UI and an agent can both agree on: YYYY-MM-DD, or nothing. */

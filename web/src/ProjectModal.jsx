@@ -5,7 +5,7 @@ import { Dialog } from './Dialog.jsx';
 import { LinkList } from './LinkList.jsx';
 
 const PROJECT_COLORS = ['#c3d117', '#4bb3d4', '#f0b429', '#e2725b', '#9b8ec4', '#57a773', '#94a3b8'];
-const COLS = ['todo', 'next', 'doing', 'review', 'done'];
+const COLS = ['todo', 'next', 'doing', 'waiting', 'review', 'done'];
 
 /** The update log as Markdown: a heading, then one line per entry, newest first. */
 export function logAsMarkdown(project) {
@@ -295,7 +295,7 @@ export function ProjectModal({ projectId, onClose, onSaved, onDeleted, onOpenCar
         </div>
 
 
-        {/* All five columns in one row, each scrolling on its own past a few cards,
+        {/* All six columns in one row, each scrolling on its own past a few cards,
             so a project with sixty cards takes the same room as one with five. */}
         <div className="field">
           <label>Cards</label>

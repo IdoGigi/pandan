@@ -61,7 +61,7 @@ function fakeFetch(url, opts = {}) {
   if (path === '/about') return json({
     name: 'Pandan', version: '1.0.0', description: 'test', license: 'MIT',
     node: 'v24.0.0', repo: null, issues: null, contributing: null,
-    columns: ['todo', 'next', 'doing', 'review', 'done'],
+    columns: ['todo', 'next', 'doing', 'waiting', 'review', 'done'],
     counts: { projects: 3, cards: 3 },
   });
   if (path === '/cards?archived=true') return json(state.archived);
@@ -132,7 +132,7 @@ function fakeFetch(url, opts = {}) {
     // Only board 1 has the seeded projects; board 2 is empty.
     const empty = board.id !== 1;
     return json({
-      columns: ['todo', 'next', 'doing', 'review', 'done'],
+      columns: ['todo', 'next', 'doing', 'waiting', 'review', 'done'],
       board: { id: board.id, name: board.name, key: board.key },
       projects: empty ? [] : state.projects,
       cards: empty ? [] : state.cards,
@@ -153,7 +153,7 @@ function fakeFetch(url, opts = {}) {
     const id = Number(detail[1]);
     const p = state.projects.find((x) => x.id === id);
     const cards = state.cards.filter((c) => c.project_id === id);
-    const by_column = { todo: 0, next: 0, doing: 0, review: 0, done: 0 };
+    const by_column = { todo: 0, next: 0, doing: 0, waiting: 0, review: 0, done: 0 };
     for (const c of cards) by_column[c.column_key] += 1;
     return json({
       ...p, created_at: '2026-09-01 00:00:00', cards,
@@ -307,11 +307,15 @@ await step('board renders after load', () => {
   if (!text.includes('In progress')) throw new Error('In progress header missing');
 });
 
-await step('all five columns present, including Review', () => {
+await step('all six columns present, with Waiting under In progress', () => {
   const heads = q('.head-col').map((n) => n.textContent);
-  for (const label of ['To do', 'Next', 'Doing', 'Review', 'Done']) {
+  for (const label of ['To do', 'Next', 'Doing', 'Waiting', 'Review', 'Done']) {
     if (!heads.includes(label)) throw new Error(`missing column ${label}`);
   }
+  const group = q('.head-group')[0].style.gridColumn;
+  const waiting = q('.head-col').find((n) => n.textContent === 'Waiting').style.gridColumn;
+  if (group !== '3 / 6' || waiting !== '5') throw new Error(`In progress spans ${group}, Waiting sits at ${waiting}`);
+  if (q('.list.waiting').length !== state.projects.length) throw new Error('every project should have a Waiting cell');
 });
 
 await step('a card can be dragged into Review', async () => {
@@ -552,10 +556,11 @@ await step('clicking a project name opens the project panel', async () => {
   if (!panel) throw new Error('project panel did not open');
   if (!panel.querySelector('.project-name')) throw new Error('name field missing');
   if (!panel.querySelector('.pipeline-bar')) throw new Error('pipeline bar missing');
-  if (panel.querySelectorAll('.pipe-key').length !== 5) throw new Error('legend should name all five columns');
+  const legend = [...panel.querySelectorAll('.pipe-key')].map((k) => k.textContent.replace(/\s*\d+$/, ''));
+  if (legend.join() !== 'To do,Next,Doing,Waiting,Review,Done') throw new Error(`legend should name all six columns, got ${legend}`);
   if (!panel.querySelector('.mini-card')) throw new Error('card list missing');
   const cols = panel.querySelectorAll('.project-col');
-  if (cols.length !== 5) throw new Error(`all five columns should show, got ${cols.length}`);
+  if (cols.length !== 6) throw new Error(`all six columns should show, got ${cols.length}`);
   const list = panel.querySelector('.project-col-list');
   const lcss = dom.window.getComputedStyle(list);
   if (!lcss.maxHeight || lcss.maxHeight === 'none') throw new Error('a column should scroll past a few cards');
@@ -871,13 +876,13 @@ await step('the menu moves a card to another column', async () => {
   const id = state.cards.find((c) => c.title === card.querySelector('.card-title').textContent).id;
   await rightClick(card);
   const items = [...document.querySelectorAll('.ctx-move')];
-  if (items.map((b) => b.textContent.replace(' ✓', '')).join() !== 'To do,Next,Doing,Review,Done') {
+  if (items.map((b) => b.textContent.replace(' ✓', '')).join() !== 'To do,Next,Doing,Waiting,Review,Done') {
     throw new Error('move options missing');
   }
-  const keys = ['todo', 'next', 'doing', 'review', 'done'];
+  const keys = ['todo', 'next', 'doing', 'waiting', 'review', 'done'];
   const here = items.filter((b) => b.disabled);
   if (here.length !== 1 || here[0] !== items[keys.indexOf(from)]) throw new Error('the current column should be the one marked');
-  const to = from === 'next' ? 'review' : 'next';
+  const to = from === 'waiting' ? 'next' : 'waiting';
   await click(items[keys.indexOf(to)]);
 
   g.fetch = prev; dom.window.fetch = prev;
@@ -1571,12 +1576,14 @@ await step('the project column stays pinned, the headers scroll away', async () 
 
 await step('on a phone, the column tabs pick the one column shown', async () => {
   const tabs = q('.col-tabs button');
-  if (tabs.map((t) => t.textContent).join() !== 'To do,Next,Doing,Review,Done') throw new Error('column tabs missing');
+  if (tabs.map((t) => t.textContent).join() !== 'To do,Next,Doing,Waiting,Review,Done') throw new Error('column tabs missing');
   const shown = () => [...new Set(q('.board .phone-col .list').map((l) => l.className.split(' ')[1]))];
   if (shown().join() !== 'doing') throw new Error(`Doing should be shown first, got ${shown()}`);
   await click(tabs.find((t) => t.textContent === 'Review'));
   if (shown().join() !== 'review') throw new Error(`Review tab showed ${shown()}`);
   if (q('.board .phone-off .list.review').length) throw new Error('Review cells still marked hidden');
+  await click(tabs.find((t) => t.textContent === 'Waiting'));
+  if (shown().join() !== 'waiting') throw new Error(`Waiting tab showed ${shown()}`);
 });
 
 console.log('');
