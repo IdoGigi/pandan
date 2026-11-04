@@ -133,3 +133,30 @@ test('weeks follow the browser time zone', async () => {
   assert.ok((await insights(0)).weeks[10].finished.includes(late.id));
   assert.ok((await insights(-120)).weeks[11].finished.includes(late.id));
 });
+
+test('median days per column use real moves only, and list the slowest cards', async () => {
+  const slow = await card('hiring', 'slow');
+  const quick = await card('hiring', 'quick');
+  const guessed = await card('hiring', 'guessed');
+  for (const c of [slow, quick, guessed]) sql(dbPath, 'DELETE FROM card_events WHERE card_id = ?', c.id);
+  const add = (id, kind, from, to, at, estimated = 0) => sql(dbPath,
+    `INSERT INTO card_events (card_id, kind, from_column, to_column, actor_kind, at, estimated)
+     VALUES (?, ?, ?, ?, 'owner', ?, ?)`, id, kind, from, to, at, estimated);
+  add(slow.id, 'moved', 'todo', 'doing', ago(10));
+  add(slow.id, 'moved', 'doing', 'review', ago(6));    // 4 days in doing
+  add(quick.id, 'moved', 'todo', 'doing', ago(5));
+  add(quick.id, 'moved', 'doing', 'review', ago(3));   // 2 days in doing
+  add(guessed.id, 'moved', 'todo', 'doing', ago(30), 1);
+  add(guessed.id, 'moved', 'doing', 'review', ago(1)); // starts from a guess: not measured
+  // A seeded creation row: exact date, but no actor — it is not when collecting began.
+  sql(dbPath, `INSERT INTO card_events (card_id, kind, at) VALUES (?, 'created', ?)`, guessed.id, ago(60));
+
+  const { time_in_column: t, history_since } = await insights();
+  assert.equal(t.doing.median_days, 3);
+  assert.equal(t.doing.moves, 2);
+  assert.deepEqual(t.doing.longest.slice(0, 2), [slow.id, quick.id]);
+  assert.deepEqual(Object.keys(t), ['todo', 'next', 'doing', 'waiting', 'review']);
+  assert.equal(t.next.median_days, null);
+  assert.match(history_since, /^\d{4}-\d{2}-\d{2}$/);
+  assert.ok(history_since > daysAgoDate(60), 'seeded rows (no actor) do not count as collecting');
+});

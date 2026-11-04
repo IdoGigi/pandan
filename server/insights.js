@@ -28,14 +28,19 @@ function weekStart(t, tz) {
 const shiftWeeks = (start, n) => new Date(Date.parse(`${start}T00:00:00Z`) + n * 7 * DAY).toISOString().slice(0, 10);
 
 /**
- * The last WEEKS local weeks, oldest first and ending with this one, and a
- * lookup from a row's time to its week's index (undefined outside them).
+ * The last WEEKS local weeks, oldest first and ending with this one; `since`,
+ * the local midnight they start at, as epoch ms; and a lookup from a row's
+ * time to its week's index (undefined outside them).
  */
 function calendar(now, tz) {
   const thisWeek = weekStart(now, tz);
   const starts = Array.from({ length: WEEKS }, (_, i) => shiftWeeks(thisWeek, i - (WEEKS - 1)));
   const slot = new Map(starts.map((s, i) => [s, i]));
-  return { starts, weekOf: (at) => slot.get(weekStart(ms(at), tz)) };
+  return {
+    starts,
+    since: Date.parse(`${starts[0]}T00:00:00Z`) + tz * 60000,
+    weekOf: (at) => slot.get(weekStart(ms(at), tz)),
+  };
 }
 
 /** The last event that put a card into `col`, by a move or by being made there. */
@@ -61,6 +66,44 @@ function weekCounts({ starts, weekOf }, cards, history, byCard) {
     if (finish.estimated) weeks[w].estimated = true;
   }
   return weeks;
+}
+
+/** The middle value, or the mean of the two middle ones. */
+const median = (xs) => {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+
+/**
+ * How long cards sat in each open column: from a real move (or creation) into
+ * it to the next real move out, for moves out inside the window. A seeded
+ * guess never starts or ends a stay, so estimates never become durations.
+ */
+function timeInColumn(byCard, since) {
+  const stays = Object.fromEntries(OPEN.map((col) => [col, []]));
+  for (const [cardId, events] of byCard) {
+    let col = null;
+    let entered = null;
+    for (const e of events) {
+      if (e.estimated) { col = null; entered = null; continue; }
+      if (e.kind === 'moved' && col && e.from_column === col && ms(e.at) >= since && stays[col]) {
+        stays[col].push({ cardId, days: (ms(e.at) - entered) / DAY });
+      }
+      if (e.kind === 'moved' || (e.kind === 'created' && e.to_column)) {
+        col = e.to_column;
+        entered = ms(e.at);
+      }
+    }
+  }
+  return Object.fromEntries(OPEN.map((col) => {
+    const list = stays[col].sort((a, b) => b.days - a.days);
+    return [col, {
+      median_days: list.length ? Math.round(median(list.map((s) => s.days)) * 10) / 10 : null,
+      moves: list.length,
+      longest: [...new Set(list.map((s) => s.cardId))].slice(0, 10),
+    }];
+  }));
 }
 
 /**
@@ -93,6 +136,8 @@ export function buildInsights(boardId, { tz = 0, now = Date.now() } = {}) {
   const byCard = new Map();
   for (const e of history) byCard.set(e.card_id, [...(byCard.get(e.card_id) ?? []), e]);
   const cal = calendar(now, tz);
+  // Live rows always carry an actor; seeded ones never do (see recordEvent).
+  const firstReal = history.filter((e) => !e.estimated && e.actor_kind).map((e) => e.at).sort()[0];
 
   const projects = db.prepare(
     'SELECT id, name, color FROM projects WHERE board_id = ? AND archived = 0 ORDER BY position'
@@ -105,7 +150,7 @@ export function buildInsights(boardId, { tz = 0, now = Date.now() } = {}) {
   return {
     board,
     quiet_days: QUIET_DAYS,
-    history_since: null,
+    history_since: firstReal ? localDate(ms(firstReal), tz) : null,
     stuck: {
       waiting: ids(open.filter((c) => c.column_key === 'waiting')),
       flagged: ids(open.filter((c) => c.flagged)),
@@ -114,7 +159,7 @@ export function buildInsights(boardId, { tz = 0, now = Date.now() } = {}) {
     },
     projects,
     weeks: weekCounts(cal, cards, history, byCard),
-    time_in_column: {},
+    time_in_column: timeInColumn(byCard, cal.since),
     agents: { review_from_agents: [], this_week: [], weeks: [] },
     cards: Object.fromEntries(cards.map((c) => [c.id, {
       id: c.id, ref: c.ref, title: c.title, project_id: c.project_id, column_key: c.column_key,
