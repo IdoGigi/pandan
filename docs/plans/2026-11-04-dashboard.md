@@ -767,7 +767,7 @@ and return:
       start: new Date(Date.UTC(2026, 7, 16 + 7 * i)).toISOString().slice(0, 10),
       added: i === 11 ? [10, 12] : [], finished: i === 9 ? [99] : [], estimated: i === 9 })),
     time_in_column: Object.fromEntries(['todo', 'next', 'doing', 'waiting', 'review']
-      .map((c) => [c, c === 'doing' ? { median_days: 2.5, moves: 3, longest: [11] } : { median_days: null, moves: 0, longest: [] }])),
+      .map((c) => [c, c === 'doing' ? { median_days: 2.5, moves: 3, longest: [12, 11], longest_days: [6.5, 1] } : { median_days: null, moves: 0, longest: [], longest_days: [] }])),
     agents: { review_from_agents: [13], this_week: [13],
       weeks: Array.from({ length: 12 }, (_, i) => ({ start: '', agent: i === 11 ? [13] : [], you: i === 11 ? [10] : [] })) },
     cards: {
@@ -838,7 +838,8 @@ const OPEN_COLS = ['todo', 'next', 'doing', 'waiting', 'review'];
  */
 export function Dashboard({ boardId, tick, onOpenCard, onError }) {
   const [data, setData] = useState(null);
-  const [pick, setPick] = useState(null); // { title, ids }
+  // { title, ids, notes? } — notes (id → text) keep the given order, e.g. "Longest in Doing".
+  const [pick, setPick] = useState(null);
 
   const load = useCallback(() => {
     if (!boardId) return;
@@ -848,7 +849,7 @@ export function Dashboard({ boardId, tick, onOpenCard, onError }) {
   useEffect(() => { setPick(null); }, [boardId]);
 
   if (!data) return <div className="center-note">Loading…</div>;
-  const show = (title, ids) => setPick({ title, ids });
+  const show = (title, ids, notes) => setPick({ title, ids, notes });
 
   return (
     <div className="dash">
@@ -890,6 +891,7 @@ export function Dashboard({ boardId, tick, onOpenCard, onError }) {
         <DrillPanel
           title={pick.title}
           cards={pick.ids.map((id) => data.cards[id]).filter(Boolean)}
+          notes={pick.notes}
           projects={data.projects}
           onOpenCard={onOpenCard}
           onClose={() => setPick(null)}
@@ -927,8 +929,8 @@ const weekLabel = (start) => new Date(`${start}T00:00:00Z`)
   .toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 /** Props that make an SVG shape a button for `ids`. Empty ones are not clickable. */
-function pickable(title, ids, onPick) {
-  const go = () => { if (ids.length) onPick(title, ids); };
+function pickable(title, ids, onPick, notes) {
+  const go = () => { if (ids.length) onPick(title, ids, notes); };
   return {
     className: 'pick',
     role: 'button',
@@ -1058,7 +1060,9 @@ export function MedianColumns({ times, columns, labels, since, onPick }) {
               {t.median_days !== null && (
                 <>
                   <rect x={x} y={y(t.median_days)} width={BAR} height={H - y(t.median_days)}
-                    style={{ fill: `var(--pipe-${col})` }} {...pickable(`Longest in ${labels[col]}`, t.longest, onPick)} />
+                    style={{ fill: `var(--pipe-${col})` }}
+                    {...pickable(`Longest in ${labels[col]}`, t.longest, onPick, Object.fromEntries(
+                      t.longest.map((id, k) => [id, `${t.longest_days[k]}d in ${labels[col]}`])))} />
                   <text className="chart-num" x={x + BAR / 2} y={y(t.median_days) - 4}>{t.median_days}d</text>
                 </>
               )}
@@ -1156,6 +1160,17 @@ await step('estimated weeks are marked, and archived cards cannot be opened', as
   if (!row?.disabled || !row.textContent.includes('archived')) throw new Error('archived row should be shown and disabled');
 });
 
+await step('"Longest in" keeps the slowest first and says how long', async () => {
+  const bar = q('.dash .pick').find((p) => p.getAttribute('aria-label') === 'Longest in Doing · 2 cards');
+  if (!bar) throw new Error('no median bar for Doing');
+  await click(bar);
+  const rows = q('.drill-row').map((r) => [r.querySelector('.card-no').textContent, r.querySelector('.drill-age').textContent]);
+  // The server says WRK-3 sat longest; sorting by last change would wrongly put WRK-2 (older change) first.
+  if (JSON.stringify(rows) !== JSON.stringify([['WRK-3', '6.5d in Doing'], ['WRK-2', '1d in Doing']])) {
+    throw new Error(`longest rows: ${JSON.stringify(rows)}`);
+  }
+});
+
 await step('the dashboard is remembered as the view', () => {
   if (dom.window.localStorage.getItem('kanban.view') !== '"dashboard"') throw new Error('view not remembered');
 });
@@ -1179,7 +1194,7 @@ function age(updatedAt) {
 }
 
 /** The cards behind a number on the dashboard, untouched longest first. */
-export function DrillPanel({ title, cards, projects, onOpenCard, onClose }) {
+export function DrillPanel({ title, cards, notes, projects, onOpenCard, onClose }) {
   useEffect(() => {
     // Esc belongs to the card editor while it is open over the dashboard.
     const onKey = (e) => {
@@ -1190,7 +1205,8 @@ export function DrillPanel({ title, cards, projects, onOpenCard, onClose }) {
   }, [onClose]);
 
   const colorOf = Object.fromEntries(projects.map((p) => [p.id, p.color]));
-  const sorted = [...cards].sort((a, b) => a.updated_at.localeCompare(b.updated_at));
+  // A list with notes ("Longest in Doing") is already in its own order; the rest go untouched-longest first.
+  const sorted = notes ? cards : [...cards].sort((a, b) => a.updated_at.localeCompare(b.updated_at));
 
   return (
     <aside className="drill" aria-label={title}>
@@ -1211,7 +1227,7 @@ export function DrillPanel({ title, cards, projects, onOpenCard, onClose }) {
               <span className="drill-title" dir="auto">{c.title}</span>
               <i className="dot" style={{ background: colorOf[c.project_id] ?? 'var(--muted)' }} />
               <span className="drill-col">{c.archived ? 'archived' : COLUMN_LABELS[c.column_key]}</span>
-              <span className="drill-age">{age(c.updated_at)}</span>
+              <span className="drill-age">{notes?.[c.id] ?? age(c.updated_at)}</span>
             </button>
           </li>
         ))}

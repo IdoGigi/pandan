@@ -38,7 +38,7 @@ All charts are vertical. Three blocks:
     "Collecting since …" until there are some.
 - **Agents**
   - Cards an agent left in Review.
-  - Agent moves this week.
+  - Cards agents touched this week.
   - Agent against you, per week, as paired bars.
 
 **Deep-dive.** A tile, a part of a column, a week or a median opens a card
@@ -96,7 +96,7 @@ key. `tz` is the browser's `getTimezoneOffset()`, in minutes.
   "stuck": { "waiting": [], "flagged": [], "overdue": [], "quiet": [] },
   "projects": [{ "id": 19, "name": "", "color": "", "by_column": { "todo": [] } }],
   "weeks": [{ "start": "2026-08-16", "added": [], "finished": [], "estimated": true }],
-  "time_in_column": { "doing": { "median_days": 4.2, "moves": 9, "longest": [] } },
+  "time_in_column": { "doing": { "median_days": 4.2, "moves": 9, "longest": [], "longest_days": [] } },
   "agents": { "review_from_agents": [], "this_week": [], "weeks": [{ "start": "", "agent": [], "you": [] }] },
   "cards": { "274": { "id": 274, "ref": "SCH-1", "title": "", "project_id": 23, "column_key": "todo",
                       "flagged": 0, "due_date": null, "updated_at": "", "archived": false } }
@@ -109,8 +109,9 @@ key. `tz` is the browser's `getTimezoneOffset()`, in minutes.
   moved back out of Done, it no longer counts; if it is archived from Done, it
   still does. A week is `estimated` when any of its finished rows is.
 - **Time in column:** the time from a real move into a column to the next real
-  move out. The median covers the 12-week window, and `longest` holds the
-  slowest cards.
+  move out, leaving out any time the card spent archived. The median covers the
+  12-week window; `longest` holds the slowest cards and `longest_days` their days,
+  in the same order, and the card list keeps that order.
 - **Weeks:** 12 weeks, starting on Sunday, in the browser's local time.
 - **Overdue:** judged against the local date.
 - **Gone quiet:** uses `updated_at`, so any change restarts the clock.
