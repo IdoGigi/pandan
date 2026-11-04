@@ -220,6 +220,11 @@ test('agents: review left by agents, and agent against you per week', async () =
 
 /** Ids in numeric order, to compare lists as sets. */
 const sorted = (list) => [...list].sort((a, b) => a - b);
+/** Archives a card, so a test that counts on the archive fails at the cause if it did not happen. */
+async function archive(c) {
+  const res = await server.call('DELETE', `/cards/${c.ref}`);
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+}
 
 test('totals: open, in progress, and done with cards archived from Done', async () => {
   const todo = await card('website', 'totals todo');
@@ -231,8 +236,8 @@ test('totals: open, in progress, and done with cards archived from Done', async 
   const dropped = await card('website', 'totals dropped');
   const back = await card('website', 'totals back', { column_key: 'next' });
   const shelved = await card('shelved', 'totals shelved', { column_key: 'done' });
-  for (const c of [filed, dropped, back]) await server.call('DELETE', `/cards/${c.ref}`);
-  await server.call('POST', `/cards/${back.ref}/restore`);
+  for (const c of [filed, dropped, back]) await archive(c);
+  assert.equal((await server.call('POST', `/cards/${back.ref}/restore`)).status, 200);
 
   const { totals } = await insights();
   const countsIn = (c) => Object.keys(totals).filter((key) => totals[key].includes(c.id));
@@ -250,7 +255,7 @@ test('columns: live cards by column, Done included', async () => {
   const done = await card('hiring', 'columns done', { column_key: 'done' });
   const next = await card('hiring', 'columns next', { column_key: 'next' });
   const filed = await card('hiring', 'columns filed', { column_key: 'done' });
-  await server.call('DELETE', `/cards/${filed.ref}`);
+  await archive(filed);
 
   const { columns, totals, cards } = await insights();
   assert.deepEqual(Object.keys(columns), ['todo', 'next', 'doing', 'waiting', 'review', 'done']);
@@ -268,7 +273,7 @@ test('each project counts its Done, archived from Done included', async () => {
   const done = await card('hiring', 'project done', { column_key: 'done' });
   const filed = await card('hiring', 'project filed', { column_key: 'done' });
   const dropped = await card('hiring', 'project dropped', { column_key: 'review' });
-  for (const c of [filed, dropped]) await server.call('DELETE', `/cards/${c.ref}`);
+  for (const c of [filed, dropped]) await archive(c);
   const elsewhere = await card('website', 'project elsewhere', { column_key: 'done' });
 
   const { projects: list, totals } = await insights();
@@ -282,13 +287,13 @@ test('each project counts its Done, archived from Done included', async () => {
 
 test('age of open work: whole days since made, each range from its start up to its end', async () => {
   const made = {};
-  for (const days of [0, 6.9, 7, 89.9, 90]) {
+  for (const days of [0, 6.9, 7, 20, 89.9, 90]) {
     made[days] = await card('website', `aged ${days}`);
     sql(dbPath, 'UPDATE cards SET created_at = ? WHERE id = ?', ago(days), made[days].id);
   }
   const finished = await card('website', 'aged and done', { column_key: 'done' });
   const filed = await card('website', 'aged and archived');
-  await server.call('DELETE', `/cards/${filed.ref}`);
+  await archive(filed);
   for (const c of [finished, filed]) sql(dbPath, 'UPDATE cards SET created_at = ? WHERE id = ?', ago(100), c.id);
 
   const { age, totals } = await insights();
@@ -297,6 +302,7 @@ test('age of open work: whole days since made, each range from its start up to i
   assert.equal(rangeOf(made[0]), 0);
   assert.equal(rangeOf(made[6.9]), 0, '6 whole days is under a week');
   assert.equal(rangeOf(made[7]), 1, '7 days starts the second range');
+  assert.equal(rangeOf(made[20]), 2);
   assert.equal(rangeOf(made[89.9]), 3, '89 whole days is under 90');
   assert.equal(rangeOf(made[90]), 4, '90 days starts the last range');
   assert.equal(rangeOf(finished), -1, 'Done is not open work');

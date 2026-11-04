@@ -232,7 +232,7 @@ curl -s -H "$KEY" "$KB/insights?board_id=4&tz=-120"
     "274": { "id": 274, "ref": "SCH-1", "title": "Read chapter 3", "project_id": 23,
              "column_key": "todo", "flagged": 0, "due_date": null, "created_at": "2026-08-18 18:02:11",
              "updated_at": "2026-10-02 09:14:00", "archived": false, "last_actor_kind": "owner",
-             "position": 3 }
+             "position": 3000 }
   }
 }
 ```
@@ -247,10 +247,10 @@ curl -s -H "$KEY" "$KB/insights?board_id=4&tz=-120"
 | `columns` | Live cards in each column, `todo` to `done`: the board as it stands |
 | `projects` | Each active project in board order, with its open cards per column in `by_column`, `todo` to `review`, then its `done` cards, counted as in `totals` |
 | `weeks` | The last 12 weeks, oldest first, ending with this one. `added`: cards created that week. `finished`: cards that last moved into Done that week. `estimated`: at least one of those finish dates is a guess |
-| `age` | Open cards by whole days since they were made, in five ranges: `0`–`7`, `7`–`14`, `14`–`30`, `30`–`90`, and `90` on (`to_days: null`). Each range includes `from_days` and stops before `to_days` |
+| `age` | Open cards by whole days since they were made, in five ranges: `0`–`7`, `7`–`14`, `14`–`30`, `30`–`90`, and `90` on (`to_days: null`). Each range includes `from_days` and stops before `to_days`. Whole days are 24-hour spans from `created_at`; `tz` does not apply |
 | `time_in_column` | For each open column, `todo` to `review`: `median_days` (`null` until a card has left it), `moves` (how many stays the median covers), `longest` (up to 10 of the slowest cards) and `longest_days` (their days) |
 | `agents` | `review_from_agents`: cards in Review that an agent put there. `this_week`: cards an agent created, moved, archived or restored this week. `weeks`: the same 12 weeks, split into the cards an agent touched (`agent`) and the ones you did (`you`) |
-| `cards` | Every card in the board's active projects, by id. Archived ones are included with `archived: true`. `last_actor_kind` is `owner`, `agent`, or `null` for a card no one has touched since that was tracked. `position` orders cards within a column, lowest first |
+| `cards` | Every card in the board's active projects, by id. Archived ones are included with `archived: true`. `last_actor_kind` is `owner`, `agent`, or `null` for a card no one has touched since that was tracked. `created_at` is when the card was made, in UTC. `position` orders cards within their project's column, lowest first |
 
 The rules:
 
