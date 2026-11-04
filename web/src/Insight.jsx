@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { COLUMN_LABELS } from './Board.jsx';
-import { useWidth } from './chartKit.jsx';
+import { agentWeekHasAny, hasMedian, percent, useWidth } from './chartKit.jsx';
 import { AgeBars, BoardNow, MedianColumns, ProjectColumns, Tile } from './charts.jsx';
 import { AddedFinished, PairBars } from './weekCharts.jsx';
 
@@ -22,10 +22,13 @@ function Panel({ title, children }) {
 /** Every card added in the last four weeks, each once. */
 const addedLately = (weeks) => [...new Set(weeks.slice(-4).flatMap((w) => w.added))];
 
-/** Agents and time in column both start collecting on ship day; true once either has something. */
+/**
+ * Agents and time in column both start collecting on ship day; true once either
+ * has something, a card an agent left in Review included, so no count is hidden.
+ */
 function hasHistory({ agents, time_in_column: times }) {
-  return agents.weeks.some((w) => w.agent.length || w.you.length)
-    || Object.values(times).some((t) => t.median_days !== null && t.median_days !== undefined);
+  return agents.review_from_agents.length > 0 || agents.weeks.some(agentWeekHasAny)
+    || Object.values(times).some(hasMedian);
 }
 
 /**
@@ -35,7 +38,7 @@ function hasHistory({ agents, time_in_column: times }) {
 function BigNumbers({ data, onPick }) {
   const { totals, stuck } = data;
   const all = totals.done.length + totals.open.length;
-  const share = all ? `${Math.round((totals.done.length / all) * 100)}% of all work` : null;
+  const share = all ? `${percent(totals.done.length, all)} of all work` : null;
   return (
     <div className="big-numbers">
       <div className="tiles">
@@ -59,8 +62,8 @@ function BigNumbers({ data, onPick }) {
 /** The right half of the dashboard: the numbers and charts, each opening the cards behind it. */
 export function Insight({ data, onPick }) {
   return (
-    <section className="dash-half dash-insight" aria-label="Insight">
-      <h2>Insight</h2>
+    <section className="dash-half dash-insight" aria-labelledby="dash-insight-head">
+      <h2 id="dash-insight-head">Insight</h2>
       <BigNumbers data={data} onPick={onPick} />
       <Panel title="Board now">
         {(width) => <BoardNow columns={data.columns} order={ALL_COLS} labels={COLUMN_LABELS} width={width} onPick={onPick} />}

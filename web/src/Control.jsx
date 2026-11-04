@@ -81,8 +81,8 @@ export function Control({ data, onPick, onOpenCard, onChanged, onError }) {
   const row = { colorOf: Object.fromEntries(data.projects.map((p) => [p.id, p.color])), onOpenCard, onChanged, onError };
   const made = (c) => `${daysSince(c.created_at)}d old`;
   return (
-    <section className="dash-half dash-control" aria-label="Control">
-      <h2>Control</h2>
+    <section className="dash-half dash-control" aria-labelledby="dash-control-head">
+      <h2 id="dash-control-head">Control</h2>
       <QuickAdd boardId={data.board.id} projects={data.projects} onAdded={onChanged} onError={onError} />
       <CardList title="In progress" empty="Nothing in progress" row={row} onPick={onPick}
         rows={inProgress.map((card) => ({ card }))} />

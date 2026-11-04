@@ -1242,9 +1242,10 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
 .tile small { font-size: 12px; color: var(--muted); }
 .tile:not(:disabled):hover, .tile:focus-visible { border-color: var(--sky); }
 .tile:disabled { cursor: default; opacity: 0.6; }
-/* The big numbers on top, in two rows; the tiles in a row share its width. */
+/* The big numbers on top, in two rows; the tiles in a row share its width, and wrap
+   rather than cramp when the half is narrow (the card list open beside it). */
 .big-numbers { display: flex; flex-direction: column; gap: 10px; }
-.big-numbers .tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+.big-numbers .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
 .big-numbers .tile {
   min-width: 0; padding: 14px 16px; background: var(--panel); box-shadow: var(--shadow); font-size: 13px;
 }

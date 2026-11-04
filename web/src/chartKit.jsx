@@ -10,15 +10,26 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 export const H = 180; // the plot's height; the labels go under it
-const TOP = 18; // room above the tallest bar for its number
+export const TOP = 18; // room above the tallest bar for its number
 const MIN_BAR = 4; // the shortest bar drawn, so one that rounds to 0 can still be seen and clicked
 const MAX_BAR = 64; // wider than this a bar reads as a block
 const FALLBACK_WIDTH = 560; // without a ResizeObserver (jsdom) a chart is drawn this wide
 const MIN_WEEKS = 4;
 // A name whose first letter is Hebrew or Arabic reads right to left, as dir="auto" decides elsewhere.
-export const RTL_FIRST = /^[^\p{L}]*[֐-ࣿ]/u;
+export const RTL_FIRST = /^[^\p{L}]*[\u0590-\u08FF]/u;
 
 const plural = (n) => `${n} card${n === 1 ? '' : 's'}`;
+
+/** A whole percent that says 0% or 100% only when it is: under 1% reads "<1%", nearly all "99%". */
+export function percent(part, whole) {
+  if (!part || part === whole) return `${part ? 100 : 0}%`;
+  const share = part / whole;
+  return share < 0.01 ? '<1%' : `${Math.min(99, Math.round(share * 100))}%`;
+}
+
+// The gates for "anything collected yet", shared by the dashboard and its charts so they agree.
+export const hasMedian = (t) => t?.median_days !== null && t?.median_days !== undefined;
+export const agentWeekHasAny = (w) => w.agent.length > 0 || w.you.length > 0;
 export const shortName = (name, max) => (name.length > max ? `${name.slice(0, max - 1)}…` : name);
 export const weekLabel = (start) => new Date(`${start}T00:00:00Z`)
   .toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -58,16 +69,28 @@ export function useWidth(ref) {
 
 /**
  * A chart of weeks opens on the latest ones, at its right end, however narrow
- * the screen. It moves there again only for a new week or when it is drawn
- * after being empty, not on every live change, so older weeks you scrolled
- * back to stay in view.
+ * the screen. The chart that calls this is drawn only when it has weeks to
+ * show, so opening covers "drawn again after being empty". A new week brings
+ * it back to the end. So does its panel narrowing or widening (`width`), but
+ * only if it was at the end: older weeks you scrolled back to stay in view.
+ * A live change in the same weeks moves nothing. Before paint, so the oldest
+ * weeks never flash first.
  */
-export function useLatestInView(weeks, empty) {
+export function useLatestInView(latest, width) {
   const box = useRef(null);
-  const latest = weeks.at(-1)?.start;
+  const atEnd = useRef(true);
+  const shown = useRef(null);
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (el && (latest !== shown.current || atEnd.current)) el.scrollLeft = el.scrollWidth;
+    shown.current = latest;
+  }, [latest, width]);
   useEffect(() => {
-    if (box.current) box.current.scrollLeft = box.current.scrollWidth;
-  }, [latest, empty]);
+    const el = box.current;
+    const onScroll = () => { atEnd.current = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1; };
+    el.addEventListener('scroll', onScroll);
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
   return box;
 }
 
@@ -136,13 +159,14 @@ export function Bars({ label, items, width, minSlot, onPick }) {
   );
 }
 
+/** A colour swatch and its name, for a legend. */
+export const Key = ({ color, children }) => <span><i className="pipe-dot" style={{ background: color }} />{children}</span>;
+
 /** Which blue is which column, under a chart coloured by column. */
 export function ColumnKey({ columns, labels }) {
   return (
     <div className="chart-legend">
-      {columns.map((col) => (
-        <span key={col}><i className={`pipe-dot pipe-${col}`} />{labels[col]}</span>
-      ))}
+      {columns.map((col) => <Key key={col} color={`var(--pipe-${col})`}>{labels[col]}</Key>)}
     </div>
   );
 }
