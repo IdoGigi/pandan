@@ -1,7 +1,8 @@
 /**
  * Small hand-drawn charts for the dashboard — all upright, no library. Every
- * part a person can click is a button: it calls onPick(title, ids) with the
- * cards behind it, and says how many in its label for a screen reader. Each
+ * part a person can click is a button: it calls onPick(title, ids, notes) with
+ * the cards behind it (notes, when given, say something per card and keep their
+ * order), and says how many in its label for a screen reader. Each
  * chart is a labelled group, so a screen reader names it too.
  */
 import { useEffect, useRef } from 'react';
@@ -21,12 +22,18 @@ const shortName = (name, max = NAME_MAX) => (name.length > max ? `${name.slice(0
 const weekLabel = (start) => new Date(`${start}T00:00:00Z`)
   .toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
-/** A chart of weeks opens on the latest ones, at its right end, however narrow the screen. */
-function useLatestInView(weeks) {
+/**
+ * A chart of weeks opens on the latest ones, at its right end, however narrow
+ * the screen. It moves there again only for a new week or when it is drawn
+ * after being empty, not on every live change, so older weeks you scrolled
+ * back to stay in view.
+ */
+function useLatestInView(weeks, empty) {
   const box = useRef(null);
+  const latest = weeks.at(-1)?.start;
   useEffect(() => {
     if (box.current) box.current.scrollLeft = box.current.scrollWidth;
-  }, [weeks]);
+  }, [latest, empty]);
   return box;
 }
 
@@ -112,8 +119,9 @@ function ColumnKey({ columns, labels }) {
 
 /** Finished per week as bars, added per week as a line. Estimated weeks are lighter. */
 export function WeekBars({ weeks, onPick }) {
-  const scroller = useLatestInView(weeks);
-  if (weeks.every((w) => !w.finished.length && !w.added.length)) {
+  const empty = weeks.every((w) => !w.finished.length && !w.added.length);
+  const scroller = useLatestInView(weeks, empty);
+  if (empty) {
     return <p className="dash-empty">Nothing added or finished in the last {weeks.length} weeks.</p>;
   }
   const max = Math.max(1, ...weeks.map((w) => Math.max(w.finished.length, w.added.length)));
@@ -194,9 +202,10 @@ export function MedianColumns({ times, columns, labels, since, onPick }) {
 
 /** Cards an agent touched against cards you touched, side by side per week. */
 export function PairBars({ weeks, since, onPick }) {
-  const scroller = useLatestInView(weeks);
+  const empty = weeks.every((w) => !w.agent.length && !w.you.length);
+  const scroller = useLatestInView(weeks, empty);
   // Seeded history has no "who", so an empty chart means nothing collected yet, not nobody working.
-  if (weeks.every((w) => !w.agent.length && !w.you.length)) {
+  if (empty) {
     return <p className="dash-empty">Collecting since {since ?? 'today'}. Changes by agents and by you appear as cards move.</p>;
   }
   const max = Math.max(1, ...weeks.map((w) => Math.max(w.agent.length, w.you.length)));
@@ -210,9 +219,9 @@ export function PairBars({ weeks, since, onPick }) {
           <line className="chart-axis" x1={0} x2={width} y1={H} y2={H} />
           {weeks.map((w, i) => {
             const x = GAP + i * (BAR + GAP);
-            const label = w.start ? weekLabel(w.start) : '';
+            const label = weekLabel(w.start);
             return (
-              <g key={`${w.start}-${i}`}>
+              <g key={w.start}>
                 {w.agent.length > 0 && (
                   <rect x={x} y={y(w.agent.length)} width={half} height={H - y(w.agent.length)}
                     style={{ fill: 'var(--sky)' }} {...pickable(`Agents · week of ${label}`, w.agent, onPick)} />

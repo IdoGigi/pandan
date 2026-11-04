@@ -14,6 +14,10 @@ import { pathToFileURL } from 'node:url';
 const problems = [];
 
 /* ---- fake board data ---- */
+// The 12 Sundays the dashboard's week charts cover; the server sends the same ones to both.
+const WEEK_STARTS = Array.from({ length: 12 }, (_, i) =>
+  new Date(Date.UTC(2026, 7, 16 + 7 * i)).toISOString().slice(0, 10));
+
 const state = {
   boards: [
     { id: 1, name: 'Work', key: 'WRK', position: 1000, created_at: '2026-08-01', projects: 3 },
@@ -59,16 +63,15 @@ const state = {
     // A Hebrew name, as on the School board: too long for its slot, and read right to left.
     { id: 4, name: 'ניתוח מערכות מידע', color: '#9b8ec4',
       by_column: { todo: [], next: [], doing: [], waiting: [], review: [] } }],
-    weeks: Array.from({ length: 12 }, (_, i) => ({
-      start: new Date(Date.UTC(2026, 7, 16 + 7 * i)).toISOString().slice(0, 10),
-      added: i === 11 ? [10, 12] : [], finished: i === 9 ? [77] : [], estimated: i === 9 })),
+    weeks: WEEK_STARTS.map((start, i) => ({
+      start, added: i === 11 ? [10, 12] : [], finished: i === 9 ? [77] : [], estimated: i === 9 })),
     time_in_column: Object.fromEntries(['todo', 'next', 'doing', 'waiting', 'review'].map((c) => [c,
       c === 'doing' ? { median_days: 2.5, moves: 3, longest: [12, 11], longest_days: [6.5, 1] }
       // Under an hour rounds to 0 days; that bar must still show and click.
       : c === 'review' ? { median_days: 0, moves: 1, longest: [13], longest_days: [0] }
       : { median_days: null, moves: 0, longest: [], longest_days: [] }])),
     agents: { review_from_agents: [13], this_week: [13],
-      weeks: Array.from({ length: 12 }, (_, i) => ({ start: '', agent: i === 11 ? [13] : [], you: i === 11 ? [10] : [] })) },
+      weeks: WEEK_STARTS.map((start, i) => ({ start, agent: i === 11 ? [13] : [], you: i === 11 ? [10] : [] })) },
     cards: {
       10: { id: 10, ref: 'WRK-1', title: 'Buy milk', project_id: 1, column_key: 'todo', flagged: 1, due_date: null, updated_at: '2026-11-01 10:00:00', archived: false },
       11: { id: 11, ref: 'WRK-2', title: 'Fix the sink', project_id: 1, column_key: 'doing', flagged: 0, due_date: null, updated_at: '2026-10-20 10:00:00', archived: false },
@@ -1666,6 +1669,13 @@ await step('project names fit their columns and are cut at the reading end', () 
   if (xs.some((x, i) => i > 0 && x - xs[i - 1] < 72)) throw new Error(`labels too close to fit their names: ${xs}`);
 });
 
+await step('the agent chart covers the same weeks as Getting done', () => {
+  const labels = (name) => q(`.dash svg[aria-label="${name}"] .chart-label`).map((t) => t.textContent);
+  const done = labels('Finished and added per week');
+  const agents = labels('Agent against you per week');
+  if (done.length !== 12 || agents.join() !== done.join()) throw new Error(`agent weeks ${agents} against ${done}`);
+});
+
 await step('the parts of a stacked column are drawn apart', () => {
   const parts = q('.dash svg[aria-label="Open work by project"] rect');
   if (!parts.length) throw new Error('no stacked parts');
@@ -1753,6 +1763,39 @@ const liveChange = async () => {
   await act(async () => { stream.emit('change', { revision: 3, source: 'PATCH /cards' }); });
   await settle();
 };
+
+await step('the week charts jump to the latest week only when there is something new to show', async () => {
+  // jsdom has no layout, so count the writes to scrollLeft instead of reading where it ends up.
+  const proto = dom.window.Element.prototype;
+  const real = Object.getOwnPropertyDescriptor(proto, 'scrollLeft');
+  let writes = 0;
+  Object.defineProperty(proto, 'scrollLeft', { configurable: true, get: () => 0, set: () => { writes += 1; } });
+  const kept = { weeks: state.insights.weeks, agents: state.insights.agents };
+  const plusWeek = (day) => new Date(Date.parse(`${day}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10);
+  const scrollsAfter = async (change) => { change(); writes = 0; await liveChange(); return writes; };
+  try {
+    // An agent moves a card: same weeks, so someone looking at older weeks stays there.
+    const same = await scrollsAfter(() => {});
+    if (same !== 0) throw new Error(`a change in the same weeks scrolled the charts ${same} time(s)`);
+    // A new week starts: both charts move to it.
+    const newWeek = await scrollsAfter(() => {
+      state.insights.weeks = kept.weeks.map((w) => ({ ...w, start: plusWeek(w.start) }));
+      state.insights.agents = { ...kept.agents, weeks: kept.agents.weeks.map((w) => ({ ...w, start: plusWeek(w.start) })) };
+    });
+    if (newWeek !== 2) throw new Error(`a new week scrolled the charts ${newWeek} time(s), expected 2`);
+    // The agent chart appears for the first time (it was "Collecting since…"): it opens on the latest week.
+    await scrollsAfter(() => {
+      state.insights.weeks = kept.weeks;
+      state.insights.agents = { ...kept.agents, weeks: kept.agents.weeks.map((w) => ({ ...w, agent: [], you: [] })) };
+    });
+    const drawn = await scrollsAfter(() => { state.insights.agents = kept.agents; });
+    if (drawn !== 1) throw new Error(`a chart drawn again scrolled ${drawn} time(s), expected 1`);
+  } finally {
+    Object.defineProperty(proto, 'scrollLeft', real);
+    Object.assign(state.insights, kept);
+    await liveChange();
+  }
+});
 
 await step('a change from elsewhere re-reads the dashboard', async () => {
   const count = () => q('.tile').find((t) => t.textContent.includes('Waiting'))?.querySelector('b').textContent;
