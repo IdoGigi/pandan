@@ -49,6 +49,28 @@ const state = {
       color: 'plain', flagged: 0, position: 1000, checks_total: 0, checks_done: 0,
       last_actor: 'Claude on laptop', last_actor_kind: 'agent' },
   ],
+  // What GET /insights says about board 1. The cards are the fake ones above (and the archived
+  // WRK-9); the lists are canned, so the steps can check order and counts.
+  insights: {
+    board: { id: 1, name: 'Work', key: 'WRK' }, quiet_days: 7, history_since: '2026-11-05',
+    stuck: { waiting: [12, 11], flagged: [10], overdue: [], quiet: [11] },
+    projects: [{ id: 1, name: 'House chores', color: '#c3d117',
+      by_column: { todo: [10], next: [], doing: [], waiting: [12], review: [13] } }],
+    weeks: Array.from({ length: 12 }, (_, i) => ({
+      start: new Date(Date.UTC(2026, 7, 16 + 7 * i)).toISOString().slice(0, 10),
+      added: i === 11 ? [10, 12] : [], finished: i === 9 ? [77] : [], estimated: i === 9 })),
+    time_in_column: Object.fromEntries(['todo', 'next', 'doing', 'waiting', 'review']
+      .map((c) => [c, c === 'doing' ? { median_days: 2.5, moves: 3, longest: [12, 11], longest_days: [6.5, 1] } : { median_days: null, moves: 0, longest: [], longest_days: [] }])),
+    agents: { review_from_agents: [13], this_week: [13],
+      weeks: Array.from({ length: 12 }, (_, i) => ({ start: '', agent: i === 11 ? [13] : [], you: i === 11 ? [10] : [] })) },
+    cards: {
+      10: { id: 10, ref: 'WRK-1', title: 'Buy milk', project_id: 1, column_key: 'todo', flagged: 1, due_date: null, updated_at: '2026-11-01 10:00:00', archived: false },
+      11: { id: 11, ref: 'WRK-2', title: 'Fix the sink', project_id: 1, column_key: 'doing', flagged: 0, due_date: null, updated_at: '2026-10-20 10:00:00', archived: false },
+      12: { id: 12, ref: 'WRK-3', title: 'Sort donations', project_id: 1, column_key: 'waiting', flagged: 0, due_date: null, updated_at: '2026-10-30 10:00:00', archived: false },
+      13: { id: 13, ref: 'WRK-4', title: 'Written by an agent', project_id: 1, column_key: 'review', flagged: 0, due_date: null, updated_at: '2026-11-02 10:00:00', archived: false },
+      77: { id: 77, ref: 'WRK-9', title: 'an archived card', project_id: 1, column_key: 'done', flagged: 0, due_date: null, updated_at: '2026-10-15 10:00:00', archived: true },
+    },
+  },
 };
 
 function fakeFetch(url, opts = {}) {
@@ -126,6 +148,7 @@ function fakeFetch(url, opts = {}) {
     return json({ deleted: true });
   }
   if (path.startsWith('/boards/')) return json({ id: 1, name: body.name || 'Work', key: body.key || 'WRK' });
+  if (path.startsWith('/insights')) return json(state.insights);
   if (path.startsWith('/board')) {
     const id = Number((path.match(/board_id=(\d+)/) || [])[1] || 1);
     const board = state.boards.find((b) => b.id === id) || state.boards[0];
@@ -1584,6 +1607,75 @@ await step('on a phone, the column tabs pick the one column shown', async () => 
   if (q('.board .phone-off .list.review').length) throw new Error('Review cells still marked hidden');
   await click(tabs.find((t) => t.textContent === 'Waiting'));
   if (shown().join() !== 'waiting') throw new Error(`Waiting tab showed ${shown()}`);
+});
+
+await step('the Dashboard view shows its three blocks', async () => {
+  const tab = q('.view-switch button').find((b) => b.textContent === 'Dashboard');
+  if (!tab) throw new Error('no Dashboard tab');
+  await click(tab);
+  await settle();
+  const heads = q('.dash h2').map((h) => h.textContent);
+  if (heads.join() !== 'Stuck now,Getting done,Agents') throw new Error(`blocks: ${heads}`);
+  const waiting = q('.tile').find((t) => t.textContent.includes('Waiting'));
+  if (waiting?.querySelector('b').textContent !== '2') throw new Error('Waiting tile should count 2');
+});
+
+await step('a tile lists its cards, untouched longest first', async () => {
+  await click(q('.tile').find((t) => t.textContent.includes('Waiting')));
+  const head = document.querySelector('.drill h3')?.textContent;
+  if (head !== 'Waiting · 2') throw new Error(`drill header: ${head}`);
+  const refs = q('.drill .card-no').map((n) => n.textContent);
+  if (refs.join() !== 'WRK-2,WRK-3') throw new Error(`order: ${refs}`);
+});
+
+await step('a row opens the card editor, and Esc there closes only the editor', async () => {
+  await click(q('.drill-row')[0]);
+  await settle();
+  const editor = document.querySelector('.modal');
+  if (!editor) throw new Error('card editor did not open');
+  if (!editor.querySelector('h2').textContent.includes('WRK-2')) throw new Error('the editor opened another card');
+  // The editor closes on Esc; the list under it must ignore that Esc.
+  await act(async () => { dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' })); });
+  await settle();
+  if (document.querySelector('.modal')) throw new Error('card editor did not close');
+  if (!document.querySelector('.drill')) throw new Error('Esc in the editor closed the list too');
+});
+
+await step('Esc closes the list', async () => {
+  if (!document.querySelector('.drill')) throw new Error('no list open to close');
+  await act(async () => { dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' })); });
+  if (document.querySelector('.drill')) throw new Error('list still open');
+});
+
+await step("a project's column part lists just those cards", async () => {
+  const part = q('.dash .pick').find((p) => p.getAttribute('aria-label') === 'Waiting · House chores · 1 card');
+  if (!part) throw new Error('no Waiting part for House chores');
+  await click(part);
+  if (document.querySelector('.drill h3')?.textContent !== 'Waiting · House chores · 1') throw new Error('wrong list');
+});
+
+await step('estimated weeks are marked, and archived cards cannot be opened', async () => {
+  const est = q('.dash rect[data-estimated]');
+  if (est.length !== 1) throw new Error(`estimated bars: ${est.length}`);
+  if (!document.querySelector('.est-note')) throw new Error('no estimate note');
+  await click(est[0]);
+  const row = q('.drill-row')[0];
+  if (!row?.disabled || !row.textContent.includes('archived')) throw new Error('archived row should be shown and disabled');
+});
+
+await step('"Longest in" keeps the slowest first and says how long', async () => {
+  const bar = q('.dash .pick').find((p) => p.getAttribute('aria-label') === 'Longest in Doing · 2 cards');
+  if (!bar) throw new Error('no median bar for Doing');
+  await click(bar);
+  const rows = q('.drill-row').map((r) => [r.querySelector('.card-no').textContent, r.querySelector('.drill-age').textContent]);
+  // The server says WRK-3 sat longest; sorting by last change would wrongly put WRK-2 (older change) first.
+  if (JSON.stringify(rows) !== JSON.stringify([['WRK-3', '6.5d in Doing'], ['WRK-2', '1d in Doing']])) {
+    throw new Error(`longest rows: ${JSON.stringify(rows)}`);
+  }
+});
+
+await step('the dashboard is remembered as the view', () => {
+  if (dom.window.localStorage.getItem('kanban.view') !== '"dashboard"') throw new Error('view not remembered');
 });
 
 console.log('');

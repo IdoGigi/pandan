@@ -1194,6 +1194,62 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
   text-align: start;
 }
 
+/* ---------------- dashboard ---------------- */
+
+.dash { flex: 1 1 auto; display: flex; align-items: flex-start; gap: 16px; padding: 18px; overflow: auto; }
+.dash-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.dash-block {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  padding: 14px 16px; box-shadow: var(--shadow);
+}
+.dash-block h2 { margin: 0 0 10px; font-size: 14px; }
+.dash-block h3 { margin: 16px 0 6px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.dash-empty { margin: 6px 0; font-size: 12.5px; color: var(--muted); }
+
+.tiles { display: flex; flex-wrap: wrap; gap: 10px; }
+.tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 128px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--head-bg); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.tile b { font-size: 22px; color: var(--text); font-variant-numeric: tabular-nums; }
+.tile:not(:disabled):hover, .tile:focus-visible { border-color: var(--sky); }
+.tile:disabled { cursor: default; opacity: 0.6; }
+
+.chart-scroll { overflow-x: auto; }
+.chart { display: block; }
+.chart .pick { cursor: pointer; }
+.chart .pick:hover, .chart .pick:focus-visible { outline: none; stroke: var(--text); stroke-width: 1.5; }
+.chart .pick[data-estimated] { opacity: 0.45; }
+.chart-axis { stroke: var(--line); }
+.chart-label { font-size: 11px; fill: var(--muted); text-anchor: middle; }
+.chart-num { font-size: 11px; font-weight: 600; fill: var(--text); text-anchor: middle; }
+.chart-line { fill: none; stroke: var(--amber); stroke-width: 2; }
+.chart-dot { fill: var(--amber); }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.key-line { display: inline-block; width: 14px; height: 2px; margin-right: 5px; vertical-align: 3px; background: var(--amber); }
+.est-note { font-style: italic; }
+
+.drill {
+  position: sticky; top: 0; flex: 0 0 340px; max-height: calc(100vh - 110px); overflow: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: var(--shadow);
+}
+.drill header {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid var(--line);
+}
+.drill h3 { margin: 0; font-size: 13px; }
+.drill ul { list-style: none; margin: 0; padding: 4px 0; }
+.drill-row {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 12px;
+  border: 0; background: none; color: var(--text); font: inherit; font-size: 12.5px; text-align: start; cursor: pointer;
+}
+.drill-row:hover:not(:disabled) { background: var(--head-bg); }
+.drill-row:disabled { cursor: default; opacity: 0.6; }
+.drill-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drill-row .dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
+.drill-col, .drill-age { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
 /* ---------------- phone ----------------
    Every phone rule uses this one width. */
 .seg.col-tabs { display: none; } /* the column tabs are for a phone only */
@@ -1230,6 +1286,14 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
 
   /* The project panel stacks its six card columns; each still scrolls on its own. */
   .project-cards { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+
+  /* The dashboard stacks; its card list rises from the bottom as a sheet. */
+  .dash { flex-direction: column; padding: 12px; }
+  .dash-main { width: 100%; }
+  .drill {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 20;
+    max-height: 60vh; border-radius: 10px 10px 0 0;
+  }
 }
 
 /* A touch screen has no hover, so the controls that wait for one always show.

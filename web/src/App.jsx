@@ -12,6 +12,7 @@ import { SettingsModal } from './SettingsModal.jsx';
 import { TokensModal } from './TokensModal.jsx';
 import { ArchiveModal } from './ArchiveModal.jsx';
 import { NoteBoard } from './NoteBoard.jsx';
+import { Dashboard } from './Dashboard.jsx';
 
 const PROJECT_COLORS = ['#c3d117', '#4bb3d4', '#f0b429', '#e2725b', '#9b8ec4', '#57a773'];
 
@@ -59,9 +60,12 @@ export function App() {
   const [collapsed, setCollapsed] = useState(() => new Set(readSetting('collapsed', [])));
   const [busy, setBusy] = useState(false);
   const [live, setLive] = useState(false);
-  // 'board' is the kanban, 'notes' the sticky notes. Remembered per browser.
-  const [view, setView] = useState(() => (readSetting('view', 'board') === 'notes' ? 'notes' : 'board'));
-  // Counts up on every reload, so the notes view knows to re-read too.
+  // 'board' is the kanban, 'notes' the sticky notes, 'dashboard' the numbers. Remembered per browser.
+  const [view, setView] = useState(() => {
+    const saved = readSetting('view', 'board');
+    return ['board', 'notes', 'dashboard'].includes(saved) ? saved : 'board';
+  });
+  // Counts up on every reload, so the notes and dashboard views know to re-read too.
   const [tick, setTick] = useState(0);
   const [error, setError] = useState('');
 
@@ -385,6 +389,14 @@ export function App() {
           >
             Notes
           </button>
+          <button
+            role="tab"
+            aria-selected={view === 'dashboard'}
+            className={view === 'dashboard' ? 'on' : ''}
+            onClick={() => setView('dashboard')}
+          >
+            Dashboard
+          </button>
         </div>
 
         {view === 'board' && (
@@ -450,6 +462,8 @@ export function App() {
 
       {view === 'notes' ? (
         <NoteBoard boardId={boardId} tick={tick} onError={setError} />
+      ) : view === 'dashboard' ? (
+        <Dashboard boardId={boardId} tick={tick} onOpenCard={setOpenCardId} onError={setError} />
       ) : (
       <div className="board-scroll">
         {shown.length === 0 ? (
