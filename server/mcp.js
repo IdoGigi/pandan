@@ -9,9 +9,8 @@ const COLORS = ['plain', 'lime', 'sky', 'amber', 'rose', 'violet'];
 /**
  * The tools call this app's own HTTP API rather than the database, so every
  * validation rule in routes.js applies to an agent exactly as it does to the UI.
- * They call it with the caller's own Authorization, so an agent key acts as that
- * agent — on the card and in its history — and never as you. With no header
- * (a browser session), the board password stands in, as the owner.
+ * An agent's key is passed on so its work is recorded as that agent's; the
+ * owner keeps using the password.
  */
 function apiFor(authorization) {
   const auth = authorization || `Bearer ${process.env.APP_PASSWORD}`;
@@ -54,7 +53,7 @@ const cardField = (what) => z.union([z.string().min(1), z.number().int()]).descr
 );
 const cardPath = (cardId, rest = '') => `/cards/${encodeURIComponent(cardId)}${rest}`;
 
-/** `authorization` is the /mcp request's own header; every tool calls the API with it. */
+/** `authorization` is an agent's own header, or nothing for the owner; every tool calls the API with it. */
 export function buildMcpServer(authorization) {
   const callApi = apiFor(authorization);
   const server = new McpServer(
@@ -291,7 +290,7 @@ export function buildMcpServer(authorization) {
  * sessions to keep alive and a plain JSON reply comes back.
  */
 export async function handleMcpRequest(req, res) {
-  const server = buildMcpServer(req.headers.authorization);
+  const server = buildMcpServer(req.actor?.kind === 'agent' ? req.headers.authorization : undefined);
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
