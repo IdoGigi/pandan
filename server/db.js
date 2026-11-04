@@ -154,10 +154,15 @@ export function inTransaction(fn) {
 }
 
 /**
- * One row of move history. `estimated` marks a guess made from old dates, so
- * the dashboard can say so and never measure time from it.
+ * One row of move history. `kind` is `created`, `moved`, `archived` or
+ * `restored`. Live rows, written by the routes, always name who did it; rows
+ * seeded from old dates carry no actor, and the dashboard relies on that to
+ * tell real history from seeded. `estimated` marks a guess made from old
+ * dates, so the dashboard can say so and never measure time from it.
  */
-export function recordEvent({ cardId, kind, from = null, to = null, actor = null, actorKind = null, at = null, estimated = 0 }) {
+export function recordEvent({
+  cardId, kind, from = null, to = null, actor = null, actorKind = null, at = null, estimated = 0,
+}) {
   db.prepare(
     `INSERT INTO card_events (card_id, kind, from_column, to_column, actor, actor_kind, at, estimated)
      VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?)`

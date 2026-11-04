@@ -98,6 +98,8 @@ test('cards from before move history are seeded once', async () => {
       ['created', null, '2026-08-01 09:00:00', 0], ['moved', 'done', '2026-08-20 18:00:00', 1]]);
     assert.deepEqual(seeded(gone.id).map((e) => [e.kind, e.from_column, e.at]), [
       ['created', null, '2026-08-01 09:00:00'], ['archived', 'todo', '2026-08-25 12:00:00']]);
+    assert.deepEqual(rows(path, 'SELECT DISTINCT actor, actor_kind FROM card_events'),
+      [{ actor: null, actor_kind: null }], 'seeded rows name no actor');
 
     s = await startServer(path);
     await s.stop();

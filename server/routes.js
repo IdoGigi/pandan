@@ -640,24 +640,30 @@ api.post('/cards/:id/move', (req, res) => {
  */
 api.delete('/cards/:id', (req, res) => {
   const card = findCard(req.params.id);
-  const info = card && db
-    .prepare(`UPDATE cards SET archived_at = ${NOW}, updated_at = ${NOW}
-               WHERE id = ? AND archived_at IS NULL`)
-    .run(card.id);
-  if (!info?.changes) return res.status(404).json({ error: 'no live card with that id' });
-  logEvent(req, card.id, 'archived', card.column_key, null);
+  const archived = card && inTransaction(() => {
+    const { changes } = db
+      .prepare(`UPDATE cards SET archived_at = ${NOW}, updated_at = ${NOW}
+                 WHERE id = ? AND archived_at IS NULL`)
+      .run(card.id);
+    if (changes) logEvent(req, card.id, 'archived', card.column_key, null);
+    return changes;
+  });
+  if (!archived) return res.status(404).json({ error: 'no live card with that id' });
   stamp(req, card.id);
   res.json({ archived: true });
 });
 
 api.post('/cards/:id/restore', (req, res) => {
   const card = findCard(req.params.id);
-  const info = card && db
-    .prepare(`UPDATE cards SET archived_at = NULL, updated_at = ${NOW}
-               WHERE id = ? AND archived_at IS NOT NULL`)
-    .run(card.id);
-  if (!info?.changes) return res.status(404).json({ error: 'no archived card with that id' });
-  logEvent(req, card.id, 'restored', null, card.column_key);
+  const restored = card && inTransaction(() => {
+    const { changes } = db
+      .prepare(`UPDATE cards SET archived_at = NULL, updated_at = ${NOW}
+                 WHERE id = ? AND archived_at IS NOT NULL`)
+      .run(card.id);
+    if (changes) logEvent(req, card.id, 'restored', null, card.column_key);
+    return changes;
+  });
+  if (!restored) return res.status(404).json({ error: 'no archived card with that id' });
   stamp(req, card.id);
   res.json(cardById(card.id));
 });
