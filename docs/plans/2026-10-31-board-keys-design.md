@@ -89,7 +89,7 @@ boards without renumbering), so rolling back and forward again is safe.
 
 ## Production
 
-Railway service `kanban` (project `kanban`), SQLite at `/data/pandan.db` on a
+Railway service `kanban` (project `kanban`), SQLite at `/data/kanban.db` on a
 volume, deployed by `railway up`. Backup on the volume with `VACUUM INTO`,
 download a copy, dry-run the new code against it locally, merge to `main`,
 deploy from a clean export of `main`, verify, keep deployment `2bb6140c` as the
