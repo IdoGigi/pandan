@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   db, COLUMNS, CARD_COLORS, LINK_KINDS, nextPosition, safeUrl, defaultBoardId, cleanDate,
-  createBoard, takeNumber, renumber, inTransaction,
+  createBoard, takeNumber, renumber, inTransaction, recordEvent,
 } from './db.js';
 import { createToken, requireOwner } from './auth.js';
 import { cleanKey, parseRef } from './refs.js';
@@ -55,6 +55,12 @@ function stamp(req, cardId) {
   const [name, kind] = actorOf(req);
   db.prepare('UPDATE cards SET last_actor = ?, last_actor_kind = ? WHERE id = ?')
     .run(name, kind, cardId);
+}
+
+/** Writes the move history for a card, as whoever made the request. */
+function logEvent(req, cardId, kind, from = null, to = null) {
+  const [actor, actorKind] = actorOf(req);
+  recordEvent({ cardId, kind, from, to, actor, actorKind });
 }
 
 /* ---------------- agent tokens ---------------- */
@@ -520,19 +526,23 @@ api.post('/cards', (req, res) => {
   if (due === undefined) return bad(res, 'due_date must look like 2026-09-15, or be empty');
 
   const position = nextPosition('cards', 'project_id = ? AND column_key = ?', [projectId, column]);
-  const { lastInsertRowid } = inTransaction(() => db.prepare(
-    `INSERT INTO cards (project_id, column_key, title, notes, color, flagged, position, due_date, number)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    projectId, column, title,
-    clean(req.body?.notes, 4000),
-    clean(req.body?.color, 20) || 'plain',
-    req.body?.flagged ? 1 : 0,
-    position, due,
-    takeNumber(boardOfProject(projectId))
-  ));
-  stamp(req, lastInsertRowid);
-  res.status(201).json(cardById(lastInsertRowid));
+  const cardId = inTransaction(() => {
+    const { lastInsertRowid } = db.prepare(
+      `INSERT INTO cards (project_id, column_key, title, notes, color, flagged, position, due_date, number)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      projectId, column, title,
+      clean(req.body?.notes, 4000),
+      clean(req.body?.color, 20) || 'plain',
+      req.body?.flagged ? 1 : 0,
+      position, due,
+      takeNumber(boardOfProject(projectId))
+    );
+    logEvent(req, lastInsertRowid, 'created', null, column);
+    return lastInsertRowid;
+  });
+  stamp(req, cardId);
+  res.status(201).json(cardById(cardId));
 });
 
 api.patch('/cards/:id', (req, res) => {

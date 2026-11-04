@@ -94,12 +94,25 @@ db.exec(`
     updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS card_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_id     INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    kind        TEXT    NOT NULL,
+    from_column TEXT,
+    to_column   TEXT,
+    actor       TEXT,
+    actor_kind  TEXT,
+    at          TEXT    NOT NULL DEFAULT (datetime('now')),
+    estimated   INTEGER NOT NULL DEFAULT 0
+  );
+
   CREATE INDEX IF NOT EXISTS idx_cards_project ON cards(project_id, column_key, position);
   CREATE INDEX IF NOT EXISTS idx_notes_board   ON notes(board_id, id);
   CREATE INDEX IF NOT EXISTS idx_checks_card   ON checks(card_id, position);
   CREATE INDEX IF NOT EXISTS idx_links_project ON project_links(project_id, kind, position);
   CREATE INDEX IF NOT EXISTS idx_updates_project ON project_updates(project_id, id DESC);
   CREATE INDEX IF NOT EXISTS idx_tokens_hash ON tokens(hash);
+  CREATE INDEX IF NOT EXISTS idx_events_card ON card_events(card_id, at);
 `);
 
 /**
@@ -138,6 +151,17 @@ export function inTransaction(fn) {
     db.exec('ROLLBACK');
     throw err;
   }
+}
+
+/**
+ * One row of move history. `estimated` marks a guess made from old dates, so
+ * the dashboard can say so and never measure time from it.
+ */
+export function recordEvent({ cardId, kind, from = null, to = null, actor = null, actorKind = null, at = null, estimated = 0 }) {
+  db.prepare(
+    `INSERT INTO card_events (card_id, kind, from_column, to_column, actor, actor_kind, at, estimated)
+     VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?)`
+  ).run(cardId, kind, from, to, actor, actorKind, at, estimated);
 }
 
 function takenKeys() {
