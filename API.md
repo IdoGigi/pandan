@@ -185,6 +185,94 @@ curl -s -X PATCH -H "$KEY" -H 'Content-Type: application/json' \
   -d '{"done":true}' $KB/checks/3
 ```
 
+## Dashboard
+
+`GET /insights?board_id=&tz=` gives the numbers behind the Dashboard view, for
+one board. It only reads, and takes the password, the browser cookie or an
+agent key, like every other route.
+
+```bash
+curl -s -H "$KEY" "$KB/insights?board_id=4&tz=-120"
+```
+
+- `board_id`: leave it out, or empty, for the first board. An unknown board
+  returns `404`.
+- `tz`: the caller's offset from UTC as the browser's `getTimezoneOffset()`
+  gives it, in minutes: `-120` for UTC+2, `300` for UTC-5. It must be a whole
+  number from `-840` to `840`, or the call returns `400`. Leave it out for UTC.
+  It decides what "today" is and where each week starts.
+
+```json
+{
+  "board": { "id": 4, "name": "School", "key": "SCH" },
+  "quiet_days": 7,
+  "history_since": "2026-11-04",
+  "stuck": { "waiting": [281], "flagged": [], "overdue": [279], "quiet": [281] },
+  "projects": [
+    { "id": 23, "name": "Thesis", "color": "#4bb3d4",
+      "by_column": { "todo": [274], "next": [], "doing": [279], "waiting": [281], "review": [] } }
+  ],
+  "weeks": [{ "start": "2026-08-16", "added": [274], "finished": [], "estimated": false }],
+  "time_in_column": {
+    "doing": { "median_days": 4.2, "moves": 9, "longest": [283, 280], "longest_days": [11.5, 6] }
+  },
+  "agents": {
+    "review_from_agents": [],
+    "this_week": [283],
+    "weeks": [{ "start": "2026-11-01", "agent": [283], "you": [279, 283] }]
+  },
+  "cards": {
+    "274": { "id": 274, "ref": "SCH-1", "title": "Read chapter 3", "project_id": 23,
+             "column_key": "todo", "flagged": 0, "due_date": null,
+             "updated_at": "2026-10-02 09:14:00", "archived": false, "last_actor_kind": "owner" }
+  }
+}
+```
+
+| Field | What it holds |
+| --- | --- |
+| `board` | The board these numbers are for |
+| `quiet_days` | How long without a change counts as gone quiet: `7` |
+| `history_since` | The local date of the first change recorded live on this board, not seeded, or `null` before there is one |
+| `stuck` | Open cards (not Done, not archived): `waiting`, `flagged`, `overdue` (due before today), and `quiet` (in `doing`, `waiting` or `review` with no change for `quiet_days` or more) |
+| `projects` | Each active project in board order, with its open cards per column in `by_column`, `todo` to `review` |
+| `weeks` | The last 12 weeks, oldest first, ending with this one. `added`: cards created that week. `finished`: cards that last moved into Done that week. `estimated`: at least one of those finish dates is a guess |
+| `time_in_column` | For each open column, `todo` to `review`: `median_days` (`null` until a card has left it), `moves` (how many stays the median covers), `longest` (up to 10 of the slowest cards) and `longest_days` (their days) |
+| `agents` | `review_from_agents`: cards in Review that an agent put there. `this_week`: cards an agent created, moved, archived or restored this week. `weeks`: the same 12 weeks, split into the cards an agent touched (`agent`) and the ones you did (`you`) |
+| `cards` | Every card in the board's active projects, by id. Archived ones are included with `archived: true`. `last_actor_kind` is `owner`, `agent`, or `null` for a card no one has touched since that was tracked |
+
+The rules:
+
+- **Every number is a list of card ids.** Count the list for the number, and
+  look each id up in `cards` to show the card. One call covers every number.
+- **Finished** is the week a card last moved into Done. A card moved back out
+  of Done no longer counts. A card archived from Done still does.
+- **Estimated.** Move history starts with this version. On the first start,
+  every card gets history from the dates it already has. Creation and archive
+  dates are exact. For a card in Done, its last change stands in for the day
+  it was finished, marked as an estimate. A week is `estimated` when any of its
+  finished cards is.
+- **Time in column** runs from a real move into a column, or a card being made
+  there, to the next real move out. Seeded history never counts, and time
+  spent archived is left out. The median covers stays that ended in the 12
+  weeks. `longest` and `longest_days` share an order, slowest first, and each
+  card appears once, at its longest stay.
+- **Weeks** start on Sunday in local time, from `tz`. **Overdue** is judged
+  against the local date too.
+- **Gone quiet** uses the card's `updated_at`, so any change restarts the
+  clock.
+- **Agent or you.** A change counts as an agent's when it came with an agent
+  key, through this API or MCP. The password or the browser cookie counts as
+  you. Seeded history names no one, so it never shows under `agents`.
+- **History follows the card.** A card moved from another board counts on the
+  board it is on now. Cards in archived projects are left out, past weeks
+  included.
+
+Only a change of column is a move. Reordering a card, or giving it another
+project in the same column, records none, though either one restarts the Gone
+quiet clock. The Dashboard view reads this route again after every `change` on
+the live stream below.
+
 ## Live updates
 
 `GET /api/events` is a Server-Sent Events stream. It sends `hello` on connect,

@@ -4,10 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   db, COLUMNS, CARD_COLORS, LINK_KINDS, nextPosition, safeUrl, defaultBoardId, cleanDate,
-  createBoard, takeNumber, renumber, inTransaction,
+  createBoard, takeNumber, renumber, inTransaction, recordEvent,
 } from './db.js';
 import { createToken, requireOwner } from './auth.js';
 import { cleanKey, parseRef } from './refs.js';
+import { buildInsights } from './insights.js';
 
 export const api = Router();
 
@@ -55,6 +56,12 @@ function stamp(req, cardId) {
   const [name, kind] = actorOf(req);
   db.prepare('UPDATE cards SET last_actor = ?, last_actor_kind = ? WHERE id = ?')
     .run(name, kind, cardId);
+}
+
+/** Writes the move history for a card, as whoever made the request. */
+function logEvent(req, cardId, kind, from = null, to = null) {
+  const [actor, actorKind] = actorOf(req);
+  recordEvent({ cardId, kind, from, to, actor, actorKind });
 }
 
 /* ---------------- agent tokens ---------------- */
@@ -202,6 +209,18 @@ api.get('/board', (req, res) => {
   );
 
   res.json({ columns: COLUMNS, board, projects, cards, labels });
+});
+
+/** The dashboard's numbers for one board. `tz` is the browser's getTimezoneOffset(). */
+api.get('/insights', (req, res) => {
+  const boardId = req.query.board_id ? Number(req.query.board_id) : defaultBoardId();
+  const tz = req.query.tz === undefined ? 0 : Number(req.query.tz);
+  if (!Number.isInteger(tz) || Math.abs(tz) > 14 * 60) {
+    return bad(res, 'tz must be whole minutes, as from getTimezoneOffset()');
+  }
+  const data = buildInsights(boardId, { tz });
+  if (!data) return res.status(404).json({ error: 'board not found' });
+  res.json(data);
 });
 
 /* ---------------- projects ---------------- */
@@ -520,19 +539,23 @@ api.post('/cards', (req, res) => {
   if (due === undefined) return bad(res, 'due_date must look like 2026-09-15, or be empty');
 
   const position = nextPosition('cards', 'project_id = ? AND column_key = ?', [projectId, column]);
-  const { lastInsertRowid } = inTransaction(() => db.prepare(
-    `INSERT INTO cards (project_id, column_key, title, notes, color, flagged, position, due_date, number)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    projectId, column, title,
-    clean(req.body?.notes, 4000),
-    clean(req.body?.color, 20) || 'plain',
-    req.body?.flagged ? 1 : 0,
-    position, due,
-    takeNumber(boardOfProject(projectId))
-  ));
-  stamp(req, lastInsertRowid);
-  res.status(201).json(cardById(lastInsertRowid));
+  const cardId = inTransaction(() => {
+    const { lastInsertRowid } = db.prepare(
+      `INSERT INTO cards (project_id, column_key, title, notes, color, flagged, position, due_date, number)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      projectId, column, title,
+      clean(req.body?.notes, 4000),
+      clean(req.body?.color, 20) || 'plain',
+      req.body?.flagged ? 1 : 0,
+      position, due,
+      takeNumber(boardOfProject(projectId))
+    );
+    logEvent(req, lastInsertRowid, 'created', null, column);
+    return lastInsertRowid;
+  });
+  stamp(req, cardId);
+  res.status(201).json(cardById(cardId));
 });
 
 api.patch('/cards/:id', (req, res) => {
@@ -564,18 +587,21 @@ api.patch('/cards/:id', (req, res) => {
     : movedList ? nextPosition('cards', 'project_id = ? AND column_key = ?', [projectId, column])
     : card.position;
 
-  inTransaction(() => db.prepare(
-    `UPDATE cards
-        SET project_id = ?, column_key = ?, title = ?, notes = ?, color = ?, flagged = ?,
-            position = ?, due_date = ?, number = ?, updated_at = ${NOW}
-      WHERE id = ?`
-  ).run(
-    projectId, column, title,
-    b.notes === undefined ? card.notes : clean(b.notes, 4000),
-    b.color === undefined ? card.color : clean(b.color, 20),
-    b.flagged === undefined ? card.flagged : (b.flagged ? 1 : 0),
-    position, due, numberIn(card, projectId), card.id
-  ));
+  inTransaction(() => {
+    db.prepare(
+      `UPDATE cards
+          SET project_id = ?, column_key = ?, title = ?, notes = ?, color = ?, flagged = ?,
+              position = ?, due_date = ?, number = ?, updated_at = ${NOW}
+        WHERE id = ?`
+    ).run(
+      projectId, column, title,
+      b.notes === undefined ? card.notes : clean(b.notes, 4000),
+      b.color === undefined ? card.color : clean(b.color, 20),
+      b.flagged === undefined ? card.flagged : (b.flagged ? 1 : 0),
+      position, due, numberIn(card, projectId), card.id
+    );
+    if (column !== card.column_key) logEvent(req, card.id, 'moved', card.column_key, column);
+  });
   stamp(req, card.id);
   res.json(cardById(card.id));
 });
@@ -610,10 +636,13 @@ api.post('/cards/:id/move', (req, res) => {
     : after === undefined ? before + 1000
     : (before + after) / 2;
 
-  inTransaction(() => db.prepare(
-    `UPDATE cards SET project_id = ?, column_key = ?, position = ?, number = ?, updated_at = ${NOW}
-      WHERE id = ?`
-  ).run(projectId, column, position, numberIn(card, projectId), card.id));
+  inTransaction(() => {
+    db.prepare(
+      `UPDATE cards SET project_id = ?, column_key = ?, position = ?, number = ?, updated_at = ${NOW}
+        WHERE id = ?`
+    ).run(projectId, column, position, numberIn(card, projectId), card.id);
+    if (column !== card.column_key) logEvent(req, card.id, 'moved', card.column_key, column);
+  });
   stamp(req, card.id);
   res.json(cardById(card.id));
 });
@@ -624,22 +653,30 @@ api.post('/cards/:id/move', (req, res) => {
  */
 api.delete('/cards/:id', (req, res) => {
   const card = findCard(req.params.id);
-  const info = card && db
-    .prepare(`UPDATE cards SET archived_at = ${NOW}, updated_at = ${NOW}
-               WHERE id = ? AND archived_at IS NULL`)
-    .run(card.id);
-  if (!info?.changes) return res.status(404).json({ error: 'no live card with that id' });
+  const archived = card && inTransaction(() => {
+    const { changes } = db
+      .prepare(`UPDATE cards SET archived_at = ${NOW}, updated_at = ${NOW}
+                 WHERE id = ? AND archived_at IS NULL`)
+      .run(card.id);
+    if (changes) logEvent(req, card.id, 'archived', card.column_key, null);
+    return changes;
+  });
+  if (!archived) return res.status(404).json({ error: 'no live card with that id' });
   stamp(req, card.id);
   res.json({ archived: true });
 });
 
 api.post('/cards/:id/restore', (req, res) => {
   const card = findCard(req.params.id);
-  const info = card && db
-    .prepare(`UPDATE cards SET archived_at = NULL, updated_at = ${NOW}
-               WHERE id = ? AND archived_at IS NOT NULL`)
-    .run(card.id);
-  if (!info?.changes) return res.status(404).json({ error: 'no archived card with that id' });
+  const restored = card && inTransaction(() => {
+    const { changes } = db
+      .prepare(`UPDATE cards SET archived_at = NULL, updated_at = ${NOW}
+                 WHERE id = ? AND archived_at IS NOT NULL`)
+      .run(card.id);
+    if (changes) logEvent(req, card.id, 'restored', null, card.column_key);
+    return changes;
+  });
+  if (!restored) return res.status(404).json({ error: 'no archived card with that id' });
   stamp(req, card.id);
   res.json(cardById(card.id));
 });

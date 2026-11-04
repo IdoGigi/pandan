@@ -1,0 +1,219 @@
+/**
+ * The dashboard's numbers. Every number is a list of card ids, so these tests
+ * check exactly which cards land where, on back-dated rows.
+ *
+ * The tests share one server and run in file order, so each one sees the cards
+ * the earlier ones made. Assertions look at a test's own cards, apart from a
+ * few exact ones that hold only because of that order.
+ */
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { join } from 'node:path';
+
+import { startServer, tempDir, removeDir, sql, ago } from './helpers.js';
+
+let dir;
+let dbPath;
+let server;
+let boardId;
+const projects = {};
+
+const today = () => new Date().toISOString().slice(0, 10);
+const daysAgoDate = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+const insights = async (tz = 0) => (await server.call('GET', `/insights?board_id=${boardId}&tz=${tz}`)).body;
+async function card(project, title, extra = {}) {
+  const res = await server.call('POST', '/cards', { project_id: projects[project], title, ...extra });
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  return res.body;
+}
+
+before(async () => {
+  dir = tempDir();
+  dbPath = join(dir, 'pandan.db');
+  server = await startServer(dbPath);
+  boardId = (await server.call('POST', '/boards', { name: 'Insights', key: 'INS' })).body.id;
+  for (const name of ['hiring', 'website', 'shelved']) {
+    projects[name] = (await server.call('POST', '/projects', { name, board_id: boardId })).body.id;
+  }
+  await server.call('PATCH', `/projects/${projects.shelved}`, { archived: true });
+});
+
+after(async () => {
+  await server?.stop();
+  removeDir(dir);
+});
+
+test('stuck now: waiting, flagged, overdue and gone quiet', async () => {
+  const waiting = await card('hiring', 'reference check', { column_key: 'waiting' });
+  const flagged = await card('hiring', 'offer', { column_key: 'doing', flagged: true });
+  const overdue = await card('website', 'copy', { due_date: daysAgoDate(1) });
+  const dueToday = await card('website', 'logo', { due_date: today() });
+  const quiet = await card('website', 'old', { column_key: 'review' });
+  const fresh = await card('website', 'recent', { column_key: 'doing' });
+  const finished = await card('website', 'shipped', { column_key: 'done', flagged: true, due_date: daysAgoDate(3) });
+  const gone = await card('hiring', 'archived waiter', { column_key: 'waiting' });
+  await server.call('DELETE', `/cards/${gone.ref}`);
+  sql(dbPath, 'UPDATE cards SET updated_at = ? WHERE id = ?', ago(8), quiet.id);
+  sql(dbPath, 'UPDATE cards SET updated_at = ? WHERE id = ?', ago(6), fresh.id);
+
+  const { stuck, quiet_days } = await insights();
+  assert.equal(quiet_days, 7);
+  assert.deepEqual(stuck.waiting, [waiting.id]);
+  assert.deepEqual(stuck.flagged, [flagged.id]);
+  assert.deepEqual(stuck.overdue, [overdue.id], 'due today is not overdue; Done never is');
+  assert.deepEqual(stuck.quiet, [quiet.id], '8 days quiet counts, 6 does not');
+  assert.ok(![dueToday.id, finished.id].some((id) => Object.values(stuck).flat().includes(id)));
+});
+
+test('open work by project, split by column, without Done or shelved projects', async () => {
+  const { projects: list } = await insights();
+  assert.deepEqual(list.map((p) => p.name), ['hiring', 'website']);
+  const hiring = list.find((p) => p.name === 'hiring');
+  assert.deepEqual(Object.keys(hiring.by_column), ['todo', 'next', 'doing', 'waiting', 'review']);
+  assert.equal(hiring.by_column.waiting.length, 1, 'the archived card is not open work');
+  assert.equal(hiring.by_column.doing.length, 1);
+});
+
+test('the cards map covers every card on the board, archived ones marked', async () => {
+  const data = await insights();
+  const all = Object.values(data.cards);
+  assert.ok(all.every((c) => /^INS-\d+$/.test(c.ref)));
+  assert.equal(all.filter((c) => c.archived).length, 1);
+});
+
+test('another board stays out, a login is needed, and bad input is refused', async () => {
+  const other = (await server.call('GET', '/projects')).body.find((p) => p.board_id !== boardId);
+  const stranger = (await server.call('POST', '/cards', { project_id: other.id, title: 'elsewhere' })).body;
+  assert.equal((await insights()).cards[stranger.id], undefined);
+  assert.equal((await fetch(`${server.base}/api/insights?board_id=${boardId}`)).status, 401);
+  assert.equal((await server.call('GET', `/insights?board_id=${boardId}&tz=abc`)).status, 400);
+  assert.equal((await server.call('GET', `/insights?board_id=${boardId}&tz=900`)).status, 400);
+  assert.equal((await server.call('GET', '/insights?board_id=99999')).status, 404);
+  assert.equal((await server.call('GET', '/insights?board_id=')).body.board?.id, other.board_id,
+    'an empty board_id means the default board');
+});
+
+/** The Sunday that starts this UTC week, as a Date at 00:00 UTC. */
+function thisSunday() {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() - d.getUTCDay());
+  return d;
+}
+/** A day as YYYY-MM-DD, from epoch ms. */
+const iso = (t) => new Date(t).toISOString().slice(0, 10);
+/** The start of the week a card counts as finished in, if any. */
+const finishedIn = (data, id) => data.weeks.find((w) => w.finished.includes(id))?.start;
+
+test('weeks: 12 Sundays; added on creation; finished on the last move into Done', async () => {
+  const shipped = await card('website', 'launch');
+  await server.call('POST', `/cards/${shipped.ref}/move`, { column_key: 'done' });
+  const reopened = await card('website', 'reopened');
+  await server.call('POST', `/cards/${reopened.ref}/move`, { column_key: 'done' });
+  await server.call('POST', `/cards/${reopened.ref}/move`, { column_key: 'doing' });
+
+  const { weeks } = await insights();
+  assert.equal(weeks.length, 12);
+  assert.equal(weeks[11].start, thisSunday().toISOString().slice(0, 10));
+  assert.ok(weeks[11].added.includes(shipped.id));
+  assert.ok(weeks[11].finished.includes(shipped.id));
+  assert.ok(!weeks.some((w) => w.finished.includes(reopened.id)), 'moved back out of Done no longer counts');
+});
+
+test('a seeded finish lands in its week, marked as an estimate', async () => {
+  const old = await card('website', 'from before');
+  await server.call('POST', `/cards/${old.ref}/move`, { column_key: 'done' });
+  const threeWeeksAgo = new Date(thisSunday().getTime() - 20 * 86400000);
+  sql(dbPath, `UPDATE card_events SET at = ?, estimated = 1
+                WHERE card_id = ? AND to_column = 'done'`,
+      threeWeeksAgo.toISOString().slice(0, 19).replace('T', ' '), old.id);
+  const { weeks } = await insights();
+  assert.ok(weeks[8].finished.includes(old.id));
+  assert.equal(weeks[8].estimated, true);
+  assert.equal(weeks[11].estimated, false);
+});
+
+test('weeks follow the browser time zone', async () => {
+  const late = await card('website', 'saturday night');
+  await server.call('POST', `/cards/${late.ref}/move`, { column_key: 'done' });
+  // 22:30 UTC on the Saturday before this week: still last week in UTC,
+  // already Sunday 00:30 — this week — at UTC+2 (getTimezoneOffset() = -120).
+  const saturdayNight = new Date(thisSunday().getTime() - 90 * 60000);
+  sql(dbPath, `UPDATE card_events SET at = ? WHERE card_id = ? AND to_column = 'done'`,
+      saturdayNight.toISOString().slice(0, 19).replace('T', ' '), late.id);
+  // The week's start, not its index: from Saturday 22:00 UTC this week has
+  // already begun at UTC+2, so the indexes shift but the starts do not.
+  assert.equal(finishedIn(await insights(0), late.id), iso(thisSunday().getTime() - 7 * 86400000));
+  assert.equal(finishedIn(await insights(-120), late.id), iso(thisSunday().getTime()));
+});
+
+test('a card archived from Done still counts, and restoring it keeps its week', async () => {
+  const filed = await card('website', 'filed away');
+  await server.call('POST', `/cards/${filed.ref}/move`, { column_key: 'done' });
+  const threeWeeksAgo = new Date(thisSunday().getTime() - 20 * 86400000);
+  sql(dbPath, `UPDATE card_events SET at = ? WHERE card_id = ? AND to_column = 'done'`,
+      threeWeeksAgo.toISOString().slice(0, 19).replace('T', ' '), filed.id);
+  const finishWeek = iso(thisSunday().getTime() - 21 * 86400000);
+  await server.call('DELETE', `/cards/${filed.ref}`);
+  assert.equal(finishedIn(await insights(), filed.id), finishWeek, 'archived from Done still counts');
+  await server.call('POST', `/cards/${filed.ref}/restore`);
+  assert.equal(finishedIn(await insights(), filed.id), finishWeek, 'a restore is not a new finish');
+});
+
+/** Writes one back-dated history row, as the owner. */
+const addEvent = (id, kind, from, to, at, estimated = 0) => sql(dbPath,
+  `INSERT INTO card_events (card_id, kind, from_column, to_column, actor_kind, at, estimated)
+   VALUES (?, ?, ?, ?, 'owner', ?, ?)`, id, kind, from, to, at, estimated);
+
+test('median days per column use real moves only, and list the slowest cards', async () => {
+  const slow = await card('hiring', 'slow');
+  const quick = await card('hiring', 'quick');
+  const guessed = await card('hiring', 'guessed');
+  for (const c of [slow, quick, guessed]) sql(dbPath, 'DELETE FROM card_events WHERE card_id = ?', c.id);
+  addEvent(slow.id, 'moved', 'todo', 'doing', ago(10));
+  addEvent(slow.id, 'moved', 'doing', 'review', ago(6));    // 4 days in doing
+  addEvent(quick.id, 'moved', 'todo', 'doing', ago(5));
+  addEvent(quick.id, 'moved', 'doing', 'review', ago(3));   // 2 days in doing
+  addEvent(guessed.id, 'moved', 'todo', 'doing', ago(30), 1);
+  addEvent(guessed.id, 'moved', 'doing', 'review', ago(1)); // starts from a guess: not measured
+  // A seeded creation row: exact date, but no actor — it is not when collecting began.
+  sql(dbPath, `INSERT INTO card_events (card_id, kind, at) VALUES (?, 'created', ?)`, guessed.id, ago(60));
+
+  const { time_in_column: t, history_since } = await insights();
+  assert.equal(t.doing.median_days, 3);
+  assert.equal(t.doing.moves, 2);
+  assert.deepEqual(t.doing.longest.slice(0, 2), [slow.id, quick.id]);
+  assert.deepEqual(t.doing.longest_days.slice(0, 2), [4, 2]);
+  assert.deepEqual(Object.keys(t), ['todo', 'next', 'doing', 'waiting', 'review']);
+  assert.equal(t.next.median_days, null);
+  assert.match(history_since, /^\d{4}-\d{2}-\d{2}$/);
+  assert.ok(history_since > daysAgoDate(60), 'seeded rows (no actor) do not count as collecting');
+});
+
+test('time spent archived is left out of a stay', async () => {
+  const paused = await card('hiring', 'paused');
+  sql(dbPath, 'DELETE FROM card_events WHERE card_id = ?', paused.id);
+  addEvent(paused.id, 'moved', 'todo', 'doing', ago(40));
+  addEvent(paused.id, 'archived', 'doing', null, ago(39.5)); // half a day in doing
+  addEvent(paused.id, 'restored', null, 'doing', ago(9.5));  // 30 days put away
+  addEvent(paused.id, 'moved', 'doing', 'review', ago(9));   // half a day more
+  const { doing } = (await insights()).time_in_column;
+  assert.equal(doing.longest_days[doing.longest.indexOf(paused.id)], 1);
+});
+
+test('agents: review left by agents, and agent against you per week', async () => {
+  const token = (await server.call('POST', '/tokens', { name: 'helper' })).body.token;
+  const byAgent = (await server.call('POST', '/cards', { project_id: projects.hiring, title: 'agent work' }, token)).body;
+  await server.call('POST', `/cards/${byAgent.ref}/move`, { column_key: 'review' }, token);
+  const byYou = await card('hiring', 'my review');
+  await server.call('POST', `/cards/${byYou.ref}/move`, { column_key: 'review' });
+
+  const { agents } = await insights();
+  assert.ok(agents.review_from_agents.includes(byAgent.id));
+  assert.ok(!agents.review_from_agents.includes(byYou.id));
+  assert.equal(agents.weeks.length, 12);
+  assert.ok(agents.weeks[11].agent.includes(byAgent.id));
+  assert.ok(agents.weeks[11].you.includes(byYou.id));
+  assert.ok(!agents.weeks[11].agent.includes(byYou.id));
+  assert.deepEqual(agents.this_week, agents.weeks[11].agent);
+});

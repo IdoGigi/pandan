@@ -94,12 +94,25 @@ db.exec(`
     updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS card_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_id     INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    kind        TEXT    NOT NULL,
+    from_column TEXT,
+    to_column   TEXT,
+    actor       TEXT,
+    actor_kind  TEXT,
+    at          TEXT    NOT NULL DEFAULT (datetime('now')),
+    estimated   INTEGER NOT NULL DEFAULT 0
+  );
+
   CREATE INDEX IF NOT EXISTS idx_cards_project ON cards(project_id, column_key, position);
   CREATE INDEX IF NOT EXISTS idx_notes_board   ON notes(board_id, id);
   CREATE INDEX IF NOT EXISTS idx_checks_card   ON checks(card_id, position);
   CREATE INDEX IF NOT EXISTS idx_links_project ON project_links(project_id, kind, position);
   CREATE INDEX IF NOT EXISTS idx_updates_project ON project_updates(project_id, id DESC);
   CREATE INDEX IF NOT EXISTS idx_tokens_hash ON tokens(hash);
+  CREATE INDEX IF NOT EXISTS idx_events_card ON card_events(card_id, at);
 `);
 
 /**
@@ -138,6 +151,22 @@ export function inTransaction(fn) {
     db.exec('ROLLBACK');
     throw err;
   }
+}
+
+/**
+ * One row of move history. `kind` is `created`, `moved`, `archived` or
+ * `restored`. Live rows, written by the routes, always name who did it; rows
+ * seeded from old dates carry no actor, and the dashboard relies on that to
+ * tell real history from seeded. `estimated` marks a guess made from old
+ * dates, so the dashboard can say so and never measure time from it.
+ */
+export function recordEvent({
+  cardId, kind, from = null, to = null, actor = null, actorKind = null, at = null, estimated = 0,
+}) {
+  db.prepare(
+    `INSERT INTO card_events (card_id, kind, from_column, to_column, actor, actor_kind, at, estimated)
+     VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?)`
+  ).run(cardId, kind, from, to, actor, actorKind, at, estimated);
 }
 
 function takenKeys() {
@@ -222,6 +251,33 @@ function backfillRefs() {
   }
 }
 
+/**
+ * Gives every card some history, so the dashboard's trends reach back before
+ * move history existed. Creation and archive dates are exact; for a card in
+ * Done, its last change stands in for the day it was finished, marked as an
+ * estimate. Only cards with no history are touched, so this runs on every
+ * start — and also covers cards an older version made after a rollback.
+ */
+function seedHistory() {
+  const seeded = inTransaction(() => {
+    const bare = db.prepare(
+      `SELECT id, column_key, created_at, updated_at, archived_at FROM cards c
+        WHERE NOT EXISTS (SELECT 1 FROM card_events e WHERE e.card_id = c.id) ORDER BY id`
+    ).all();
+    for (const card of bare) {
+      recordEvent({ cardId: card.id, kind: 'created', at: card.created_at });
+      if (card.column_key === 'done') {
+        recordEvent({ cardId: card.id, kind: 'moved', to: 'done', at: card.updated_at, estimated: 1 });
+      }
+      if (card.archived_at) {
+        recordEvent({ cardId: card.id, kind: 'archived', from: card.column_key, at: card.archived_at });
+      }
+    }
+    return bare.length;
+  });
+  if (seeded) console.log(`[db] seeded history for ${seeded} card(s)`);
+}
+
 const firstBoardId = ensureBoard();
 if (db.prepare('SELECT COUNT(*) AS n FROM boards').get().n === 1) {
   // Nothing to log on a fresh database; only worth a line when we adopted rows.
@@ -229,6 +285,7 @@ if (db.prepare('SELECT COUNT(*) AS n FROM boards').get().n === 1) {
   if (orphans > 0) console.log(`[db] ${orphans} project(s) on the default board`);
 }
 backfillRefs();
+seedHistory();
 
 export const COLUMNS = ['todo', 'next', 'doing', 'waiting', 'review', 'done'];
 export const CARD_COLORS = ['plain', 'lime', 'sky', 'amber', 'rose', 'violet'];

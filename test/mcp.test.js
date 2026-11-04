@@ -6,15 +6,17 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 
-import { startServer, tempDir, removeDir } from './helpers.js';
+import { startServer, tempDir, removeDir, rows } from './helpers.js';
 
 let dir;
+let dbPath;
 let server;
 let card;
 
 before(async () => {
   dir = tempDir();
-  server = await startServer(join(dir, 'pandan.db'));
+  dbPath = join(dir, 'pandan.db');
+  server = await startServer(dbPath);
   const project = (await server.call('GET', '/projects')).body[0];
   card = (await server.tool('create_card', { project_id: project.id, title: 'from an agent' })).data;
 });
@@ -80,4 +82,21 @@ test('create_board takes an optional key', async () => {
   assert.equal(auto.data.key, 'SCH');
   const boards = (await server.tool('get_boards', {})).data;
   assert.ok(boards.every((b) => typeof b.key === 'string'), 'get_boards lists the keys');
+});
+
+test('an agent key acts as itself through MCP, in the history and on the card', async () => {
+  const token = (await server.call('POST', '/tokens', { name: 'mcp-agent' })).body.token;
+  const projectId = (await server.call('GET', '/projects')).body[0].id;
+  const made = await server.tool('create_card', { project_id: projectId, title: 'by key' }, token);
+  assert.equal(made.isError, false, String(made.data));
+  const moved = await server.tool('move_card', { card_id: made.data.ref, column_key: 'review' }, token);
+  assert.equal(moved.isError, false, String(moved.data));
+
+  assert.deepEqual(
+    rows(dbPath, 'SELECT kind, actor, actor_kind FROM card_events WHERE card_id = ? ORDER BY id', made.data.id), [
+      { kind: 'created', actor: 'mcp-agent', actor_kind: 'agent' },
+      { kind: 'moved', actor: 'mcp-agent', actor_kind: 'agent' },
+    ]);
+  const stamped = (await server.call('GET', `/cards/${made.data.ref}`)).body;
+  assert.deepEqual([stamped.last_actor, stamped.last_actor_kind], ['mcp-agent', 'agent']);
 });

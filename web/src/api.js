@@ -36,6 +36,7 @@ export const api = {
   deleteBoard: (id) => request('DELETE', `/boards/${id}`),
 
   board: (boardId) => request('GET', boardId ? `/board?board_id=${boardId}` : '/board'),
+  insights: (boardId) => request('GET', `/insights?board_id=${boardId}&tz=${new Date().getTimezoneOffset()}`),
 
   getProject: (id) => request('GET', `/projects/${id}`),
   createProject: (data) => request('POST', '/projects', data),

@@ -14,6 +14,10 @@ import { pathToFileURL } from 'node:url';
 const problems = [];
 
 /* ---- fake board data ---- */
+// The 12 Sundays the dashboard's week charts cover; the server sends the same ones to both.
+const WEEK_STARTS = Array.from({ length: 12 }, (_, i) =>
+  new Date(Date.UTC(2026, 7, 16 + 7 * i)).toISOString().slice(0, 10));
+
 const state = {
   boards: [
     { id: 1, name: 'Work', key: 'WRK', position: 1000, created_at: '2026-08-01', projects: 3 },
@@ -49,6 +53,33 @@ const state = {
       color: 'plain', flagged: 0, position: 1000, checks_total: 0, checks_done: 0,
       last_actor: 'Claude on laptop', last_actor_kind: 'agent' },
   ],
+  // What GET /insights says (the fake answers for whichever board is asked). The cards are the
+  // fake ones above (and the archived WRK-9); the lists are canned, so the steps can check order and counts.
+  insights: {
+    board: { id: 1, name: 'Work', key: 'WRK' }, quiet_days: 7, history_since: '2026-11-05',
+    stuck: { waiting: [12, 11], flagged: [10], overdue: [], quiet: [11] },
+    projects: [{ id: 1, name: 'House chores', color: '#c3d117',
+      by_column: { todo: [10], next: [], doing: [], waiting: [12], review: [13] } },
+    // A Hebrew name, as on the School board: too long for its slot, and read right to left.
+    { id: 4, name: 'ניתוח מערכות מידע', color: '#9b8ec4',
+      by_column: { todo: [], next: [], doing: [], waiting: [], review: [] } }],
+    weeks: WEEK_STARTS.map((start, i) => ({
+      start, added: i === 11 ? [10, 12] : [], finished: i === 9 ? [77] : [], estimated: i === 9 })),
+    time_in_column: Object.fromEntries(['todo', 'next', 'doing', 'waiting', 'review'].map((c) => [c,
+      c === 'doing' ? { median_days: 2.5, moves: 3, longest: [12, 11], longest_days: [6.5, 1] }
+      // Under an hour rounds to 0 days; that bar must still show and click.
+      : c === 'review' ? { median_days: 0, moves: 1, longest: [13], longest_days: [0] }
+      : { median_days: null, moves: 0, longest: [], longest_days: [] }])),
+    agents: { review_from_agents: [13], this_week: [13],
+      weeks: WEEK_STARTS.map((start, i) => ({ start, agent: i === 11 ? [13] : [], you: i === 11 ? [10] : [] })) },
+    cards: {
+      10: { id: 10, ref: 'WRK-1', title: 'Buy milk', project_id: 1, column_key: 'todo', flagged: 1, due_date: null, updated_at: '2026-11-01 10:00:00', archived: false },
+      11: { id: 11, ref: 'WRK-2', title: 'Fix the sink', project_id: 1, column_key: 'doing', flagged: 0, due_date: null, updated_at: '2026-10-20 10:00:00', archived: false },
+      12: { id: 12, ref: 'WRK-3', title: 'Sort donations', project_id: 1, column_key: 'waiting', flagged: 0, due_date: null, updated_at: '2026-10-30 10:00:00', archived: false },
+      13: { id: 13, ref: 'WRK-4', title: 'Written by an agent', project_id: 1, column_key: 'review', flagged: 0, due_date: null, updated_at: '2026-11-02 10:00:00', archived: false },
+      77: { id: 77, ref: 'WRK-9', title: 'an archived card', project_id: 1, column_key: 'done', flagged: 0, due_date: null, updated_at: '2026-10-15 10:00:00', archived: true },
+    },
+  },
 };
 
 function fakeFetch(url, opts = {}) {
@@ -126,6 +157,12 @@ function fakeFetch(url, opts = {}) {
     return json({ deleted: true });
   }
   if (path.startsWith('/boards/')) return json({ id: 1, name: body.name || 'Work', key: body.key || 'WRK' });
+  if (path.startsWith('/insights')) {
+    // A fresh copy for the board asked about, as the server would answer.
+    const id = Number((path.match(/board_id=(\d+)/) || [])[1]);
+    const copy = structuredClone(state.insights);
+    return json({ ...copy, board: { ...copy.board, id } });
+  }
   if (path.startsWith('/board')) {
     const id = Number((path.match(/board_id=(\d+)/) || [])[1] || 1);
     const board = state.boards.find((b) => b.id === id) || state.boards[0];
@@ -1584,6 +1621,257 @@ await step('on a phone, the column tabs pick the one column shown', async () => 
   if (q('.board .phone-off .list.review').length) throw new Error('Review cells still marked hidden');
   await click(tabs.find((t) => t.textContent === 'Waiting'));
   if (shown().join() !== 'waiting') throw new Error(`Waiting tab showed ${shown()}`);
+});
+
+await step('the Dashboard view shows its three blocks', async () => {
+  const tab = q('.view-switch button').find((b) => b.textContent === 'Dashboard');
+  if (!tab) throw new Error('no Dashboard tab');
+  await click(tab);
+  await settle();
+  const heads = q('.dash h2').map((h) => h.textContent);
+  if (heads.join() !== 'Stuck now,Getting done,Agents') throw new Error(`blocks: ${heads}`);
+  const waiting = q('.tile').find((t) => t.textContent.includes('Waiting'));
+  if (waiting?.querySelector('b').textContent !== '2') throw new Error('Waiting tile should count 2');
+});
+
+await step('each chart is a labelled group for a screen reader', () => {
+  const charts = q('.dash svg[aria-label]');
+  if (charts.length !== 4) throw new Error(`labelled charts: ${charts.length}`);
+  const bare = charts.filter((svg) => svg.getAttribute('role') !== 'group').map((svg) => svg.getAttribute('aria-label'));
+  if (bare.length) throw new Error(`no role="group" on: ${bare.join(', ')}`);
+});
+
+await step('legends stay in view when a chart scrolls sideways', () => {
+  const legends = q('.dash .chart-legend');
+  if (legends.length !== 3) throw new Error(`legends: ${legends.length}`);
+  const scrolled = legends.filter((l) => l.closest('.chart-scroll'));
+  if (scrolled.length) throw new Error(`${scrolled.length} legend(s) scroll with their chart`);
+});
+
+await step('tile labels line up at the start when they wrap', () => {
+  // jsdom computes "center" for every button whatever the stylesheet says, so read the .tile rule itself.
+  const rule = [...document.styleSheets].flatMap((s) => [...s.cssRules]).find((r) => r.selectorText === '.tile');
+  if (!rule) throw new Error('no .tile rule');
+  if (rule.style.textAlign !== 'start') throw new Error(`.tile text-align: "${rule.style.textAlign}"`);
+});
+
+await step('project names fit their columns and are cut at the reading end', () => {
+  const labels = q('.dash svg[aria-label="Open work by project"] .chart-label');
+  const byName = (name) => labels.find((l) => l.querySelector('title')?.textContent === name);
+  const shown = (l) => l.childNodes[0].textContent;   // the text before its <title>
+  const hebrew = byName('ניתוח מערכות מידע');
+  const english = byName('House chores');
+  if (!hebrew || !english) throw new Error('a project label is missing');
+  if (hebrew.getAttribute('direction') !== 'rtl') throw new Error('a Hebrew name should read right to left');
+  if (!shown(hebrew).endsWith('…')) throw new Error(`a long Hebrew name should end in "…", got "${shown(hebrew)}"`);
+  if (english.getAttribute('direction')) throw new Error('an English name should keep the page direction');
+  const xs = labels.map((l) => Number(l.getAttribute('x')));
+  if (xs.some((x, i) => i > 0 && x - xs[i - 1] < 72)) throw new Error(`labels too close to fit their names: ${xs}`);
+});
+
+await step('the agent chart covers the same weeks as Getting done', () => {
+  const labels = (name) => q(`.dash svg[aria-label="${name}"] .chart-label`).map((t) => t.textContent);
+  const done = labels('Finished and added per week');
+  const agents = labels('Agent against you per week');
+  if (done.length !== 12 || agents.join() !== done.join()) throw new Error(`agent weeks ${agents} against ${done}`);
+});
+
+await step('the parts of a stacked column are drawn apart', () => {
+  const parts = q('.dash svg[aria-label="Open work by project"] rect');
+  if (!parts.length) throw new Error('no stacked parts');
+  const plain = parts.filter((r) => !r.classList.contains('stack-part') || !r.classList.contains('pick'));
+  if (plain.length) throw new Error(`${plain.length} part(s) without both "pick" and "stack-part"`);
+});
+
+await step('a tile lists its cards, untouched longest first', async () => {
+  await click(q('.tile').find((t) => t.textContent.includes('Waiting')));
+  const head = document.querySelector('.drill h3')?.textContent;
+  if (head !== 'Waiting · 2') throw new Error(`drill header: ${head}`);
+  const refs = q('.drill .card-no').map((n) => n.textContent);
+  if (refs.join() !== 'WRK-2,WRK-3') throw new Error(`order: ${refs}`);
+});
+
+await step('the open list takes focus, and its header stays in view', () => {
+  const drill = document.querySelector('.drill');
+  if (document.activeElement !== drill) {
+    throw new Error(`focus is on ${document.activeElement?.className || document.activeElement?.tagName}`);
+  }
+  const header = drill.querySelector('header');
+  if (dom.window.getComputedStyle(header).position !== 'sticky') throw new Error('the header scrolls away in a long list');
+});
+
+await step('a row opens the card editor, and Esc there closes only the editor', async () => {
+  await click(q('.drill-row')[0]);
+  await settle();
+  const editor = document.querySelector('.modal');
+  if (!editor) throw new Error('card editor did not open');
+  if (!editor.querySelector('h2').textContent.includes('WRK-2')) throw new Error('the editor opened another card');
+  // The editor closes on Esc; the list under it must ignore that Esc.
+  await act(async () => { dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' })); });
+  await settle();
+  if (document.querySelector('.modal')) throw new Error('card editor did not close');
+  if (!document.querySelector('.drill')) throw new Error('Esc in the editor closed the list too');
+});
+
+await step('Esc closes the list', async () => {
+  if (!document.querySelector('.drill')) throw new Error('no list open to close');
+  await act(async () => { dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' })); });
+  if (document.querySelector('.drill')) throw new Error('list still open');
+});
+
+await step("a project's column part lists just those cards", async () => {
+  const part = q('.dash .pick').find((p) => p.getAttribute('aria-label') === 'Waiting · House chores · 1 card');
+  if (!part) throw new Error('no Waiting part for House chores');
+  await click(part);
+  if (document.querySelector('.drill h3')?.textContent !== 'Waiting · House chores · 1') throw new Error('wrong list');
+});
+
+await step('estimated weeks are marked, and archived cards cannot be opened', async () => {
+  const est = q('.dash rect[data-estimated]');
+  if (est.length !== 1) throw new Error(`estimated bars: ${est.length}`);
+  if (!document.querySelector('.est-note')) throw new Error('no estimate note');
+  document.querySelector('.drill')?.blur();
+  await click(est[0]);
+  const row = q('.drill-row')[0];
+  if (!row?.disabled || !row.textContent.includes('archived')) throw new Error('archived row should be shown and disabled');
+  if (document.activeElement !== document.querySelector('.drill')) throw new Error('the list did not take focus for its new title');
+});
+
+await step('"Longest in" keeps the slowest first and says how long', async () => {
+  const bar = q('.dash .pick').find((p) => p.getAttribute('aria-label') === 'Longest in Doing · 2 cards');
+  if (!bar) throw new Error('no median bar for Doing');
+  await click(bar);
+  const rows = q('.drill-row').map((r) => [r.querySelector('.card-no').textContent, r.querySelector('.drill-age').textContent]);
+  // The server says WRK-3 sat longest; sorting by last change would wrongly put WRK-2 (older change) first.
+  if (JSON.stringify(rows) !== JSON.stringify([['WRK-3', '6.5d in Doing'], ['WRK-2', '1d in Doing']])) {
+    throw new Error(`longest rows: ${JSON.stringify(rows)}`);
+  }
+});
+
+await step('a median of 0 days still has a bar you can see and click', async () => {
+  const bar = q('.dash .pick').find((p) => p.getAttribute('aria-label') === 'Longest in Review · 1 card');
+  if (!bar) throw new Error('no median bar for Review');
+  const height = Number(bar.getAttribute('height'));
+  if (!(height >= 4)) throw new Error(`the bar is ${height}px tall`);
+  await click(bar);
+  if (document.querySelector('.drill h3')?.textContent !== 'Longest in Review · 1') throw new Error('its list did not open');
+});
+
+/** The server's ping that something changed, as the live stream sends it. */
+const liveChange = async () => {
+  const stream = streams.find((x) => !x.closed);
+  await act(async () => { stream.emit('change', { revision: 3, source: 'PATCH /cards' }); });
+  await settle();
+};
+
+await step('the week charts jump to the latest week only when there is something new to show', async () => {
+  // jsdom has no layout, so count the writes to scrollLeft instead of reading where it ends up.
+  const proto = dom.window.Element.prototype;
+  const real = Object.getOwnPropertyDescriptor(proto, 'scrollLeft');
+  let writes = 0;
+  Object.defineProperty(proto, 'scrollLeft', { configurable: true, get: () => 0, set: () => { writes += 1; } });
+  const kept = { weeks: state.insights.weeks, agents: state.insights.agents };
+  const plusWeek = (day) => new Date(Date.parse(`${day}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10);
+  const scrollsAfter = async (change) => { change(); writes = 0; await liveChange(); return writes; };
+  try {
+    // An agent moves a card: same weeks, so someone looking at older weeks stays there.
+    const same = await scrollsAfter(() => {});
+    if (same !== 0) throw new Error(`a change in the same weeks scrolled the charts ${same} time(s)`);
+    // A new week starts: both charts move to it.
+    const newWeek = await scrollsAfter(() => {
+      state.insights.weeks = kept.weeks.map((w) => ({ ...w, start: plusWeek(w.start) }));
+      state.insights.agents = { ...kept.agents, weeks: kept.agents.weeks.map((w) => ({ ...w, start: plusWeek(w.start) })) };
+    });
+    if (newWeek !== 2) throw new Error(`a new week scrolled the charts ${newWeek} time(s), expected 2`);
+    // The agent chart appears for the first time (it was "Collecting since…"): it opens on the latest week.
+    await scrollsAfter(() => {
+      state.insights.weeks = kept.weeks;
+      state.insights.agents = { ...kept.agents, weeks: kept.agents.weeks.map((w) => ({ ...w, agent: [], you: [] })) };
+    });
+    const drawn = await scrollsAfter(() => { state.insights.agents = kept.agents; });
+    if (drawn !== 1) throw new Error(`a chart drawn again scrolled ${drawn} time(s), expected 1`);
+  } finally {
+    Object.defineProperty(proto, 'scrollLeft', real);
+    Object.assign(state.insights, kept);
+    await liveChange();
+  }
+});
+
+await step('a change from elsewhere re-reads the dashboard', async () => {
+  const count = () => q('.tile').find((t) => t.textContent.includes('Waiting'))?.querySelector('b').textContent;
+  if (count() !== '2') throw new Error(`Waiting starts at ${count()}`);
+  const kept = state.insights.stuck;
+  state.insights.stuck = { ...kept, waiting: [12] };
+  await liveChange();
+  const after = count();
+  state.insights.stuck = kept;
+  await liveChange();
+  if (after !== '1') throw new Error(`the Waiting tile reads ${after} after the change, expected 1`);
+  if (count() !== '2') throw new Error('the Waiting tile did not go back');
+});
+
+await step('with nothing in the last 12 weeks, the week charts say so', async () => {
+  const kept = { weeks: state.insights.weeks, agents: state.insights.agents };
+  state.insights.weeks = kept.weeks.map((w) => ({ ...w, added: [], finished: [], estimated: false }));
+  state.insights.agents = { ...kept.agents, weeks: kept.agents.weeks.map((w) => ({ ...w, agent: [], you: [] })) };
+  await liveChange();
+  const notes = q('.dash .dash-empty').map((p) => p.textContent);
+  const charts = q('.dash svg[aria-label]').map((svg) => svg.getAttribute('aria-label'));
+  Object.assign(state.insights, kept);
+  await liveChange();
+  for (const want of ['Nothing added or finished in the last 12 weeks.',
+    'Collecting since 2026-11-05. Changes by agents and by you appear as cards move.']) {
+    if (!notes.includes(want)) throw new Error(`missing "${want}", got: ${notes.join(' | ')}`);
+  }
+  if (charts.includes('Finished and added per week') || charts.includes('Agent against you per week')) {
+    throw new Error(`empty charts were still drawn: ${charts.join(', ')}`);
+  }
+});
+
+await step("a slow answer for another board never shows under this one", async () => {
+  let release = () => {};
+  const held = new Promise((r) => { release = r; });
+  const prev = g.fetch;
+  // Personal's numbers are held back until the test lets them through.
+  const slow = (url, opts = {}) => (/\/insights\?board_id=2&/.test(String(url))
+    ? held.then(() => prev(url, opts)) : prev(url, opts));
+  g.fetch = slow; dom.window.fetch = slow;
+  const select = container.querySelector('.board-select');
+  const pickBoard = async (id) => {
+    await act(async () => {
+      select.value = String(id);
+      select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    });
+    await settle();
+  };
+  try {
+    await pickBoard(2);
+    if (container.querySelector('.dash')) throw new Error("Work's numbers showed under Personal");
+    await pickBoard(1);
+    if (!container.querySelector('.dash')) throw new Error("Work's numbers did not come back");
+    await act(async () => { release(); });
+    await settle();
+    if (!container.querySelector('.dash')) throw new Error("Personal's late answer replaced Work's numbers");
+  } finally {
+    release();
+    g.fetch = prev; dom.window.fetch = prev;
+  }
+});
+
+await step('closing the list gives focus back to what opened it', async () => {
+  const tile = q('.tile').find((t) => t.textContent.includes('Waiting'));
+  tile.focus();   // as a click or Tab would in a browser
+  await click(tile);
+  if (document.activeElement !== document.querySelector('.drill')) throw new Error('the list did not take focus');
+  await click(document.querySelector('.drill header button'));
+  if (document.querySelector('.drill')) throw new Error('✕ did not close the list');
+  if (document.activeElement !== tile) {
+    throw new Error(`focus went to ${document.activeElement?.className || document.activeElement?.tagName}`);
+  }
+});
+
+await step('the dashboard is remembered as the view', () => {
+  if (dom.window.localStorage.getItem('kanban.view') !== '"dashboard"') throw new Error('view not remembered');
 });
 
 console.log('');

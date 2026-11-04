@@ -9,20 +9,25 @@ const COLORS = ['plain', 'lime', 'sky', 'amber', 'rose', 'violet'];
 /**
  * The tools call this app's own HTTP API rather than the database, so every
  * validation rule in routes.js applies to an agent exactly as it does to the UI.
+ * An agent's key is passed on so its work is recorded as that agent's; the
+ * owner keeps using the password.
  */
-async function callApi(method, path, body) {
-  const port = process.env.PORT || 3000;
-  const res = await fetch(`http://127.0.0.1:${port}/api${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${process.env.APP_PASSWORD}`,
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `request failed (${res.status})`);
-  return data;
+function apiFor(authorization) {
+  const auth = authorization || `Bearer ${process.env.APP_PASSWORD}`;
+  return async (method, path, body) => {
+    const port = process.env.PORT || 3000;
+    const res = await fetch(`http://127.0.0.1:${port}/api${path}`, {
+      method,
+      headers: {
+        Authorization: auth,
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `request failed (${res.status})`);
+    return data;
+  };
 }
 
 const ok = (data) => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
@@ -48,7 +53,9 @@ const cardField = (what) => z.union([z.string().min(1), z.number().int()]).descr
 );
 const cardPath = (cardId, rest = '') => `/cards/${encodeURIComponent(cardId)}${rest}`;
 
-export function buildMcpServer() {
+/** `authorization` is an agent's own header, or nothing for the owner; every tool calls the API with it. */
+export function buildMcpServer(authorization) {
+  const callApi = apiFor(authorization);
   const server = new McpServer(
     { name: 'pandan', version: '1.1.0' },
     {
@@ -283,7 +290,7 @@ export function buildMcpServer() {
  * sessions to keep alive and a plain JSON reply comes back.
  */
 export async function handleMcpRequest(req, res) {
-  const server = buildMcpServer();
+  const server = buildMcpServer(req.actor?.kind === 'agent' ? req.headers.authorization : undefined);
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,

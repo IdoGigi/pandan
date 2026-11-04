@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -14,6 +15,25 @@ const PASSWORD = 'test-only-not-a-real-secret';
 
 export const tempDir = () => mkdtempSync(join(tmpdir(), 'pandan-test-'));
 export const removeDir = (dir) => rmSync(dir, { recursive: true, force: true });
+
+/** Runs one statement on the test database while the server is idle — for back-dating rows. */
+export function sql(dbPath, statement, ...params) {
+  const db = new DatabaseSync(dbPath);
+  try { return db.prepare(statement).run(...params); } finally { db.close(); }
+}
+
+/**
+ * Reads rows from the test database. node:sqlite hands back null-prototype
+ * objects, which strict deepEqual never matches to a literal, so they are copied.
+ */
+export function rows(dbPath, statement, ...params) {
+  const db = new DatabaseSync(dbPath, { readOnly: true });
+  try { return db.prepare(statement).all(...params).map((row) => ({ ...row })); } finally { db.close(); }
+}
+
+const DAY = 86400000;
+/** A SQLite UTC time `days` ago (fractions allowed). */
+export const ago = (days) => new Date(Date.now() - days * DAY).toISOString().slice(0, 19).replace('T', ' ');
 
 /** A port nothing is using, so test files can run side by side. */
 function freePort() {
@@ -52,12 +72,12 @@ export async function startServer(dbPath) {
     throw new Error(`server did not start:\n${log}`);
   }
 
-  /** A REST call as the owner. Resolves to { status, body }. */
-  async function call(method, path, body) {
+  /** A REST call, as the owner unless an agent key is given. Resolves to { status, body }. */
+  async function call(method, path, body, token = PASSWORD) {
     const res = await fetch(`${base}/api${path}`, {
       method,
       headers: {
-        Authorization: `Bearer ${PASSWORD}`,
+        Authorization: `Bearer ${token}`,
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
@@ -65,12 +85,12 @@ export async function startServer(dbPath) {
     return { status: res.status, body: await res.json().catch(() => null) };
   }
 
-  /** A JSON-RPC call to /mcp. Resolves to the `result` member. */
-  async function rpc(method, params) {
+  /** A JSON-RPC call to /mcp, as the owner unless an agent key is given. Resolves to the `result` member. */
+  async function rpc(method, params, token = PASSWORD) {
     const res = await fetch(`${base}/mcp`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${PASSWORD}`,
+        Authorization: `Bearer ${token}`,
         Accept: 'application/json, text/event-stream',
         'Content-Type': 'application/json',
       },
@@ -81,9 +101,9 @@ export async function startServer(dbPath) {
     return data.result;
   }
 
-  /** Calls one MCP tool. Resolves to { isError, data } with the tool's JSON parsed. */
-  async function tool(name, args) {
-    const result = await rpc('tools/call', { name, arguments: args });
+  /** Calls one MCP tool, as the owner unless an agent key is given. Resolves to { isError, data } with the tool's JSON parsed. */
+  async function tool(name, args, token = PASSWORD) {
+    const result = await rpc('tools/call', { name, arguments: args }, token);
     const text = result.content?.[0]?.text ?? '';
     let data = text;
     try { data = JSON.parse(text); } catch { /* an error message, kept as text */ }
@@ -95,5 +115,5 @@ export async function startServer(dbPath) {
     await exited;
   }
 
-  return { call, rpc, tool, stop, log: () => log };
+  return { base, call, rpc, tool, stop, log: () => log };
 }
