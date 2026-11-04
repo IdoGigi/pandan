@@ -9,7 +9,7 @@
     "build": "npm --prefix web ci --no-audit --no-fund && npm --prefix web run build",
     "start": "node start.js",
     "dev": "node --watch server/index.js",
-    "check": "node --check setup.js && node --check start.js && node --check connect.js && node --check server/index.js && node --check server/paths.js && node --check server/db.js && node --check server/refs.js &&node --check server/auth.js && node --check server/routes.js && node --check server/mcp.js && node --check server/events.js",
+    "check": "node --check setup.js && node --check start.js && node --check connect.js && node --check server/index.js && node --check server/paths.js && node --check server/db.js && node --check server/refs.js &&node --check server/auth.js && node --check server/routes.js && node --check server/mcp.js && node --check server/events.js && node --check server/insights.js",
     "smoke": "npm --prefix web run smoke",
     "test": "node --test \"test/*.test.js\"",
     "setup": "node setup.js",

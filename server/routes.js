@@ -8,6 +8,7 @@ import {
 } from './db.js';
 import { createToken, requireOwner } from './auth.js';
 import { cleanKey, parseRef } from './refs.js';
+import { buildInsights } from './insights.js';
 
 export const api = Router();
 
@@ -208,6 +209,18 @@ api.get('/board', (req, res) => {
   );
 
   res.json({ columns: COLUMNS, board, projects, cards, labels });
+});
+
+/** The dashboard's numbers for one board. `tz` is the browser's getTimezoneOffset(). */
+api.get('/insights', (req, res) => {
+  const boardId = req.query.board_id === undefined ? defaultBoardId() : Number(req.query.board_id);
+  const tz = req.query.tz === undefined ? 0 : Number(req.query.tz);
+  if (!Number.isInteger(tz) || Math.abs(tz) > 14 * 60) {
+    return bad(res, 'tz must be whole minutes, as from getTimezoneOffset()');
+  }
+  const data = buildInsights(boardId, { tz });
+  if (!data) return res.status(404).json({ error: 'board not found' });
+  res.json(data);
 });
 
 /* ---------------- projects ---------------- */
