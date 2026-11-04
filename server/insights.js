@@ -68,6 +68,19 @@ function weekCounts({ starts, weekOf }, cards, history, byCard) {
   return weeks;
 }
 
+/**
+ * The cards an agent touched each week, against the ones you did. Only live
+ * rows name who acted, so seeded history never shows up here.
+ */
+function agentWeeks({ starts, weekOf }, history) {
+  const touched = starts.map((start) => ({ start, agent: new Set(), you: new Set() }));
+  for (const e of history) {
+    const w = !e.estimated && e.actor_kind ? weekOf(e.at) : undefined;
+    if (w !== undefined) touched[w][e.actor_kind === 'agent' ? 'agent' : 'you'].add(e.card_id);
+  }
+  return touched.map((t) => ({ start: t.start, agent: [...t.agent], you: [...t.you] }));
+}
+
 /** The middle value, or the mean of the two middle ones. */
 const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b);
@@ -138,6 +151,7 @@ export function buildInsights(boardId, { tz = 0, now = Date.now() } = {}) {
   const cal = calendar(now, tz);
   // Live rows always carry an actor; seeded ones never do (see recordEvent).
   const firstReal = history.filter((e) => !e.estimated && e.actor_kind).map((e) => e.at).sort()[0];
+  const byWho = agentWeeks(cal, history);
 
   const projects = db.prepare(
     'SELECT id, name, color FROM projects WHERE board_id = ? AND archived = 0 ORDER BY position'
@@ -160,7 +174,12 @@ export function buildInsights(boardId, { tz = 0, now = Date.now() } = {}) {
     projects,
     weeks: weekCounts(cal, cards, history, byCard),
     time_in_column: timeInColumn(byCard, cal.since),
-    agents: { review_from_agents: [], this_week: [], weeks: [] },
+    agents: {
+      review_from_agents: ids(live.filter((c) => c.column_key === 'review'
+        && lastInto(byCard.get(c.id) ?? [], 'review')?.actor_kind === 'agent')),
+      this_week: byWho[WEEKS - 1].agent,
+      weeks: byWho,
+    },
     cards: Object.fromEntries(cards.map((c) => [c.id, {
       id: c.id, ref: c.ref, title: c.title, project_id: c.project_id, column_key: c.column_key,
       flagged: c.flagged, due_date: c.due_date, updated_at: c.updated_at,

@@ -160,3 +160,20 @@ test('median days per column use real moves only, and list the slowest cards', a
   assert.match(history_since, /^\d{4}-\d{2}-\d{2}$/);
   assert.ok(history_since > daysAgoDate(60), 'seeded rows (no actor) do not count as collecting');
 });
+
+test('agents: review left by agents, and agent against you per week', async () => {
+  const token = (await server.call('POST', '/tokens', { name: 'helper' })).body.token;
+  const byAgent = (await server.call('POST', '/cards', { project_id: projects.hiring, title: 'agent work' }, token)).body;
+  await server.call('POST', `/cards/${byAgent.ref}/move`, { column_key: 'review' }, token);
+  const byYou = await card('hiring', 'my review');
+  await server.call('POST', `/cards/${byYou.ref}/move`, { column_key: 'review' });
+
+  const { agents } = await insights();
+  assert.ok(agents.review_from_agents.includes(byAgent.id));
+  assert.ok(!agents.review_from_agents.includes(byYou.id));
+  assert.equal(agents.weeks.length, 12);
+  assert.ok(agents.weeks[11].agent.includes(byAgent.id));
+  assert.ok(agents.weeks[11].you.includes(byYou.id));
+  assert.ok(!agents.weeks[11].agent.includes(byYou.id));
+  assert.deepEqual(agents.this_week, agents.weeks[11].agent);
+});
