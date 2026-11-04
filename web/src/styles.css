@@ -270,8 +270,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .card-line .card-title { flex: 1; min-width: 0; }
 
-/* The id is what you say to an agent — "archive #23" — so it earns its place,
-   but it must never compete with the title. */
+/* The reference is what you say to an agent — "archive SCH-23" — so it earns
+   its place, but it must never compete with the title. */
 .card-no {
   flex: 0 0 auto;
   font-size: 10.5px;

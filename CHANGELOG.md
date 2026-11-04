@@ -4,6 +4,29 @@ Newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+### Card numbers per board
+
+Cards were numbered across all boards, so a new board started at #274. Now
+every board counts from 1, and a card is known by its board's key and its
+number: `SCH-3`.
+
+- **Board keys.** Each board has a short key, made from its name: `My board` →
+  `MB`, `School` → `SCH`; a name with no Latin letters gets `B` and the board
+  id. Change it under **Settings → This board**. A key is 2 to 6 letters or
+  digits, starting with a letter.
+- **What you say is what the agent takes.** Every card tool and every
+  `/cards/:id` route takes the reference (`SCH-3`, any case) as well as the
+  numeric id, so existing scripts keep working. Card responses carry `number`
+  and `ref`; boards carry `key`.
+- **Search** takes `#3`, `SCH-3` or a bare `3` for a card on the open board.
+- **Moving.** A card that moves to another board, alone or with its project,
+  takes that board's next number. Numbers are never reused, even after a card
+  is deleted for good.
+- **Upgrading.** On first start every existing card is numbered on its own
+  board in the order it was made, archived ones included, so the numbers you
+  knew change once. The upgrade is additive: an older version still runs on the
+  new database, and the next start of this one tidies anything it wrote.
+
 ### On a phone
 
 Pandan now works on a phone screen (640px wide or less), and with a finger.

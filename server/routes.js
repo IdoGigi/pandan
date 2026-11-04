@@ -2,8 +2,12 @@ import { Router } from 'express';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { db, COLUMNS, CARD_COLORS, LINK_KINDS, nextPosition, safeUrl, defaultBoardId, cleanDate } from './db.js';
+import {
+  db, COLUMNS, CARD_COLORS, LINK_KINDS, nextPosition, safeUrl, defaultBoardId, cleanDate,
+  createBoard, takeNumber, renumber, inTransaction,
+} from './db.js';
 import { createToken, requireOwner } from './auth.js';
+import { cleanKey, parseRef } from './refs.js';
 
 export const api = Router();
 
@@ -13,6 +17,38 @@ const NOW = "datetime('now')";
 
 /** Who is doing this — you, or one of your agent keys by name. */
 const actorOf = (req) => [req.actor?.name ?? 'you', req.actor?.kind ?? 'owner'];
+
+/** A card with its reference — its board key and its number there, like "SCH-3". */
+const CARD_SELECT = `SELECT c.*, b.key || '-' || c.number AS ref
+                       FROM cards c
+                       JOIN projects p ON p.id = c.project_id
+                       JOIN boards b ON b.id = p.board_id`;
+const cardById = (id) => db.prepare(`${CARD_SELECT} WHERE c.id = ?`).get(id);
+
+/** The card a URL names: by its reference such as "SCH-3", or by its id. */
+function findCard(param) {
+  const ref = parseRef(param);
+  if (ref) return db.prepare(`${CARD_SELECT} WHERE b.key = ? AND c.number = ?`).get(ref.key, ref.number);
+  return /^\d+$/.test(param) ? cardById(Number(param)) : undefined;
+}
+
+const boardOfProject = (projectId) =>
+  db.prepare('SELECT board_id FROM projects WHERE id = ?').get(projectId)?.board_id;
+
+/** The number a card has in its new project: the same one, unless it changed board. */
+function numberIn(card, projectId) {
+  const toBoard = boardOfProject(projectId);
+  return toBoard === boardOfProject(card.project_id) ? card.number : takeNumber(toBoard);
+}
+
+/** A board key from a request: `{ key }` when it can be used, `{ error }` when not. */
+function checkKey(value, boardId) {
+  const key = cleanKey(value);
+  if (!key) return { error: 'key must be 2 to 6 letters or digits, starting with a letter, like SCH' };
+  const owner = db.prepare('SELECT id, name FROM boards WHERE key = ?').get(key);
+  if (owner && owner.id !== boardId) return { error: `key ${key} is already used by the board "${owner.name}"` };
+  return { key };
+}
 
 /** Records who last touched a card, so an agent's work is visible as such. */
 function stamp(req, cardId) {
@@ -85,28 +121,40 @@ api.get('/about', (req, res) => {
 
 api.get('/boards', (req, res) => {
   res.json(db.prepare(
-    `SELECT b.id, b.name, b.position, b.created_at,
+    `SELECT b.id, b.name, b.key, b.position, b.created_at,
             (SELECT COUNT(*) FROM projects p WHERE p.board_id = b.id AND p.archived = 0) AS projects
        FROM boards b ORDER BY b.position, b.id`
   ).all());
 });
 
+/** Leave `key` out and one is made from the name. */
 api.post('/boards', (req, res) => {
   const name = clean(req.body?.name, 120);
   if (!name) return bad(res, 'name is required');
-  const position = nextPosition('boards', '1 = 1', []);
-  const { lastInsertRowid } = db
-    .prepare('INSERT INTO boards (name, position) VALUES (?, ?)').run(name, position);
-  res.status(201).json(db.prepare('SELECT * FROM boards WHERE id = ?').get(lastInsertRowid));
+  let key;
+  if (clean(req.body?.key, 20)) {
+    const checked = checkKey(req.body.key, null);
+    if (checked.error) return bad(res, checked.error);
+    key = checked.key;
+  }
+  const id = createBoard(name, key);
+  res.status(201).json(db.prepare('SELECT * FROM boards WHERE id = ?').get(id));
 });
 
+/** A new key changes the reference of every card on the board; the numbers stay. */
 api.patch('/boards/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM boards WHERE id = ?').get(Number(req.params.id));
   if (!row) return res.status(404).json({ error: 'board not found' });
   const name = req.body?.name === undefined ? row.name : clean(req.body.name, 120);
   if (!name) return bad(res, 'name cannot be empty');
   const position = req.body?.position === undefined ? row.position : Number(req.body.position);
-  db.prepare('UPDATE boards SET name = ?, position = ? WHERE id = ?').run(name, position, row.id);
+  let key = row.key;
+  if (req.body?.key !== undefined) {
+    const checked = checkKey(req.body.key, row.id);
+    if (checked.error) return bad(res, checked.error);
+    key = checked.key;
+  }
+  db.prepare('UPDATE boards SET name = ?, position = ?, key = ? WHERE id = ?').run(name, position, key, row.id);
   res.json(db.prepare('SELECT * FROM boards WHERE id = ?').get(row.id));
 });
 
@@ -128,7 +176,7 @@ api.delete('/boards/:id', (req, res) => {
 /** Everything the UI needs for one board in one round trip. */
 api.get('/board', (req, res) => {
   const boardId = req.query.board_id ? Number(req.query.board_id) : defaultBoardId();
-  const board = db.prepare('SELECT id, name FROM boards WHERE id = ?').get(boardId);
+  const board = db.prepare('SELECT id, name, key FROM boards WHERE id = ?').get(boardId);
   if (!board) return res.status(404).json({ error: 'board not found' });
 
   const projects = db.prepare(
@@ -136,12 +184,14 @@ api.get('/board', (req, res) => {
       WHERE archived = 0 AND board_id = ? ORDER BY position`
   ).all(board.id);
   const cards = db.prepare(
-    `SELECT c.id, c.project_id, c.column_key, c.title, c.notes, c.color, c.flagged, c.position,
+    `SELECT c.id, c.number, b.key || '-' || c.number AS ref,
+            c.project_id, c.column_key, c.title, c.notes, c.color, c.flagged, c.position,
             c.due_date, c.last_actor, c.last_actor_kind,
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id)                AS checks_total,
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id AND k.done = 1) AS checks_done
        FROM cards c
        JOIN projects p ON p.id = c.project_id
+       JOIN boards b ON b.id = p.board_id
       WHERE p.archived = 0 AND p.board_id = ? AND c.archived_at IS NULL
       ORDER BY c.position`
   ).all(board.id);
@@ -171,11 +221,14 @@ api.get('/projects/:id', (req, res) => {
   if (!project) return res.status(404).json({ error: 'project not found' });
 
   const cards = db.prepare(
-    `SELECT c.id, c.column_key, c.title, c.notes, c.color, c.flagged, c.position,
+    `SELECT c.id, c.number, b.key || '-' || c.number AS ref,
+            c.column_key, c.title, c.notes, c.color, c.flagged, c.position,
             c.created_at, c.updated_at,
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id)                AS checks_total,
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id AND k.done = 1) AS checks_done
        FROM cards c
+       JOIN projects p ON p.id = c.project_id
+       JOIN boards b ON b.id = p.board_id
       WHERE c.project_id = ? AND c.archived_at IS NULL
       ORDER BY c.position`
   ).all(project.id);
@@ -252,10 +305,16 @@ api.patch('/projects/:id', (req, res) => {
   const boardId = req.body?.board_id === undefined ? row.board_id : Number(req.body.board_id);
   const description = req.body?.description === undefined ? row.description : clean(req.body.description, 5000);
   const repoUrl = req.body?.repo_url === undefined ? row.repo_url : clean(req.body.repo_url, 500);
-  db.prepare(
-    `UPDATE projects SET name=?, color=?, position=?, archived=?, description=?, repo_url=?, board_id=?
-      WHERE id=?`
-  ).run(name, color, position, archived, description, repoUrl, boardId, row.id);
+  inTransaction(() => {
+    db.prepare(
+      `UPDATE projects SET name=?, color=?, position=?, archived=?, description=?, repo_url=?, board_id=?
+        WHERE id=?`
+    ).run(name, color, position, archived, description, repoUrl, boardId, row.id);
+    // Its cards go with it, archived ones too, and are numbered on the new board.
+    if (boardId !== row.board_id) {
+      renumber(db.prepare('SELECT id FROM cards WHERE project_id = ?').all(row.id).map((c) => c.id), boardId);
+    }
+  });
   res.json(db.prepare('SELECT * FROM projects WHERE id = ?').get(row.id));
 });
 
@@ -428,15 +487,17 @@ api.get('/cards', (req, res) => {
   where.push(archived ? 'c.archived_at IS NOT NULL' : 'c.archived_at IS NULL');
   const filter = where.length ? `AND ${where.join(' AND ')}` : '';
   res.json(db.prepare(
-    `SELECT c.*, p.name AS project_name FROM cards c
+    `SELECT c.*, b.key || '-' || c.number AS ref, p.name AS project_name FROM cards c
        JOIN projects p ON p.id = c.project_id
+       JOIN boards b ON b.id = p.board_id
       WHERE p.archived = 0 ${filter}
       ORDER BY ${archived ? 'c.archived_at DESC' : 'c.position'}`
   ).all(...params));
 });
 
+// Every /cards/:id route takes the card's reference ("SCH-3") as well as its id.
 api.get('/cards/:id', (req, res) => {
-  const card = db.prepare('SELECT * FROM cards WHERE id = ?').get(Number(req.params.id));
+  const card = findCard(req.params.id);
   if (!card) return res.status(404).json({ error: 'card not found' });
   card.checklist = db
     .prepare('SELECT id, text, done, position FROM checks WHERE card_id = ? ORDER BY position')
@@ -459,22 +520,23 @@ api.post('/cards', (req, res) => {
   if (due === undefined) return bad(res, 'due_date must look like 2026-09-15, or be empty');
 
   const position = nextPosition('cards', 'project_id = ? AND column_key = ?', [projectId, column]);
-  const { lastInsertRowid } = db.prepare(
-    `INSERT INTO cards (project_id, column_key, title, notes, color, flagged, position, due_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  const { lastInsertRowid } = inTransaction(() => db.prepare(
+    `INSERT INTO cards (project_id, column_key, title, notes, color, flagged, position, due_date, number)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     projectId, column, title,
     clean(req.body?.notes, 4000),
     clean(req.body?.color, 20) || 'plain',
     req.body?.flagged ? 1 : 0,
-    position, due
-  );
+    position, due,
+    takeNumber(boardOfProject(projectId))
+  ));
   stamp(req, lastInsertRowid);
-  res.status(201).json(db.prepare('SELECT * FROM cards WHERE id = ?').get(lastInsertRowid));
+  res.status(201).json(cardById(lastInsertRowid));
 });
 
 api.patch('/cards/:id', (req, res) => {
-  const card = db.prepare('SELECT * FROM cards WHERE id = ?').get(Number(req.params.id));
+  const card = findCard(req.params.id);
   if (!card) return res.status(404).json({ error: 'card not found' });
   const b = req.body || {};
 
@@ -502,25 +564,25 @@ api.patch('/cards/:id', (req, res) => {
     : movedList ? nextPosition('cards', 'project_id = ? AND column_key = ?', [projectId, column])
     : card.position;
 
-  db.prepare(
+  inTransaction(() => db.prepare(
     `UPDATE cards
         SET project_id = ?, column_key = ?, title = ?, notes = ?, color = ?, flagged = ?,
-            position = ?, due_date = ?, updated_at = ${NOW}
+            position = ?, due_date = ?, number = ?, updated_at = ${NOW}
       WHERE id = ?`
   ).run(
     projectId, column, title,
     b.notes === undefined ? card.notes : clean(b.notes, 4000),
     b.color === undefined ? card.color : clean(b.color, 20),
     b.flagged === undefined ? card.flagged : (b.flagged ? 1 : 0),
-    position, due, card.id
-  );
+    position, due, numberIn(card, projectId), card.id
+  ));
   stamp(req, card.id);
-  res.json(db.prepare('SELECT * FROM cards WHERE id = ?').get(card.id));
+  res.json(cardById(card.id));
 });
 
 /** Drop a card into a list at a slot index — easier for an agent than picking positions. */
 api.post('/cards/:id/move', (req, res) => {
-  const card = db.prepare('SELECT * FROM cards WHERE id = ?').get(Number(req.params.id));
+  const card = findCard(req.params.id);
   if (!card) return res.status(404).json({ error: 'card not found' });
 
   const column = req.body?.column_key === undefined ? card.column_key : clean(req.body.column_key, 20);
@@ -548,11 +610,12 @@ api.post('/cards/:id/move', (req, res) => {
     : after === undefined ? before + 1000
     : (before + after) / 2;
 
-  db.prepare(
-    `UPDATE cards SET project_id = ?, column_key = ?, position = ?, updated_at = ${NOW} WHERE id = ?`
-  ).run(projectId, column, position, card.id);
+  inTransaction(() => db.prepare(
+    `UPDATE cards SET project_id = ?, column_key = ?, position = ?, number = ?, updated_at = ${NOW}
+      WHERE id = ?`
+  ).run(projectId, column, position, numberIn(card, projectId), card.id));
   stamp(req, card.id);
-  res.json(db.prepare('SELECT * FROM cards WHERE id = ?').get(card.id));
+  res.json(cardById(card.id));
 });
 
 /**
@@ -560,39 +623,40 @@ api.post('/cards/:id/move', (req, res) => {
  * away by mistake — by you or by an agent — can always be brought back.
  */
 api.delete('/cards/:id', (req, res) => {
-  const info = db
+  const card = findCard(req.params.id);
+  const info = card && db
     .prepare(`UPDATE cards SET archived_at = ${NOW}, updated_at = ${NOW}
                WHERE id = ? AND archived_at IS NULL`)
-    .run(Number(req.params.id));
-  if (!info.changes) return res.status(404).json({ error: 'no live card with that id' });
-  stamp(req, Number(req.params.id));
+    .run(card.id);
+  if (!info?.changes) return res.status(404).json({ error: 'no live card with that id' });
+  stamp(req, card.id);
   res.json({ archived: true });
 });
 
 api.post('/cards/:id/restore', (req, res) => {
-  const info = db
+  const card = findCard(req.params.id);
+  const info = card && db
     .prepare(`UPDATE cards SET archived_at = NULL, updated_at = ${NOW}
                WHERE id = ? AND archived_at IS NOT NULL`)
-    .run(Number(req.params.id));
-  if (!info.changes) return res.status(404).json({ error: 'no archived card with that id' });
-  stamp(req, Number(req.params.id));
-  res.json(db.prepare('SELECT * FROM cards WHERE id = ?').get(Number(req.params.id)));
+    .run(card.id);
+  if (!info?.changes) return res.status(404).json({ error: 'no archived card with that id' });
+  stamp(req, card.id);
+  res.json(cardById(card.id));
 });
 
 /** The only way to really lose a card. Owner only — an agent key cannot. */
 api.delete('/cards/:id/permanent', requireOwner, (req, res) => {
-  const info = db.prepare('DELETE FROM cards WHERE id = ?').run(Number(req.params.id));
-  if (!info.changes) return res.status(404).json({ error: 'card not found' });
+  const card = findCard(req.params.id);
+  if (!card) return res.status(404).json({ error: 'card not found' });
+  db.prepare('DELETE FROM cards WHERE id = ?').run(card.id);
   res.json({ deleted: true });
 });
 
 /* ---------------- checklist ---------------- */
 
 api.post('/cards/:id/checks', (req, res) => {
-  const cardId = Number(req.params.id);
-  if (!db.prepare('SELECT id FROM cards WHERE id = ?').get(cardId)) {
-    return res.status(404).json({ error: 'card not found' });
-  }
+  const cardId = findCard(req.params.id)?.id;
+  if (!cardId) return res.status(404).json({ error: 'card not found' });
   const text = clean(req.body?.text, 300);
   if (!text) return bad(res, 'text is required');
   const position = nextPosition('checks', 'card_id = ?', [cardId]);

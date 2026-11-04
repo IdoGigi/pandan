@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { dbFile } from './paths.js';
+import { suggestKey } from './refs.js';
 
 const file = dbFile();
 mkdirSync(dirname(file), { recursive: true });
@@ -121,19 +122,104 @@ addColumn('cards', 'last_actor', 'TEXT');
 addColumn('cards', 'last_actor_kind', 'TEXT');
 addColumn('project_updates', 'actor', 'TEXT');
 addColumn('notes', 'title', "TEXT NOT NULL DEFAULT ''");
+// A card is known as its board key and its number on that board: SCH-3.
+addColumn('boards', 'key', 'TEXT');
+addColumn('boards', 'last_card_number', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('cards', 'number', 'INTEGER');
+
+/** Runs fn inside one transaction: all of it lands, or none of it. */
+export function inTransaction(fn) {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = fn();
+    db.exec('COMMIT');
+    return result;
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+function takenKeys() {
+  return db.prepare('SELECT key FROM boards WHERE key IS NOT NULL').all().map((b) => b.key);
+}
+
+/** A new board, keyed from its name unless a key is given. Returns its id. */
+export function createBoard(name, key) {
+  return inTransaction(() => {
+    const info = db.prepare('INSERT INTO boards (name, position) VALUES (?, ?)')
+      .run(name, nextPosition('boards', '1 = 1', []));
+    const id = Number(info.lastInsertRowid);
+    db.prepare('UPDATE boards SET key = ? WHERE id = ?').run(key ?? suggestKey(name, id, takenKeys()), id);
+    return id;
+  });
+}
+
+/** The next card number on a board. The counter only goes up, so no number is handed out twice. */
+export function takeNumber(boardId) {
+  const row = db.prepare(
+    'UPDATE boards SET last_card_number = last_card_number + 1 WHERE id = ? RETURNING last_card_number'
+  ).get(boardId);
+  if (!row) throw new Error(`no board ${boardId}`);
+  return row.last_card_number;
+}
+
+/** Cards arriving on another board take that board's next numbers, oldest first. */
+export function renumber(cardIds, boardId) {
+  for (const id of [...cardIds].sort((a, b) => a - b)) {
+    db.prepare('UPDATE cards SET number = ? WHERE id = ?').run(takeNumber(boardId), id);
+  }
+}
 
 /**
  * There is always at least one board. An older database has projects with no
  * board, so they are adopted by the first one rather than disappearing.
  */
 export function ensureBoard() {
-  let row = db.prepare('SELECT id FROM boards ORDER BY position, id LIMIT 1').get();
-  if (!row) {
-    const info = db.prepare('INSERT INTO boards (name, position) VALUES (?, ?)').run('My board', 1000);
-    row = { id: Number(info.lastInsertRowid) };
+  const row = db.prepare('SELECT id FROM boards ORDER BY position, id LIMIT 1').get();
+  const id = row ? row.id : createBoard('My board');
+  db.prepare('UPDATE projects SET board_id = ? WHERE board_id IS NULL').run(id);
+  return id;
+}
+
+/**
+ * Brings every row up to per-board numbers. Boards with no key get one, each
+ * counter is raised to its board's highest number, and cards with no number —
+ * or with a number an older card on the same board already has — take the
+ * next ones, oldest first. Only rows that need it are touched, so this runs on
+ * every start. It also repairs what an older version writes after a rollback:
+ * cards with no number, and cards moved to another board that kept their old one.
+ */
+function backfillRefs() {
+  const fixed = inTransaction(() => {
+    const unkeyed = db.prepare('SELECT id, name FROM boards WHERE key IS NULL ORDER BY position, id').all();
+    for (const board of unkeyed) {
+      db.prepare('UPDATE boards SET key = ? WHERE id = ?')
+        .run(suggestKey(board.name, board.id, takenKeys()), board.id);
+    }
+
+    db.exec(`
+      UPDATE boards SET last_card_number = MAX(last_card_number, COALESCE((
+        SELECT MAX(c.number) FROM cards c JOIN projects p ON p.id = c.project_id
+         WHERE p.board_id = boards.id), 0))`);
+
+    const unnumbered = db.prepare(
+      `SELECT c.id, p.board_id FROM cards c JOIN projects p ON p.id = c.project_id
+        WHERE c.number IS NULL OR EXISTS (
+          SELECT 1 FROM cards o JOIN projects op ON op.id = o.project_id
+           WHERE op.board_id = p.board_id AND o.number = c.number AND o.id < c.id)
+        ORDER BY c.id`
+    ).all();
+    for (const card of unnumbered) {
+      db.prepare('UPDATE cards SET number = ? WHERE id = ?').run(takeNumber(card.board_id), card.id);
+    }
+    return { boards: unkeyed.length, cards: unnumbered.length };
+  });
+
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_boards_key ON boards(key)');
+  if (fixed.boards || fixed.cards) {
+    console.log(`[db] keyed ${fixed.boards} board(s), numbered ${fixed.cards} card(s)`);
   }
-  db.prepare('UPDATE projects SET board_id = ? WHERE board_id IS NULL').run(row.id);
-  return row.id;
 }
 
 const firstBoardId = ensureBoard();
@@ -142,6 +228,7 @@ if (db.prepare('SELECT COUNT(*) AS n FROM boards').get().n === 1) {
   const orphans = db.prepare('SELECT COUNT(*) AS n FROM projects WHERE board_id = ?').get(firstBoardId).n;
   if (orphans > 0) console.log(`[db] ${orphans} project(s) on the default board`);
 }
+backfillRefs();
 
 export const COLUMNS = ['todo', 'next', 'doing', 'review', 'done'];
 export const CARD_COLORS = ['plain', 'lime', 'sky', 'amber', 'rose', 'violet'];

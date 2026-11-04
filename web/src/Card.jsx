@@ -85,8 +85,8 @@ export function Card({ card, dragging, onOpen, onMenu, onDragStart, onDragEnd })
       )}
       <div className="card-line">
         <span className="card-title" dir="auto">{card.title}</span>
-        {/* A card made a moment ago has no real id yet, so nothing to show. */}
-        {typeof card.id === 'number' && <span className="card-no">#{card.id}</span>}
+        {/* A card made a moment ago has no reference yet, so nothing to show. */}
+        {card.ref && <span className="card-no">{card.ref}</span>}
       </div>
       {(total > 0 || due) && (
         <div className="card-meta">

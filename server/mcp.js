@@ -39,6 +39,14 @@ const columnField = z.enum(COLUMNS).describe(
 );
 const colorField = z.enum(COLORS).describe('Card colour. "plain" is the default grey.');
 
+/** What a person reads off the board and says — "SCH-3" — or the card's numeric id. */
+const cardField = (what) => z.union([z.string().min(1), z.number().int()]).describe(
+  `${what} Use the card's reference as shown on the board, like "SCH-3". A bare number is the ` +
+  'card\'s internal id from get_board, not the number shown on the card: for "card 3" on the ' +
+  'School board, pass "SCH-3".'
+);
+const cardPath = (cardId, rest = '') => `/cards/${encodeURIComponent(cardId)}${rest}`;
+
 export function buildMcpServer() {
   const server = new McpServer(
     { name: 'pandan', version: '1.1.0' },
@@ -47,7 +55,9 @@ export function buildMcpServer() {
         'Pandan, a personal kanban board. There may be several boards, for example work and ' +
         'personal. On a board, rows are projects and columns are todo, next, doing, review and done. ' +
         'Call get_boards then get_board to see the projects and cards with their ids, then use the other ' +
-        'tools with those ids. Cards carry an optional checklist and a flag for anything urgent. ' +
+        'tools with those ids. Every card has a reference like "SCH-3": its board key and its number on ' +
+        'that board. It is shown on the card and it is what a person will say, so pass it straight to ' +
+        'any card tool as card_id. Cards carry an optional checklist and a flag for anything urgent. ' +
         'When you finish a card, move it to "review" if a person should check your work, or to ' +
         '"done" if it is plainly finished. You are allowed to use either.',
     }
@@ -56,7 +66,8 @@ export function buildMcpServer() {
   server.registerTool('get_boards', {
     title: 'List the boards',
     description:
-      'List every board with its id, name and how many projects it holds. Someone may keep work ' +
+      'List every board with its id, name, key and how many projects it holds. The key is the start ' +
+      'of every card reference on that board, so SCH-3 is on the board with key SCH. Someone may keep work ' +
       'and personal on separate boards, so check here first if you are not sure which one a ' +
       'project belongs to.',
     inputSchema: {},
@@ -68,14 +79,20 @@ export function buildMcpServer() {
     description:
       'Add a whole new board, for a separate area of life such as work or personal. Most of the ' +
       'time a new project on an existing board is what is wanted instead — ask before making one.',
-    inputSchema: { name: z.string().min(1).describe('What the board is for, e.g. "Work".') },
+    inputSchema: {
+      name: z.string().min(1).describe('What the board is for, e.g. "Work".'),
+      key: z.string().optional().describe(
+        'Short key that starts every card reference on the board, e.g. "WRK" for WRK-1. ' +
+        '2 to 6 letters or digits, starting with a letter. Leave it out to make one from the name.'),
+    },
   }, tool((args) => callApi('POST', '/boards', args)));
 
   server.registerTool('get_board', {
     title: 'Get one board',
     description:
-      'Read every project and card on a board in one call. Returns project ids and names, and each ' +
-      'card with its id, project_id, column_key, title, notes, colour, flag and checklist progress. ' +
+      'Read every project and card on a board in one call. Returns the board key, project ids and ' +
+      'names, and each card with its ref (like "SCH-3"), id, project_id, column_key, title, notes, ' +
+      'colour, flag and checklist progress. ' +
       'Leave board_id out for the first board. Start here so you have the ids the other tools need.',
     inputSchema: {
       board_id: z.number().int().optional().describe('Which board. Defaults to the first one.'),
@@ -168,9 +185,9 @@ export function buildMcpServer() {
   server.registerTool('get_card', {
     title: 'Read one card',
     description: 'Read a single card in full, including its checklist items and their ids.',
-    inputSchema: { card_id: z.number().int().describe('Which card to read.') },
+    inputSchema: { card_id: cardField('Which card to read.') },
     annotations: { readOnlyHint: true },
-  }, tool(({ card_id }) => callApi('GET', `/cards/${card_id}`)));
+  }, tool(({ card_id }) => callApi('GET', cardPath(card_id))));
 
   server.registerTool('update_card', {
     title: 'Edit a card',
@@ -178,7 +195,7 @@ export function buildMcpServer() {
       'Change any part of a card: its text, notes, colour, flag, or which project and column it ' +
       'sits in. To only reorder or move a card, prefer move_card.',
     inputSchema: {
-      card_id: z.number().int().describe('Which card to change.'),
+      card_id: cardField('Which card to change.'),
       title: z.string().min(1).optional().describe('New card text.'),
       notes: z.string().optional().describe('New notes.'),
       column_key: columnField.optional(),
@@ -187,7 +204,7 @@ export function buildMcpServer() {
       flagged: z.boolean().optional().describe('True puts a small red dot on the card.'),
       due_date: z.string().optional().describe('When it is due, as 2026-09-15. Empty clears it.'),
     },
-  }, tool(({ card_id, ...rest }) => callApi('PATCH', `/cards/${card_id}`, rest)));
+  }, tool(({ card_id, ...rest }) => callApi('PATCH', cardPath(card_id), rest)));
 
   server.registerTool('move_card', {
     title: 'Move a card',
@@ -197,26 +214,27 @@ export function buildMcpServer() {
       'This is the tool to use when work changes state. When you finish something, move it to ' +
       '"review" if a person should check it first, or "done" if it needs no checking.',
     inputSchema: {
-      card_id: z.number().int().describe('Which card to move.'),
+      card_id: cardField('Which card to move.'),
       column_key: columnField.optional(),
-      project_id: z.number().int().optional().describe('Move it to a different project too.'),
+      project_id: z.number().int().optional().describe(
+        'Move it to a different project too. A project on another board gives the card a new reference.'),
       index: z.number().int().min(0).optional().describe('Slot in the target list. 0 is the top.'),
     },
-  }, tool(({ card_id, ...rest }) => callApi('POST', `/cards/${card_id}/move`, rest)));
+  }, tool(({ card_id, ...rest }) => callApi('POST', cardPath(card_id, '/move'), rest)));
 
   server.registerTool('archive_card', {
     title: 'Archive a card',
     description:
       'Put a card away. It leaves the board but is not destroyed, and it can be restored. ' +
       'Use this instead of deleting — you cannot delete a card for good, only a person can.',
-    inputSchema: { card_id: z.number().int().describe('Which card to archive.') },
-  }, tool(({ card_id }) => callApi('DELETE', `/cards/${card_id}`)));
+    inputSchema: { card_id: cardField('Which card to archive.') },
+  }, tool(({ card_id }) => callApi('DELETE', cardPath(card_id))));
 
   server.registerTool('restore_card', {
     title: 'Bring an archived card back',
     description: 'Put an archived card back on the board, in the column it came from.',
-    inputSchema: { card_id: z.number().int().describe('Which card to restore.') },
-  }, tool(({ card_id }) => callApi('POST', `/cards/${card_id}/restore`)));
+    inputSchema: { card_id: cardField('Which card to restore.') },
+  }, tool(({ card_id }) => callApi('POST', cardPath(card_id, '/restore'))));
 
   server.registerTool('list_archived_cards', {
     title: 'List archived cards',
@@ -241,10 +259,10 @@ export function buildMcpServer() {
     title: 'Add a checklist item',
     description: 'Add one checklist item to a card. The board shows progress as done/total.',
     inputSchema: {
-      card_id: z.number().int().describe('Which card to add the item to.'),
+      card_id: cardField('Which card to add the item to.'),
       text: z.string().min(1).describe('The checklist item text.'),
     },
-  }, tool(({ card_id, text }) => callApi('POST', `/cards/${card_id}/checks`, { text })));
+  }, tool(({ card_id, text }) => callApi('POST', cardPath(card_id, '/checks'), { text })));
 
   server.registerTool('update_check', {
     title: 'Tick or edit a checklist item',

@@ -24,6 +24,9 @@ jobs:
       - name: Syntax check the server
         run: npm run check
 
+      - name: Server tests
+        run: npm test
+
       - name: Build the UI
         run: npm --prefix web run build
 

@@ -68,7 +68,7 @@ export function ArchiveModal({ onClose, onChanged }) {
               <div key={card.id} className="token-row">
                 <span className={`chip ${card.color || 'plain'}`} />
                 <span className="token-name">{card.title}</span>
-                <span className="token-when">{card.project_name}</span>
+                <span className="token-when">{card.ref ? `${card.ref} · ` : ''}{card.project_name}</span>
                 <button
                   className="btn"
                   onClick={async () => {
