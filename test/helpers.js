@@ -85,12 +85,12 @@ export async function startServer(dbPath) {
     return { status: res.status, body: await res.json().catch(() => null) };
   }
 
-  /** A JSON-RPC call to /mcp. Resolves to the `result` member. */
-  async function rpc(method, params) {
+  /** A JSON-RPC call to /mcp, as the owner unless an agent key is given. Resolves to the `result` member. */
+  async function rpc(method, params, token = PASSWORD) {
     const res = await fetch(`${base}/mcp`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${PASSWORD}`,
+        Authorization: `Bearer ${token}`,
         Accept: 'application/json, text/event-stream',
         'Content-Type': 'application/json',
       },
@@ -101,9 +101,9 @@ export async function startServer(dbPath) {
     return data.result;
   }
 
-  /** Calls one MCP tool. Resolves to { isError, data } with the tool's JSON parsed. */
-  async function tool(name, args) {
-    const result = await rpc('tools/call', { name, arguments: args });
+  /** Calls one MCP tool, as the owner unless an agent key is given. Resolves to { isError, data } with the tool's JSON parsed. */
+  async function tool(name, args, token = PASSWORD) {
+    const result = await rpc('tools/call', { name, arguments: args }, token);
     const text = result.content?.[0]?.text ?? '';
     let data = text;
     try { data = JSON.parse(text); } catch { /* an error message, kept as text */ }
