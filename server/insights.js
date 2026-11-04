@@ -9,6 +9,8 @@ export const QUIET_DAYS = 7;
 export const WEEKS = 12;
 const OPEN = COLUMNS.filter((c) => c !== 'done');
 const IN_FLIGHT = ['doing', 'waiting', 'review'];
+/** Where each age range starts, in days; it ends where the next one starts. */
+const AGE_FROM = [0, 7, 14, 30, 90];
 const DAY = 86400000;
 
 /**
@@ -20,6 +22,9 @@ const ms = (text) => Date.parse(`${text.replace(' ', 'T')}Z`);
 const localDate = (t, tz) => new Date(t - tz * 60000).toISOString().slice(0, 10);
 /** Numbers are lists of ids, so the UI can count them and show the cards behind them. */
 const ids = (list) => list.map((c) => c.id);
+/** Cards split by column, in the order `cols` gives, so the bars match the board. */
+const inColumns = (list, cols) =>
+  Object.fromEntries(cols.map((col) => [col, ids(list.filter((c) => c.column_key === col))]));
 
 /** The Sunday that starts the local week holding t, as YYYY-MM-DD. */
 function weekStart(t, tz) {
@@ -63,15 +68,27 @@ function stuckNow(open, tz, now) {
   };
 }
 
-/** Each active project's open cards by column, in the board's order, so the bars match the board. */
-function openByProject(boardId, open) {
+/** Each active project, in the board's order, with its open cards by column and then its finished ones. */
+function workByProject(boardId, open, done) {
   return db.prepare(
     'SELECT id, name, color FROM projects WHERE board_id = ? AND archived = 0 ORDER BY position'
-  ).all(boardId).map((p) => ({
-    ...p,
-    by_column: Object.fromEntries(OPEN.map((col) =>
-      [col, ids(open.filter((c) => c.project_id === p.id && c.column_key === col))])),
-  }));
+  ).all(boardId).map((p) => {
+    const mine = (list) => list.filter((c) => c.project_id === p.id);
+    return { ...p, by_column: { ...inColumns(mine(open), OPEN), done: ids(mine(done)) } };
+  });
+}
+
+/**
+ * Open cards by whole days since they were made, so old work stands out. Each
+ * card lands in exactly one range, so the ranges add up to the open total.
+ */
+function ageOfOpen(open, now) {
+  const ranges = AGE_FROM.map((from, i) => ({ from_days: from, to_days: AGE_FROM[i + 1] ?? null, ids: [] }));
+  for (const c of open) {
+    const days = Math.floor((now - ms(c.created_at)) / DAY);
+    ranges.find((r) => r.to_days === null || days < r.to_days).ids.push(c.id);
+  }
+  return ranges;
 }
 
 /**
@@ -170,13 +187,16 @@ export function buildInsights(boardId, { tz = 0, now = Date.now() } = {}) {
   // Both queries leave out shelved (archived) projects, past weeks included, on purpose.
   const cards = db.prepare(
     `SELECT c.id, b.key || '-' || c.number AS ref, c.title, c.project_id, c.column_key, c.flagged,
-            c.due_date, c.updated_at, c.archived_at, c.last_actor_kind
+            c.due_date, c.created_at, c.updated_at, c.archived_at, c.last_actor_kind, c.position
        FROM cards c JOIN projects p ON p.id = c.project_id JOIN boards b ON b.id = p.board_id
       WHERE p.board_id = ? AND p.archived = 0
       ORDER BY c.id`
   ).all(boardId);
   const live = cards.filter((c) => !c.archived_at);
   const open = live.filter((c) => c.column_key !== 'done');
+  // Finished work: live Done cards, and ones archived from Done (archiving keeps
+  // the column). Cards archived from any other column were dropped, so count nowhere.
+  const done = cards.filter((c) => c.column_key === 'done');
 
   // Each card's events in time order: lastInto and timeInColumn rely on it.
   const history = db.prepare(
@@ -197,8 +217,15 @@ export function buildInsights(boardId, { tz = 0, now = Date.now() } = {}) {
     quiet_days: QUIET_DAYS,
     history_since: firstReal ? localDate(ms(firstReal), tz) : null,
     stuck: stuckNow(open, tz, now),
-    projects: openByProject(boardId, open),
+    totals: {
+      open: ids(open),
+      in_progress: ids(open.filter((c) => IN_FLIGHT.includes(c.column_key))),
+      done: ids(done),
+    },
+    columns: inColumns(live, COLUMNS),
+    projects: workByProject(boardId, open, done),
     weeks: weekCounts(cal, cards, history, byCard),
+    age: ageOfOpen(open, now),
     time_in_column: timeInColumn(byCard, cal.since),
     agents: {
       review_from_agents: ids(live.filter((c) => c.column_key === 'review'
@@ -208,8 +235,8 @@ export function buildInsights(boardId, { tz = 0, now = Date.now() } = {}) {
     },
     cards: Object.fromEntries(cards.map((c) => [c.id, {
       id: c.id, ref: c.ref, title: c.title, project_id: c.project_id, column_key: c.column_key,
-      flagged: c.flagged, due_date: c.due_date, updated_at: c.updated_at,
-      archived: Boolean(c.archived_at), last_actor_kind: c.last_actor_kind,
+      flagged: c.flagged, due_date: c.due_date, created_at: c.created_at, updated_at: c.updated_at,
+      archived: Boolean(c.archived_at), last_actor_kind: c.last_actor_kind, position: c.position,
     }])),
   };
 }

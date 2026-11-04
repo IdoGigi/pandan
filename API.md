@@ -208,11 +208,18 @@ curl -s -H "$KEY" "$KB/insights?board_id=4&tz=-120"
   "quiet_days": 7,
   "history_since": "2026-11-04",
   "stuck": { "waiting": [281], "flagged": [], "overdue": [279], "quiet": [281] },
+  "totals": { "open": [274, 279, 281], "in_progress": [279, 281], "done": [270, 283] },
+  "columns": { "todo": [274], "next": [], "doing": [279], "waiting": [281], "review": [], "done": [283] },
   "projects": [
     { "id": 23, "name": "Thesis", "color": "#4bb3d4",
-      "by_column": { "todo": [274], "next": [], "doing": [279], "waiting": [281], "review": [] } }
+      "by_column": { "todo": [274], "next": [], "doing": [279], "waiting": [281], "review": [], "done": [270, 283] } }
   ],
   "weeks": [{ "start": "2026-08-16", "added": [274], "finished": [], "estimated": false }],
+  "age": [
+    { "from_days": 0, "to_days": 7, "ids": [] }, { "from_days": 7, "to_days": 14, "ids": [281] },
+    { "from_days": 14, "to_days": 30, "ids": [279] }, { "from_days": 30, "to_days": 90, "ids": [274] },
+    { "from_days": 90, "to_days": null, "ids": [] }
+  ],
   "time_in_column": {
     "doing": { "median_days": 4.2, "moves": 9, "longest": [283, 280], "longest_days": [11.5, 6] }
   },
@@ -223,8 +230,9 @@ curl -s -H "$KEY" "$KB/insights?board_id=4&tz=-120"
   },
   "cards": {
     "274": { "id": 274, "ref": "SCH-1", "title": "Read chapter 3", "project_id": 23,
-             "column_key": "todo", "flagged": 0, "due_date": null,
-             "updated_at": "2026-10-02 09:14:00", "archived": false, "last_actor_kind": "owner" }
+             "column_key": "todo", "flagged": 0, "due_date": null, "created_at": "2026-08-18 18:02:11",
+             "updated_at": "2026-10-02 09:14:00", "archived": false, "last_actor_kind": "owner",
+             "position": 3 }
   }
 }
 ```
@@ -235,11 +243,14 @@ curl -s -H "$KEY" "$KB/insights?board_id=4&tz=-120"
 | `quiet_days` | How long without a change counts as gone quiet: `7` |
 | `history_since` | The local date of the first change recorded live on this board, not seeded, or `null` before there is one |
 | `stuck` | Open cards (not Done, not archived): `waiting`, `flagged`, `overdue` (due before today), and `quiet` (in `doing`, `waiting` or `review` with no change for `quiet_days` or more) |
-| `projects` | Each active project in board order, with its open cards per column in `by_column`, `todo` to `review` |
+| `totals` | `open`: live cards not in Done. `in_progress`: live cards in `doing`, `waiting` or `review`. `done`: live Done cards plus cards archived from Done |
+| `columns` | Live cards in each column, `todo` to `done`: the board as it stands |
+| `projects` | Each active project in board order, with its open cards per column in `by_column`, `todo` to `review`, then its `done` cards, counted as in `totals` |
 | `weeks` | The last 12 weeks, oldest first, ending with this one. `added`: cards created that week. `finished`: cards that last moved into Done that week. `estimated`: at least one of those finish dates is a guess |
+| `age` | Open cards by whole days since they were made, in five ranges: `0`–`7`, `7`–`14`, `14`–`30`, `30`–`90`, and `90` on (`to_days: null`). Each range includes `from_days` and stops before `to_days` |
 | `time_in_column` | For each open column, `todo` to `review`: `median_days` (`null` until a card has left it), `moves` (how many stays the median covers), `longest` (up to 10 of the slowest cards) and `longest_days` (their days) |
 | `agents` | `review_from_agents`: cards in Review that an agent put there. `this_week`: cards an agent created, moved, archived or restored this week. `weeks`: the same 12 weeks, split into the cards an agent touched (`agent`) and the ones you did (`you`) |
-| `cards` | Every card in the board's active projects, by id. Archived ones are included with `archived: true`. `last_actor_kind` is `owner`, `agent`, or `null` for a card no one has touched since that was tracked |
+| `cards` | Every card in the board's active projects, by id. Archived ones are included with `archived: true`. `last_actor_kind` is `owner`, `agent`, or `null` for a card no one has touched since that was tracked. `position` orders cards within a column, lowest first |
 
 The rules:
 
@@ -247,6 +258,10 @@ The rules:
   look each id up in `cards` to show the card. One call covers every number.
 - **Finished** is the week a card last moved into Done. A card moved back out
   of Done no longer counts. A card archived from Done still does.
+- **Done** in `totals` and `by_column` counts cards archived from Done, since
+  they were finished, even when no week holds their finish. A card archived
+  from any other column was dropped, so it counts nowhere. A restored card
+  counts by the column it is in now.
 - **Estimated.** Move history starts with this version. On the first start,
   every card gets history from the dates it already has. Creation and archive
   dates are exact. For a card in Done, its last change stands in for the day

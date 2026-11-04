@@ -65,11 +65,11 @@ test('stuck now: waiting, flagged, overdue and gone quiet', async () => {
   assert.ok(![dueToday.id, finished.id].some((id) => Object.values(stuck).flat().includes(id)));
 });
 
-test('open work by project, split by column, without Done or shelved projects', async () => {
+test('work by project, split by column, without shelved projects', async () => {
   const { projects: list } = await insights();
   assert.deepEqual(list.map((p) => p.name), ['hiring', 'website']);
   const hiring = list.find((p) => p.name === 'hiring');
-  assert.deepEqual(Object.keys(hiring.by_column), ['todo', 'next', 'doing', 'waiting', 'review']);
+  assert.deepEqual(Object.keys(hiring.by_column), ['todo', 'next', 'doing', 'waiting', 'review', 'done']);
   assert.equal(hiring.by_column.waiting.length, 1, 'the archived card is not open work');
   assert.equal(hiring.by_column.doing.length, 1);
 });
@@ -216,4 +216,101 @@ test('agents: review left by agents, and agent against you per week', async () =
   assert.ok(agents.weeks[11].you.includes(byYou.id));
   assert.ok(!agents.weeks[11].agent.includes(byYou.id));
   assert.deepEqual(agents.this_week, agents.weeks[11].agent);
+});
+
+/** Ids in numeric order, to compare lists as sets. */
+const sorted = (list) => [...list].sort((a, b) => a - b);
+
+test('totals: open, in progress, and done with cards archived from Done', async () => {
+  const todo = await card('website', 'totals todo');
+  const doing = await card('website', 'totals doing', { column_key: 'doing' });
+  const waiting = await card('website', 'totals waiting', { column_key: 'waiting' });
+  const review = await card('website', 'totals review', { column_key: 'review' });
+  const done = await card('website', 'totals done', { column_key: 'done' });
+  const filed = await card('website', 'totals filed', { column_key: 'done' });
+  const dropped = await card('website', 'totals dropped');
+  const back = await card('website', 'totals back', { column_key: 'next' });
+  const shelved = await card('shelved', 'totals shelved', { column_key: 'done' });
+  for (const c of [filed, dropped, back]) await server.call('DELETE', `/cards/${c.ref}`);
+  await server.call('POST', `/cards/${back.ref}/restore`);
+
+  const { totals } = await insights();
+  const countsIn = (c) => Object.keys(totals).filter((key) => totals[key].includes(c.id));
+  assert.deepEqual(Object.keys(totals), ['open', 'in_progress', 'done']);
+  assert.deepEqual(countsIn(todo), ['open']);
+  for (const c of [doing, waiting, review]) assert.deepEqual(countsIn(c), ['open', 'in_progress']);
+  assert.deepEqual(countsIn(done), ['done']);
+  assert.deepEqual(countsIn(filed), ['done'], 'archived from Done was finished');
+  assert.deepEqual(countsIn(dropped), [], 'archived from To do was dropped, not finished');
+  assert.deepEqual(countsIn(back), ['open'], 'a restored card counts where it is now');
+  assert.deepEqual(countsIn(shelved), [], 'shelved projects stay out');
+});
+
+test('columns: live cards by column, Done included', async () => {
+  const done = await card('hiring', 'columns done', { column_key: 'done' });
+  const next = await card('hiring', 'columns next', { column_key: 'next' });
+  const filed = await card('hiring', 'columns filed', { column_key: 'done' });
+  await server.call('DELETE', `/cards/${filed.ref}`);
+
+  const { columns, totals, cards } = await insights();
+  assert.deepEqual(Object.keys(columns), ['todo', 'next', 'doing', 'waiting', 'review', 'done']);
+  assert.ok(columns.done.includes(done.id));
+  assert.ok(columns.next.includes(next.id));
+  assert.ok(!Object.values(columns).flat().includes(filed.id), 'an archived card is off the board');
+  const live = Object.values(cards).filter((c) => !c.archived).map((c) => c.id);
+  assert.deepEqual(sorted(Object.values(columns).flat()), sorted(live), 'each live card in one column');
+  const inFlight = [...columns.doing, ...columns.waiting, ...columns.review];
+  assert.deepEqual(sorted([...columns.todo, ...columns.next, ...inFlight]), sorted(totals.open));
+  assert.deepEqual(sorted(inFlight), sorted(totals.in_progress));
+});
+
+test('each project counts its Done, archived from Done included', async () => {
+  const done = await card('hiring', 'project done', { column_key: 'done' });
+  const filed = await card('hiring', 'project filed', { column_key: 'done' });
+  const dropped = await card('hiring', 'project dropped', { column_key: 'review' });
+  for (const c of [filed, dropped]) await server.call('DELETE', `/cards/${c.ref}`);
+  const elsewhere = await card('website', 'project elsewhere', { column_key: 'done' });
+
+  const { projects: list, totals } = await insights();
+  const hiring = list.find((p) => p.name === 'hiring');
+  assert.ok(hiring.by_column.done.includes(done.id));
+  assert.ok(hiring.by_column.done.includes(filed.id), 'archived from Done counts as done');
+  assert.ok(!Object.values(hiring.by_column).flat().includes(dropped.id), 'archived from Review counts nowhere');
+  assert.ok(!hiring.by_column.done.includes(elsewhere.id));
+  assert.deepEqual(sorted(list.flatMap((p) => p.by_column.done)), sorted(totals.done), 'the projects add up to the total');
+});
+
+test('age of open work: whole days since made, each range from its start up to its end', async () => {
+  const made = {};
+  for (const days of [0, 6.9, 7, 89.9, 90]) {
+    made[days] = await card('website', `aged ${days}`);
+    sql(dbPath, 'UPDATE cards SET created_at = ? WHERE id = ?', ago(days), made[days].id);
+  }
+  const finished = await card('website', 'aged and done', { column_key: 'done' });
+  const filed = await card('website', 'aged and archived');
+  await server.call('DELETE', `/cards/${filed.ref}`);
+  for (const c of [finished, filed]) sql(dbPath, 'UPDATE cards SET created_at = ? WHERE id = ?', ago(100), c.id);
+
+  const { age, totals } = await insights();
+  assert.deepEqual(age.map((a) => [a.from_days, a.to_days]), [[0, 7], [7, 14], [14, 30], [30, 90], [90, null]]);
+  const rangeOf = (c) => age.findIndex((a) => a.ids.includes(c.id));
+  assert.equal(rangeOf(made[0]), 0);
+  assert.equal(rangeOf(made[6.9]), 0, '6 whole days is under a week');
+  assert.equal(rangeOf(made[7]), 1, '7 days starts the second range');
+  assert.equal(rangeOf(made[89.9]), 3, '89 whole days is under 90');
+  assert.equal(rangeOf(made[90]), 4, '90 days starts the last range');
+  assert.equal(rangeOf(finished), -1, 'Done is not open work');
+  assert.equal(rangeOf(filed), -1, 'an archived card is not open work');
+  assert.deepEqual(sorted(age.flatMap((a) => a.ids)), sorted(totals.open), 'each open card in one range');
+});
+
+test('the cards map carries when each card was made and its place in its column', async () => {
+  const first = await card('website', 'placed first', { column_key: 'next' });
+  const second = await card('website', 'placed second', { column_key: 'next' });
+  const { cards } = await insights();
+  assert.equal(cards[first.id].created_at, first.created_at);
+  assert.equal(cards[first.id].position, first.position);
+  assert.ok(cards[second.id].position > cards[first.id].position);
+  assert.ok(Object.values(cards).every((c) =>
+    /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(c.created_at) && typeof c.position === 'number'));
 });
