@@ -2,21 +2,22 @@ import { useRef, useState } from 'react';
 import { List } from './List.jsx';
 
 export const COLUMN_LABELS = {
-  todo: 'To do', next: 'Next', doing: 'Doing', review: 'Review', done: 'Done',
+  todo: 'To do', next: 'Next', doing: 'Doing', waiting: 'Waiting', review: 'Review', done: 'Done',
 };
-const COLS = ['todo', 'next', 'doing', 'review', 'done'];
+const COLS = ['todo', 'next', 'doing', 'waiting', 'review', 'done'];
 
-/** Header: "To do" and "Done" stand alone; "Next" and "Doing" sit under "In progress". */
+/** Header: "To do", "Review" and "Done" stand alone; "Next", "Doing" and "Waiting" sit under "In progress". */
 function Header() {
   return (
     <>
       <div className="cell head-blank" style={{ gridColumn: 1, gridRow: '1 / 3' }} />
       <div className="cell head-col" style={{ gridColumn: 2, gridRow: '1 / 3' }}>To do</div>
-      <div className="cell head-group" style={{ gridColumn: '3 / 5', gridRow: 1 }}>In progress</div>
-      <div className="cell head-col review-head" style={{ gridColumn: 5, gridRow: '1 / 3' }}>Review</div>
-      <div className="cell head-col last-col" style={{ gridColumn: 6, gridRow: '1 / 3' }}>Done</div>
+      <div className="cell head-group" style={{ gridColumn: '3 / 6', gridRow: 1 }}>In progress</div>
+      <div className="cell head-col review-head" style={{ gridColumn: 6, gridRow: '1 / 3' }}>Review</div>
+      <div className="cell head-col last-col" style={{ gridColumn: 7, gridRow: '1 / 3' }}>Done</div>
       <div className="cell head-col" style={{ gridColumn: 3, gridRow: 2 }}>Next</div>
       <div className="cell head-col" style={{ gridColumn: 4, gridRow: 2 }}>Doing</div>
+      <div className="cell head-col" style={{ gridColumn: 5, gridRow: 2 }}>Waiting</div>
     </>
   );
 }
@@ -120,7 +121,7 @@ export function Board({
             {isShut ? (
               <div
                 className="cell last-col row-collapsed"
-                style={{ gridColumn: '2 / 7', gridRow: row }}
+                style={{ gridColumn: `2 / ${COLS.length + 2}`, gridRow: row }}
                 onDoubleClick={() => onToggleRow(project.id)}
               >
                 {COLS.map((c) => (
