@@ -57,8 +57,7 @@ New table `card_events`, purely additive:
 
 | Column | Meaning |
 | --- | --- |
-| `card_id` | The card; rows go when the card is deleted for good |
-| `board_id` | The board the card was on at the time |
+| `card_id` | The card; rows go when the card is deleted for good. History follows the card: one moved to another board counts on the board it is on now |
 | `kind` | `created`, `moved`, `archived`, `restored` |
 | `from_column`, `to_column` | For moves |
 | `actor`, `actor_kind` | Who, from the same source as `cards.last_actor` |
