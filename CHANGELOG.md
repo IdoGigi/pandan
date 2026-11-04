@@ -4,6 +4,13 @@ Newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+### Waiting column
+
+- **Waiting**, between Doing and Review under **In progress**, is for work that
+  has started but is held up by someone or something else. Say who or what in
+  the card's notes. Agents can move cards there with `move_card`, and the
+  project panel counts them in its bar.
+
 ### Card numbers per board
 
 Cards were numbered across all boards, so a new board started at #274. Now

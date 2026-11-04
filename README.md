@@ -32,8 +32,11 @@ Keep as many boards as you like — one for work, one for home. The switcher is
 in the top bar, and it remembers which one you had open. A project can be moved
 between boards, and deleting a board takes its projects with it.
 
-On a board, rows are projects. Columns are `To do`, `Next`, `Doing`, `Review` and `Done`,
-with `Next` and `Doing` grouped under **In progress**.
+On a board, rows are projects. Columns are `To do`, `Next`, `Doing`, `Waiting`, `Review`
+and `Done`, with `Next`, `Doing` and `Waiting` grouped under **In progress**.
+
+**Waiting** is for work that has started but is held up by someone or something
+else; say who or what in the card's notes.
 
 **Review** is where an agent puts work it wants you to look at. It is a signal,
 not a gate — an agent can still move a card straight to `Done` when the work

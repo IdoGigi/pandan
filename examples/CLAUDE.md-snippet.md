@@ -8,11 +8,13 @@ the board filling with noise.
 ## Pandan — keep it current, keep it short
 
 I track my work on a board at http://localhost:3000
-(rows = projects, columns = `todo` / `next` / `doing` / `review` / `done`). Use the
+(rows = projects, columns = `todo` / `next` / `doing` / `waiting` / `review` / `done`). Use the
 `pandan` MCP tools when they are connected, otherwise the `pandan` skill.
 
 - When real work on a task starts, put **one** card in `doing`. If a card for
   it already exists, move that one — never open a second card for the same job.
+- If the work is held up by someone or something else, move the card to
+  `waiting` and say who or what in its notes. Move it back when it moves again.
 - When it is finished, move the card to `review` if I should look at your work,
   or straight to `done` if it plainly needs no checking. You may use either.
   Then add **one sentence** to the project's update log.

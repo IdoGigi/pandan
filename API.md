@@ -26,8 +26,10 @@ export KEY="Authorization: Bearer YOUR_PASSWORD"
   always at least one, and you cannot delete your last.
 - A **project** is one row (swimlane) on a board.
 - A **card** belongs to one project and sits in one column.
-- Columns are fixed: `todo`, `next`, `doing`, `review`, `done`.
-  On screen, `next` and `doing` sit under the "In progress" header.
+- Columns are fixed: `todo`, `next`, `doing`, `waiting`, `review`, `done`.
+  On screen, `next`, `doing` and `waiting` sit under the "In progress" header.
+  `waiting` is for work that has started but is held up by someone or something
+  else; say who or what in the card's notes.
 - `position` orders cards inside a column. Lower comes first. You rarely set it
   by hand — use the move endpoint with an `index`.
 
@@ -67,7 +69,7 @@ curl -s -H "$KEY" "$KB/board?board_id=1"
 
 ```json
 {
-  "columns": ["todo", "next", "doing", "review", "done"],
+  "columns": ["todo", "next", "doing", "waiting", "review", "done"],
   "board": { "id": 1, "name": "Work", "key": "WRK" },
   "projects": [{ "id": 1, "name": "House chores", "color": "#c3d117", "position": 1000 }],
   "cards": [

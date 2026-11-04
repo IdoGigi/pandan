@@ -10,7 +10,7 @@ description: Record what I am working on to my personal kanban board in one shor
 
 My board: <http://localhost:3000>
 
-Rows are projects. Columns are `todo`, `next`, `doing`, `done`.
+Rows are projects. Columns are `todo`, `next`, `doing`, `waiting`, `review`, `done`.
 
 ## The one rule
 
@@ -73,7 +73,13 @@ to `doing`. Only if there is none, `create_card` in `doing`.
 
 **Never open a second card for work already on the board.**
 
-### 4. When it is finished
+### 4. When it is held up
+
+If the work has started but waits on someone or something else — an answer, an
+approval, another team — `move_card` it to `waiting` and say who or what in the
+card's notes. Move it back to `doing` when it moves again.
+
+### 5. When it is finished
 
 - `move_card` the card to **`review`** if a person should check the work, or to
   **`done`** if it plainly needs no checking. You are allowed to use either —
