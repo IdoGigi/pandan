@@ -58,11 +58,17 @@ const state = {
   insights: {
     board: { id: 1, name: 'Work', key: 'WRK' }, quiet_days: 7, history_since: '2026-11-05',
     stuck: { waiting: [12, 11], flagged: [10], overdue: [], quiet: [11] },
+    // Done counts live Done (WRK-5) and cards archived from Done (WRK-9).
+    totals: { open: [10, 11, 12, 13], in_progress: [11, 12, 13], done: [14, 77] },
+    columns: { todo: [10], next: [], doing: [11], waiting: [12], review: [13], done: [14] },
     projects: [{ id: 1, name: 'House chores', color: '#c3d117',
-      by_column: { todo: [10], next: [], doing: [], waiting: [12], review: [13] } },
-    // A Hebrew name, as on the School board: too long for its slot, and read right to left.
+      by_column: { todo: [10], next: [], doing: [11], waiting: [12], review: [13], done: [14, 77] } },
+    // A Hebrew name, as on the School board: read right to left, and cut short when its slot is narrow.
     { id: 4, name: 'ניתוח מערכות מידע', color: '#9b8ec4',
-      by_column: { todo: [], next: [], doing: [], waiting: [], review: [] } }],
+      by_column: { todo: [], next: [], doing: [], waiting: [], review: [], done: [] } }],
+    age: [{ from_days: 0, to_days: 7, ids: [10] }, { from_days: 7, to_days: 14, ids: [12] },
+      { from_days: 14, to_days: 30, ids: [11] }, { from_days: 30, to_days: 90, ids: [] },
+      { from_days: 90, to_days: null, ids: [13] }],
     weeks: WEEK_STARTS.map((start, i) => ({
       start, added: i === 11 ? [10, 12] : [], finished: i === 9 ? [77] : [], estimated: i === 9 })),
     time_in_column: Object.fromEntries(['todo', 'next', 'doing', 'waiting', 'review'].map((c) => [c,
@@ -73,11 +79,12 @@ const state = {
     agents: { review_from_agents: [13], this_week: [13],
       weeks: WEEK_STARTS.map((start, i) => ({ start, agent: i === 11 ? [13] : [], you: i === 11 ? [10] : [] })) },
     cards: {
-      10: { id: 10, ref: 'WRK-1', title: 'Buy milk', project_id: 1, column_key: 'todo', flagged: 1, due_date: null, updated_at: '2026-11-01 10:00:00', archived: false },
-      11: { id: 11, ref: 'WRK-2', title: 'Fix the sink', project_id: 1, column_key: 'doing', flagged: 0, due_date: null, updated_at: '2026-10-20 10:00:00', archived: false },
-      12: { id: 12, ref: 'WRK-3', title: 'Sort donations', project_id: 1, column_key: 'waiting', flagged: 0, due_date: null, updated_at: '2026-10-30 10:00:00', archived: false },
-      13: { id: 13, ref: 'WRK-4', title: 'Written by an agent', project_id: 1, column_key: 'review', flagged: 0, due_date: null, updated_at: '2026-11-02 10:00:00', archived: false },
-      77: { id: 77, ref: 'WRK-9', title: 'an archived card', project_id: 1, column_key: 'done', flagged: 0, due_date: null, updated_at: '2026-10-15 10:00:00', archived: true },
+      10: { id: 10, ref: 'WRK-1', title: 'Buy milk', project_id: 1, column_key: 'todo', flagged: 1, due_date: null, updated_at: '2026-11-01 10:00:00', archived: false, created_at: '2026-11-01 09:00:00', position: 1000 },
+      11: { id: 11, ref: 'WRK-2', title: 'Fix the sink', project_id: 1, column_key: 'doing', flagged: 0, due_date: null, updated_at: '2026-10-20 10:00:00', archived: false, created_at: '2026-10-16 09:00:00', position: 1000 },
+      12: { id: 12, ref: 'WRK-3', title: 'Sort donations', project_id: 1, column_key: 'waiting', flagged: 0, due_date: null, updated_at: '2026-10-30 10:00:00', archived: false, created_at: '2026-10-27 09:00:00', position: 1000 },
+      13: { id: 13, ref: 'WRK-4', title: 'Written by an agent', project_id: 1, column_key: 'review', flagged: 0, due_date: null, updated_at: '2026-11-02 10:00:00', archived: false, created_at: '2026-07-20 09:00:00', position: 1000 },
+      14: { id: 14, ref: 'WRK-5', title: 'Paint the fence', project_id: 1, column_key: 'done', flagged: 0, due_date: null, updated_at: '2026-10-25 10:00:00', archived: false, created_at: '2026-10-01 09:00:00', position: 1000 },
+      77: { id: 77, ref: 'WRK-9', title: 'an archived card', project_id: 1, column_key: 'done', flagged: 0, due_date: null, updated_at: '2026-10-15 10:00:00', archived: true, created_at: '2026-08-20 09:00:00', position: 2000 },
     },
   },
 };
@@ -1623,20 +1630,50 @@ await step('on a phone, the column tabs pick the one column shown', async () => 
   if (shown().join() !== 'waiting') throw new Error(`Waiting tab showed ${shown()}`);
 });
 
-await step('the Dashboard view shows its three blocks', async () => {
+/** The server's ping that something changed, as the live stream sends it. */
+const liveChange = async () => {
+  const stream = streams.find((x) => !x.closed);
+  await act(async () => { stream.emit('change', { revision: 3, source: 'PATCH /cards' }); });
+  await settle();
+};
+
+await step('the Dashboard has a Control half and an Insight half', async () => {
   const tab = q('.view-switch button').find((b) => b.textContent === 'Dashboard');
   if (!tab) throw new Error('no Dashboard tab');
   await click(tab);
   await settle();
-  const heads = q('.dash h2').map((h) => h.textContent);
-  if (heads.join() !== 'Stuck now,Getting done,Agents') throw new Error(`blocks: ${heads}`);
+  // Control comes first, so it is on the left, and on top once the halves stack.
+  const halves = q('.dash-main > section').map((h) => `${h.getAttribute('aria-label')}:${h.querySelector('h2')?.textContent}`);
+  if (halves.join() !== 'Control:Control,Insight:Insight') throw new Error(`halves: ${halves}`);
+  const panels = q('.dash-insight h3').map((h) => h.textContent);
+  const want = 'Board now,Projects,Added and finished per week,Age of open work,Agents,Median days in each column';
+  if (panels.join() !== want) throw new Error(`insight panels: ${panels}`);
   const waiting = q('.tile').find((t) => t.textContent.includes('Waiting'));
   if (waiting?.querySelector('b').textContent !== '2') throw new Error('Waiting tile should count 2');
 });
 
+await step('the big numbers: open, in progress, done with its share, and added in the last 4 weeks', async () => {
+  const tiles = () => Object.fromEntries(q('.big-numbers .tile').map((t) => [t.querySelector('span').textContent, t]));
+  const read = (t) => [t.querySelector('b').textContent, t.querySelector('small')?.textContent].filter(Boolean).join(' ');
+  const shown = Object.entries(tiles()).map(([label, t]) => `${label}=${read(t)}`).join(' | ');
+  // Done is 2 against 4 open; Overdue is 0, so it is left out; Gone quiet is 1, so it shows.
+  const want = 'Open=4 | In progress=3 | Done=2 33% of all work | Added, last 4 weeks=2 | Waiting=2 | Flagged=1 | Gone quiet=1';
+  if (shown !== want) throw new Error(`big numbers: ${shown}`);
+  // Each of the last 4 weeks counts, a card once however many weeks name it; the week before does not.
+  const kept = state.insights.weeks;
+  state.insights.weeks = kept.map((w, i) => ({ ...w, added: { 7: [13], 8: [11, 10] }[i] ?? w.added }));
+  await liveChange();
+  const added = read(tiles()['Added, last 4 weeks']);
+  state.insights.weeks = kept;
+  await liveChange();
+  if (added !== '3') throw new Error(`Added, last 4 weeks reads ${added}, expected 3 (WRK-1, WRK-2, WRK-3)`);
+  await click(tiles()['Added, last 4 weeks']);
+  if (document.querySelector('.drill h3')?.textContent !== 'Added, last 4 weeks · 2') throw new Error('its list did not open');
+});
+
 await step('each chart is a labelled group for a screen reader', () => {
   const charts = q('.dash svg[aria-label]');
-  if (charts.length !== 4) throw new Error(`labelled charts: ${charts.length}`);
+  if (charts.length !== 6) throw new Error(`labelled charts: ${charts.length}`);
   const bare = charts.filter((svg) => svg.getAttribute('role') !== 'group').map((svg) => svg.getAttribute('aria-label'));
   if (bare.length) throw new Error(`no role="group" on: ${bare.join(', ')}`);
 });
@@ -1655,29 +1692,47 @@ await step('tile labels line up at the start when they wrap', () => {
   if (rule.style.textAlign !== 'start') throw new Error(`.tile text-align: "${rule.style.textAlign}"`);
 });
 
-await step('project names fit their columns and are cut at the reading end', () => {
-  const labels = q('.dash svg[aria-label="Open work by project"] .chart-label');
+await step('project names read in their own direction and have room to fit', () => {
+  const labels = q('.dash svg[aria-label="Projects"] .chart-label');
   const byName = (name) => labels.find((l) => l.querySelector('title')?.textContent === name);
   const shown = (l) => l.childNodes[0].textContent;   // the text before its <title>
   const hebrew = byName('ניתוח מערכות מידע');
   const english = byName('House chores');
   if (!hebrew || !english) throw new Error('a project label is missing');
   if (hebrew.getAttribute('direction') !== 'rtl') throw new Error('a Hebrew name should read right to left');
-  if (!shown(hebrew).endsWith('…')) throw new Error(`a long Hebrew name should end in "…", got "${shown(hebrew)}"`);
+  if (shown(hebrew) !== 'ניתוח מערכות מידע') throw new Error(`a name that fits its wide slot was cut: "${shown(hebrew)}"`);
   if (english.getAttribute('direction')) throw new Error('an English name should keep the page direction');
   const xs = labels.map((l) => Number(l.getAttribute('x')));
   if (xs.some((x, i) => i > 0 && x - xs[i - 1] < 72)) throw new Error(`labels too close to fit their names: ${xs}`);
 });
 
-await step('the agent chart covers the same weeks as Getting done', () => {
+await step('each project shows its share done, or — when it has no cards', () => {
+  const shares = q('.dash svg[aria-label="Projects"] .chart-share').map((t) => t.textContent);
+  // House chores: 2 done (one of them archived from Done) of 6.
+  if (shares.join() !== '33% done,—') throw new Error(`shares: ${shares}`);
+});
+
+await step('the week charts leave out leading empty weeks, but always show 4', async () => {
   const labels = (name) => q(`.dash svg[aria-label="${name}"] .chart-label`).map((t) => t.textContent);
-  const done = labels('Finished and added per week');
-  const agents = labels('Agent against you per week');
-  if (done.length !== 12 || agents.join() !== done.join()) throw new Error(`agent weeks ${agents} against ${done}`);
+  const week = (start) => new Date(`${start}T00:00:00Z`)
+    .toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const from = (first) => WEEK_STARTS.slice(first).map(week).join();
+  // Something only in the last 3 weeks: 4 weeks show, in both charts.
+  const done = labels('Added and finished per week').join();
+  const agents = labels('Agent against you per week').join();
+  if (done !== from(8)) throw new Error(`added and finished weeks: ${done}`);
+  if (agents !== from(8)) throw new Error(`agent weeks: ${agents}`);
+  const kept = state.insights.weeks;
+  state.insights.weeks = kept.map((w, i) => (i === 2 ? { ...w, added: [13] } : w));
+  await liveChange();
+  const longer = labels('Added and finished per week').join();
+  state.insights.weeks = kept;
+  await liveChange();
+  if (longer !== from(2)) throw new Error(`with a card added in week 3, the weeks were: ${longer}`);
 });
 
 await step('the parts of a stacked column are drawn apart', () => {
-  const parts = q('.dash svg[aria-label="Open work by project"] rect');
+  const parts = q('.dash svg[aria-label="Projects"] rect');
   if (!parts.length) throw new Error('no stacked parts');
   const plain = parts.filter((r) => !r.classList.contains('stack-part') || !r.classList.contains('pick'));
   if (plain.length) throw new Error(`${plain.length} part(s) without both "pick" and "stack-part"`);
@@ -1726,6 +1781,55 @@ await step("a project's column part lists just those cards", async () => {
   if (document.querySelector('.drill h3')?.textContent !== 'Waiting · House chores · 1') throw new Error('wrong list');
 });
 
+await step("a project's done part lists its finished cards, archived ones too", async () => {
+  const part = q('.dash svg[aria-label="Projects"] .pick')
+    .find((p) => p.getAttribute('aria-label') === 'Done · House chores · 2 cards');
+  if (!part) throw new Error('no Done part for House chores');
+  if (part.style.fill !== 'var(--pipe-done)') throw new Error(`the Done part is ${part.style.fill}`);
+  await click(part);
+  if (document.querySelector('.drill h3')?.textContent !== 'Done · House chores · 2') throw new Error('wrong list');
+  const rows = q('.drill-row').map((r) => [r.querySelector('.card-no').textContent,
+    r.querySelector('.drill-col').textContent, r.disabled].join(':'));
+  if (rows.join() !== 'WRK-9:archived:true,WRK-5:Done:false') throw new Error(`rows: ${rows}`);
+});
+
+await step('Board now has a bar per column, and a bar lists its cards', async () => {
+  const svg = container.querySelector('.dash svg[aria-label="Board now"]');
+  if (!svg) throw new Error('no Board now chart');
+  const names = [...svg.querySelectorAll('.chart-label')].map((t) => t.textContent);
+  const counts = [...svg.querySelectorAll('.chart-num')].map((t) => t.textContent);
+  if (names.join() !== 'To do,Next,Doing,Waiting,Review,Done') throw new Error(`columns: ${names}`);
+  if (counts.join() !== '1,0,1,1,1,1') throw new Error(`counts: ${counts}`);
+  // Next is empty, so it has no bar.
+  const fills = [...svg.querySelectorAll('rect')].map((r) => r.style.fill);
+  const want = ['todo', 'doing', 'waiting', 'review', 'done'].map((c) => `var(--pipe-${c})`);
+  if (fills.join() !== want.join()) throw new Error(`bar colours: ${fills}`);
+  const bar = [...svg.querySelectorAll('.pick')].find((p) => p.getAttribute('aria-label') === 'Doing · 1 card');
+  if (!bar) throw new Error('no Doing bar');
+  await click(bar);
+  if (document.querySelector('.drill h3')?.textContent !== 'Doing · 1') throw new Error('the Doing list did not open');
+  if (q('.drill .card-no').map((n) => n.textContent).join() !== 'WRK-2') throw new Error('wrong cards in Doing');
+});
+
+await step('the age of open work: 5 bars from calm to warm, each listing its cards', async () => {
+  const svg = container.querySelector('.dash svg[aria-label="Age of open work"]');
+  if (!svg) throw new Error('no age chart');
+  const names = [...svg.querySelectorAll('.chart-label')].map((t) => t.textContent);
+  if (names.join() !== '< 1 wk,1–2 wk,2–4 wk,1–3 mo,3+ mo') throw new Error(`ranges: ${names}`);
+  // 1–3 months is empty, so it has no bar.
+  const fills = [...svg.querySelectorAll('rect')].map((r) => r.style.fill);
+  if (fills.join() !== 'var(--sky),var(--lime),var(--amber),var(--flag)') throw new Error(`bar colours: ${fills}`);
+  for (const [label, head, ref] of [['Open 1–2 weeks · 1 card', 'Open 1–2 weeks · 1', 'WRK-3'],
+    ['Open over 3 months · 1 card', 'Open over 3 months · 1', 'WRK-4']]) {
+    const bar = [...svg.querySelectorAll('.pick')].find((p) => p.getAttribute('aria-label') === label);
+    if (!bar) throw new Error(`no bar "${label}"`);
+    // eslint-disable-next-line no-await-in-loop
+    await click(bar);
+    if (document.querySelector('.drill h3')?.textContent !== head) throw new Error(`"${head}" did not open`);
+    if (q('.drill .card-no').map((n) => n.textContent).join() !== ref) throw new Error(`wrong cards under "${head}"`);
+  }
+});
+
 await step('estimated weeks are marked, and archived cards cannot be opened', async () => {
   const est = q('.dash rect[data-estimated]');
   if (est.length !== 1) throw new Error(`estimated bars: ${est.length}`);
@@ -1756,13 +1860,6 @@ await step('a median of 0 days still has a bar you can see and click', async () 
   await click(bar);
   if (document.querySelector('.drill h3')?.textContent !== 'Longest in Review · 1') throw new Error('its list did not open');
 });
-
-/** The server's ping that something changed, as the live stream sends it. */
-const liveChange = async () => {
-  const stream = streams.find((x) => !x.closed);
-  await act(async () => { stream.emit('change', { revision: 3, source: 'PATCH /cards' }); });
-  await settle();
-};
 
 await step('the week charts jump to the latest week only when there is something new to show', async () => {
   // jsdom has no layout, so count the writes to scrollLeft instead of reading where it ends up.
@@ -1823,8 +1920,50 @@ await step('with nothing in the last 12 weeks, the week charts say so', async ()
     'Collecting since 2026-11-05. Changes by agents and by you appear as cards move.']) {
     if (!notes.includes(want)) throw new Error(`missing "${want}", got: ${notes.join(' | ')}`);
   }
-  if (charts.includes('Finished and added per week') || charts.includes('Agent against you per week')) {
+  if (charts.includes('Added and finished per week') || charts.includes('Agent against you per week')) {
     throw new Error(`empty charts were still drawn: ${charts.join(', ')}`);
+  }
+});
+
+await step('agents and time in column: one slim line until either has something', async () => {
+  const kept = { agents: state.insights.agents, times: state.insights.time_in_column };
+  const noAgents = { ...kept.agents, weeks: kept.agents.weeks.map((w) => ({ ...w, agent: [], you: [] })) };
+  const noTimes = Object.fromEntries(Object.entries(kept.times)
+    .map(([col, t]) => [col, { ...t, median_days: null, moves: 0, longest: [], longest_days: [] }]));
+  const look = () => ({
+    line: container.querySelector('.dash-collecting')?.textContent,
+    panels: q('.dash-insight h3').map((h) => h.textContent)
+      .filter((h) => h === 'Agents' || h === 'Median days in each column').join(),
+    charts: q('.dash svg[aria-label]').map((svg) => svg.getAttribute('aria-label'))
+      .filter((l) => l === 'Agent against you per week' || l === 'Median days in each column').join(),
+  });
+  const both = { panels: 'Agents,Median days in each column' };
+  try {
+    state.insights.agents = noAgents;
+    state.insights.time_in_column = noTimes;
+    await liveChange();
+    const neither = look();
+    const want = 'Agents and time in column: collecting since 2026-11-05. They fill in as cards move; '
+      + 'an agent counts as an agent when it connects with an agent key.';
+    if (neither.line !== want) throw new Error(`the slim line reads: ${neither.line}`);
+    if (neither.panels || neither.charts) throw new Error(`with nothing collected, still drawn: ${neither.panels} ${neither.charts}`);
+    if (q('.tile').some((t) => t.textContent.includes('agents'))) throw new Error('the agent tiles still show');
+    // Medians alone bring both panels back; so do agent weeks alone.
+    for (const [name, agents, times, chart] of [['medians only', noAgents, kept.times, 'Median days in each column'],
+      ['agent weeks only', kept.agents, noTimes, 'Agent against you per week']]) {
+      state.insights.agents = agents;
+      state.insights.time_in_column = times;
+      // eslint-disable-next-line no-await-in-loop
+      await liveChange();
+      const now = look();
+      if (now.line !== undefined || now.panels !== both.panels || now.charts !== chart) {
+        throw new Error(`with ${name}: ${JSON.stringify(now)}`);
+      }
+    }
+  } finally {
+    state.insights.agents = kept.agents;
+    state.insights.time_in_column = kept.times;
+    await liveChange();
   }
 });
 
@@ -1867,6 +2006,58 @@ await step('closing the list gives focus back to what opened it', async () => {
   if (document.querySelector('.drill')) throw new Error('✕ did not close the list');
   if (document.activeElement !== tile) {
     throw new Error(`focus went to ${document.activeElement?.className || document.activeElement?.tagName}`);
+  }
+});
+
+await step('each chart is drawn to the width of its panel, and scrolls inside it when too narrow', async () => {
+  // jsdom has no layout and no ResizeObserver: stand one in, and tell the panels how wide they are.
+  const watchers = [];
+  class FakeResizeObserver {
+    constructor(cb) { this.cb = cb; this.els = []; watchers.push(this); }
+    observe(el) { this.els.push(el); }
+    disconnect() { this.els = []; }
+  }
+  const view = (name) => click(q('.view-switch button').find((b) => b.textContent === name));
+  const resize = async (width) => {
+    await act(async () => {
+      for (const w of watchers) if (w.els.length) w.cb(w.els.map((target) => ({ target, contentRect: { width } })));
+    });
+    await settle();
+  };
+  const widthOf = (name) => Number(container.querySelector(`.dash svg[aria-label="${name}"]`)?.getAttribute('width'));
+  const sized = (names) => names.map((n) => `${n}=${widthOf(n)}`).join(', ');
+  const bars = ['Board now', 'Projects', 'Age of open work'];
+  g.ResizeObserver = FakeResizeObserver;
+  dom.window.ResizeObserver = FakeResizeObserver;
+  try {
+    await view('Board');
+    await view('Dashboard');   // drawn again, now with an observer
+    const watched = watchers.flatMap((w) => w.els);
+    if (watched.length !== 6 || watched.some((el) => !el.parentElement.classList.contains('dash-block'))) {
+      throw new Error(`${watched.length} panels watched`);
+    }
+    for (const width of [900, 400]) {
+      // eslint-disable-next-line no-await-in-loop
+      await resize(width);
+      if (sized(bars) !== bars.map((n) => `${n}=${width}`).join(', ')) throw new Error(`at ${width}px: ${sized(bars)}`);
+      // The week charts give 32px to their y-axis numbers, which stay outside the part that scrolls.
+      const weeks = widthOf('Added and finished per week');
+      if (weeks !== width - 32) throw new Error(`at ${width}px the week chart is ${weeks}px wide`);
+    }
+    // 100px is too narrow for 6 columns of 48px or 2 projects of 72px: they keep that and scroll.
+    await resize(100);
+    if (sized(['Board now', 'Projects']) !== 'Board now=288, Projects=144') throw new Error(`at 100px: ${sized(bars)}`);
+    const scroller = container.querySelector('.dash svg[aria-label="Projects"]').parentElement;
+    if (!scroller.classList.contains('chart-scroll')) throw new Error('the projects chart has nothing to scroll in');
+    // In a narrow slot a long Hebrew name is cut, at its reading end.
+    const hebrew = q('.dash svg[aria-label="Projects"] .chart-label')
+      .find((l) => l.querySelector('title')?.textContent === 'ניתוח מערכות מידע');
+    if (!hebrew.childNodes[0].textContent.endsWith('…')) throw new Error(`not cut: "${hebrew.childNodes[0].textContent}"`);
+  } finally {
+    delete g.ResizeObserver;
+    delete dom.window.ResizeObserver;
+    await view('Board');
+    await view('Dashboard');
   }
 });
 
