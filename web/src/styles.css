@@ -1211,6 +1211,7 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 128px;
   padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px;
   background: var(--head-bg); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer;
+  text-align: start; /* a button centres its text; a wrapped label should line up with its number */
 }
 .tile b { font-size: 22px; color: var(--text); font-variant-numeric: tabular-nums; }
 .tile:not(:disabled):hover, .tile:focus-visible { border-color: var(--sky); }

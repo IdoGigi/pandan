@@ -1638,6 +1638,20 @@ await step('each chart is a labelled group for a screen reader', () => {
   if (bare.length) throw new Error(`no role="group" on: ${bare.join(', ')}`);
 });
 
+await step('legends stay in view when a chart scrolls sideways', () => {
+  const legends = q('.dash .chart-legend');
+  if (legends.length !== 3) throw new Error(`legends: ${legends.length}`);
+  const scrolled = legends.filter((l) => l.closest('.chart-scroll'));
+  if (scrolled.length) throw new Error(`${scrolled.length} legend(s) scroll with their chart`);
+});
+
+await step('tile labels line up at the start when they wrap', () => {
+  // jsdom computes "center" for every button whatever the stylesheet says, so read the .tile rule itself.
+  const rule = [...document.styleSheets].flatMap((s) => [...s.cssRules]).find((r) => r.selectorText === '.tile');
+  if (!rule) throw new Error('no .tile rule');
+  if (rule.style.textAlign !== 'start') throw new Error(`.tile text-align: "${rule.style.textAlign}"`);
+});
+
 await step('project names fit their columns and are cut at the reading end', () => {
   const labels = q('.dash svg[aria-label="Open work by project"] .chart-label');
   const byName = (name) => labels.find((l) => l.querySelector('title')?.textContent === name);

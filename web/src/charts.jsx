@@ -62,38 +62,40 @@ export function StackedColumns({ projects, columns, labels, onPick }) {
   const y = (n) => H - (n / max) * (H - TOP);
   const width = projects.length * SLOT;
   return (
-    <div className="chart-scroll">
-      <svg className="chart" role="group" width={width} height={H + 30} aria-label="Open work by project">
-        <line className="chart-axis" x1={0} x2={width} y1={H} y2={H} />
-        {projects.map((p, i) => {
-          const x = i * SLOT + (SLOT - BAR) / 2;
-          let below = 0;
-          return (
-            <g key={p.id}>
-              {columns.map((col) => {
-                const list = p.by_column[col];
-                if (!list.length) return null;
-                const top = y(below + list.length);
-                const height = y(below) - top;
-                below += list.length;
-                return (
-                  // A thin panel-coloured edge keeps neighbouring parts apart; the class goes after the spread.
-                  <rect key={col} x={x} y={top} width={BAR} height={height}
-                    style={{ fill: `var(--pipe-${col})` }} {...pickable(`${labels[col]} · ${p.name}`, list, onPick)}
-                    className="pick stack-part" />
-                );
-              })}
-              {totals[i] > 0 && <text className="chart-num" x={x + BAR / 2} y={y(totals[i]) - 4}>{totals[i]}</text>}
-              <text className="chart-label" x={x + BAR / 2} y={H + 16}
-                direction={RTL_FIRST.test(p.name) ? 'rtl' : undefined}>
-                {shortName(p.name)}<title>{p.name}</title>
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+    <>
+      <div className="chart-scroll">
+        <svg className="chart" role="group" width={width} height={H + 30} aria-label="Open work by project">
+          <line className="chart-axis" x1={0} x2={width} y1={H} y2={H} />
+          {projects.map((p, i) => {
+            const x = i * SLOT + (SLOT - BAR) / 2;
+            let below = 0;
+            return (
+              <g key={p.id}>
+                {columns.map((col) => {
+                  const list = p.by_column[col];
+                  if (!list.length) return null;
+                  const top = y(below + list.length);
+                  const height = y(below) - top;
+                  below += list.length;
+                  return (
+                    // A thin panel-coloured edge keeps neighbouring parts apart; the class goes after the spread.
+                    <rect key={col} x={x} y={top} width={BAR} height={height}
+                      style={{ fill: `var(--pipe-${col})` }} {...pickable(`${labels[col]} · ${p.name}`, list, onPick)}
+                      className="pick stack-part" />
+                  );
+                })}
+                {totals[i] > 0 && <text className="chart-num" x={x + BAR / 2} y={y(totals[i]) - 4}>{totals[i]}</text>}
+                <text className="chart-label" x={x + BAR / 2} y={H + 16}
+                  direction={RTL_FIRST.test(p.name) ? 'rtl' : undefined}>
+                  {shortName(p.name)}<title>{p.name}</title>
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
       <ColumnKey columns={columns} labels={labels} />
-    </div>
+    </>
   );
 }
 
@@ -119,26 +121,28 @@ export function WeekBars({ weeks, onPick }) {
   const mid = (i) => GAP + i * (BAR + GAP) + BAR / 2;
   const width = GAP + weeks.length * (BAR + GAP);
   return (
-    <div className="chart-scroll" ref={scroller}>
-      <svg className="chart" role="group" width={width} height={H + 30} aria-label="Finished and added per week">
-        <line className="chart-axis" x1={0} x2={width} y1={H} y2={H} />
-        {weeks.map((w, i) => (
-          <g key={w.start}>
-            {w.finished.length > 0 && (
-              <rect x={mid(i) - BAR / 2} y={y(w.finished.length)} width={BAR} height={H - y(w.finished.length)}
-                style={{ fill: 'var(--pipe-done)' }} data-estimated={w.estimated ? '' : undefined}
-                {...pickable(`Finished · week of ${weekLabel(w.start)}${w.estimated ? ' (estimated)' : ''}`, w.finished, onPick)} />
-            )}
-            <text className="chart-label" x={mid(i)} y={H + 16}>{weekLabel(w.start)}</text>
-          </g>
-        ))}
-        <polyline className="chart-line" points={weeks.map((w, i) => `${mid(i)},${y(w.added.length)}`).join(' ')} />
-        {weeks.map((w, i) => w.added.length > 0 && (
-          // The class goes after the spread, which would otherwise replace it with plain "pick".
-          <circle key={w.start} cx={mid(i)} cy={y(w.added.length)} r={5}
-            {...pickable(`Added · week of ${weekLabel(w.start)}`, w.added, onPick)} className="pick chart-dot" />
-        ))}
-      </svg>
+    <>
+      <div className="chart-scroll" ref={scroller}>
+        <svg className="chart" role="group" width={width} height={H + 30} aria-label="Finished and added per week">
+          <line className="chart-axis" x1={0} x2={width} y1={H} y2={H} />
+          {weeks.map((w, i) => (
+            <g key={w.start}>
+              {w.finished.length > 0 && (
+                <rect x={mid(i) - BAR / 2} y={y(w.finished.length)} width={BAR} height={H - y(w.finished.length)}
+                  style={{ fill: 'var(--pipe-done)' }} data-estimated={w.estimated ? '' : undefined}
+                  {...pickable(`Finished · week of ${weekLabel(w.start)}${w.estimated ? ' (estimated)' : ''}`, w.finished, onPick)} />
+              )}
+              <text className="chart-label" x={mid(i)} y={H + 16}>{weekLabel(w.start)}</text>
+            </g>
+          ))}
+          <polyline className="chart-line" points={weeks.map((w, i) => `${mid(i)},${y(w.added.length)}`).join(' ')} />
+          {weeks.map((w, i) => w.added.length > 0 && (
+            // The class goes after the spread, which would otherwise replace it with plain "pick".
+            <circle key={w.start} cx={mid(i)} cy={y(w.added.length)} r={5}
+              {...pickable(`Added · week of ${weekLabel(w.start)}`, w.added, onPick)} className="pick chart-dot" />
+          ))}
+        </svg>
+      </div>
       <div className="chart-legend">
         <span><i className="pipe-dot pipe-done" />finished</span>
         <span><i className="key-line" />added</span>
@@ -146,7 +150,7 @@ export function WeekBars({ weeks, onPick }) {
           <span className="est-note">Lighter bars are estimates: a card's last change stands in for when it was finished.</span>
         )}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -200,31 +204,33 @@ export function PairBars({ weeks, since, onPick }) {
   const half = BAR / 2 - 1;
   const width = GAP + weeks.length * (BAR + GAP);
   return (
-    <div className="chart-scroll" ref={scroller}>
-      <svg className="chart" role="group" width={width} height={H + 30} aria-label="Agent against you per week">
-        <line className="chart-axis" x1={0} x2={width} y1={H} y2={H} />
-        {weeks.map((w, i) => {
-          const x = GAP + i * (BAR + GAP);
-          const label = w.start ? weekLabel(w.start) : '';
-          return (
-            <g key={`${w.start}-${i}`}>
-              {w.agent.length > 0 && (
-                <rect x={x} y={y(w.agent.length)} width={half} height={H - y(w.agent.length)}
-                  style={{ fill: 'var(--sky)' }} {...pickable(`Agents · week of ${label}`, w.agent, onPick)} />
-              )}
-              {w.you.length > 0 && (
-                <rect x={x + half + 2} y={y(w.you.length)} width={half} height={H - y(w.you.length)}
-                  style={{ fill: 'var(--muted)' }} {...pickable(`You · week of ${label}`, w.you, onPick)} />
-              )}
-              <text className="chart-label" x={x + BAR / 2} y={H + 16}>{label}</text>
-            </g>
-          );
-        })}
-      </svg>
+    <>
+      <div className="chart-scroll" ref={scroller}>
+        <svg className="chart" role="group" width={width} height={H + 30} aria-label="Agent against you per week">
+          <line className="chart-axis" x1={0} x2={width} y1={H} y2={H} />
+          {weeks.map((w, i) => {
+            const x = GAP + i * (BAR + GAP);
+            const label = w.start ? weekLabel(w.start) : '';
+            return (
+              <g key={`${w.start}-${i}`}>
+                {w.agent.length > 0 && (
+                  <rect x={x} y={y(w.agent.length)} width={half} height={H - y(w.agent.length)}
+                    style={{ fill: 'var(--sky)' }} {...pickable(`Agents · week of ${label}`, w.agent, onPick)} />
+                )}
+                {w.you.length > 0 && (
+                  <rect x={x + half + 2} y={y(w.you.length)} width={half} height={H - y(w.you.length)}
+                    style={{ fill: 'var(--muted)' }} {...pickable(`You · week of ${label}`, w.you, onPick)} />
+                )}
+                <text className="chart-label" x={x + BAR / 2} y={H + 16}>{label}</text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
       <div className="chart-legend">
         <span><i className="pipe-dot" style={{ background: 'var(--sky)' }} />agents</span>
         <span><i className="pipe-dot" style={{ background: 'var(--muted)' }} />you</span>
       </div>
-    </div>
+    </>
   );
 }
