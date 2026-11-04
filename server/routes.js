@@ -574,18 +574,21 @@ api.patch('/cards/:id', (req, res) => {
     : movedList ? nextPosition('cards', 'project_id = ? AND column_key = ?', [projectId, column])
     : card.position;
 
-  inTransaction(() => db.prepare(
-    `UPDATE cards
-        SET project_id = ?, column_key = ?, title = ?, notes = ?, color = ?, flagged = ?,
-            position = ?, due_date = ?, number = ?, updated_at = ${NOW}
-      WHERE id = ?`
-  ).run(
-    projectId, column, title,
-    b.notes === undefined ? card.notes : clean(b.notes, 4000),
-    b.color === undefined ? card.color : clean(b.color, 20),
-    b.flagged === undefined ? card.flagged : (b.flagged ? 1 : 0),
-    position, due, numberIn(card, projectId), card.id
-  ));
+  inTransaction(() => {
+    db.prepare(
+      `UPDATE cards
+          SET project_id = ?, column_key = ?, title = ?, notes = ?, color = ?, flagged = ?,
+              position = ?, due_date = ?, number = ?, updated_at = ${NOW}
+        WHERE id = ?`
+    ).run(
+      projectId, column, title,
+      b.notes === undefined ? card.notes : clean(b.notes, 4000),
+      b.color === undefined ? card.color : clean(b.color, 20),
+      b.flagged === undefined ? card.flagged : (b.flagged ? 1 : 0),
+      position, due, numberIn(card, projectId), card.id
+    );
+    if (column !== card.column_key) logEvent(req, card.id, 'moved', card.column_key, column);
+  });
   stamp(req, card.id);
   res.json(cardById(card.id));
 });
@@ -620,10 +623,13 @@ api.post('/cards/:id/move', (req, res) => {
     : after === undefined ? before + 1000
     : (before + after) / 2;
 
-  inTransaction(() => db.prepare(
-    `UPDATE cards SET project_id = ?, column_key = ?, position = ?, number = ?, updated_at = ${NOW}
-      WHERE id = ?`
-  ).run(projectId, column, position, numberIn(card, projectId), card.id));
+  inTransaction(() => {
+    db.prepare(
+      `UPDATE cards SET project_id = ?, column_key = ?, position = ?, number = ?, updated_at = ${NOW}
+        WHERE id = ?`
+    ).run(projectId, column, position, numberIn(card, projectId), card.id);
+    if (column !== card.column_key) logEvent(req, card.id, 'moved', card.column_key, column);
+  });
   stamp(req, card.id);
   res.json(cardById(card.id));
 });
@@ -639,6 +645,7 @@ api.delete('/cards/:id', (req, res) => {
                WHERE id = ? AND archived_at IS NULL`)
     .run(card.id);
   if (!info?.changes) return res.status(404).json({ error: 'no live card with that id' });
+  logEvent(req, card.id, 'archived', card.column_key, null);
   stamp(req, card.id);
   res.json({ archived: true });
 });
@@ -650,6 +657,7 @@ api.post('/cards/:id/restore', (req, res) => {
                WHERE id = ? AND archived_at IS NOT NULL`)
     .run(card.id);
   if (!info?.changes) return res.status(404).json({ error: 'no archived card with that id' });
+  logEvent(req, card.id, 'restored', null, card.column_key);
   stamp(req, card.id);
   res.json(cardById(card.id));
 });
