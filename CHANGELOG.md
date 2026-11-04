@@ -4,6 +4,41 @@ Newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+### Dashboard
+
+A third view, **Board | Notes | Dashboard**, shows the open board in numbers:
+where work is stuck, how much gets done, and what the agents are doing. It
+updates live, like the board.
+
+- **Stuck now.** Tiles for Waiting, Flagged, Overdue and Gone quiet (no change
+  for 7 days or more in Doing, Waiting or Review), and each project's open
+  work as one upright stacked column.
+- **Getting done.** Cards finished per week as bars and added per week as a
+  line, over the last 12 weeks, and the median days a card spends in each
+  column.
+- **Agents.** Cards agents left in Review, cards they touched this week, and
+  agent against you per week as paired bars.
+- **Every number opens its cards.** Click a tile, a bar or a median to list
+  the cards behind it beside the charts, or in a sheet from the bottom on a
+  phone. The cards untouched longest come first; a "Longest in" list keeps
+  its slowest-first order and shows the days. A row opens the card editor;
+  archived cards are listed but can't be opened. ✕ or Esc closes the list.
+- **Move history.** Each card now keeps a record of when it was made, moved
+  to another column, archived and restored, and by whom. Reordering within a
+  column records nothing.
+- **Upgrading.** On first start every existing card gets history from the
+  dates it already has. Finish dates from before the upgrade are guesses, so
+  those weeks are drawn lighter and marked as estimates. The medians use real
+  moves only. The change is additive: an older version ignores the new table,
+  though moves made while rolled back are not recorded.
+- **Agent work through MCP is recorded as the agent's.** The MCP tools called
+  the API with the board password, so whatever an agent did through MCP was
+  recorded as yours. They now pass on the agent's own key, so the card and its
+  history name the agent. An agent that connects with your password still
+  counts as you.
+- **API.** `GET /api/insights?board_id=&tz=` returns every number as a list of
+  card ids. Details in API.md.
+
 ### Waiting column
 
 - **Waiting**, between Doing and Review under **In progress**, is for work that

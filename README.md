@@ -67,6 +67,31 @@ log, so the context lives next to the work.
 Rows fold away and every column scrolls on its own, so a project with fifty
 cards takes the same room as one with five.
 
+## The dashboard
+
+The third view in the top bar, **Board | Notes | Dashboard**, shows the open
+board in numbers and updates live, like the board. It has three blocks:
+
+- **Stuck now.** Cards in Waiting, flagged, overdue, or gone quiet (no change
+  for 7 days or more in Doing, Waiting or Review), and each project's open
+  work as one stacked column.
+- **Getting done.** Cards finished and added per week over the last 12 weeks,
+  and the median days a card spends in each column.
+- **Agents.** Cards agents left in Review, cards they touched this week, and
+  their work against yours, week by week.
+
+Click any number to list the cards behind it, and click a card in the list to
+open it.
+
+The numbers come from a move history that Pandan keeps from this version on.
+On the first start it fills in the past from the dates your cards already
+have. A finish date from before the upgrade is a guess, so those weeks are
+drawn lighter and marked as estimates. The medians use real moves only, so they
+start empty.
+
+An agent's work counts as an agent's only when it connects with its own
+[agent key](#connect-an-agent). An agent that uses your password counts as you.
+
 ## The note board
 
 Some things are not tasks: a phone number, a thought, a list for the shop.
