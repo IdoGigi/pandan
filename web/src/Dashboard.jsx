@@ -65,7 +65,7 @@ export function Dashboard({ boardId, tick, onOpenCard, onError }) {
             <Tile label="In Review from agents" ids={data.agents.review_from_agents} onPick={show} />
             <Tile label="Touched by agents this week" ids={data.agents.this_week} onPick={show} />
           </div>
-          <PairBars weeks={data.agents.weeks} onPick={show} />
+          <PairBars weeks={data.agents.weeks} since={data.history_since} onPick={show} />
         </section>
       </div>
 

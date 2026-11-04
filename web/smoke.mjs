@@ -55,7 +55,10 @@ const state = {
     board: { id: 1, name: 'Work', key: 'WRK' }, quiet_days: 7, history_since: '2026-11-05',
     stuck: { waiting: [12, 11], flagged: [10], overdue: [], quiet: [11] },
     projects: [{ id: 1, name: 'House chores', color: '#c3d117',
-      by_column: { todo: [10], next: [], doing: [], waiting: [12], review: [13] } }],
+      by_column: { todo: [10], next: [], doing: [], waiting: [12], review: [13] } },
+    // A Hebrew name, as on the School board: too long for its slot, and read right to left.
+    { id: 4, name: 'ניתוח מערכות מידע', color: '#9b8ec4',
+      by_column: { todo: [], next: [], doing: [], waiting: [], review: [] } }],
     weeks: Array.from({ length: 12 }, (_, i) => ({
       start: new Date(Date.UTC(2026, 7, 16 + 7 * i)).toISOString().slice(0, 10),
       added: i === 11 ? [10, 12] : [], finished: i === 9 ? [77] : [], estimated: i === 9 })),
@@ -1635,6 +1638,27 @@ await step('each chart is a labelled group for a screen reader', () => {
   if (bare.length) throw new Error(`no role="group" on: ${bare.join(', ')}`);
 });
 
+await step('project names fit their columns and are cut at the reading end', () => {
+  const labels = q('.dash svg[aria-label="Open work by project"] .chart-label');
+  const byName = (name) => labels.find((l) => l.querySelector('title')?.textContent === name);
+  const shown = (l) => l.childNodes[0].textContent;   // the text before its <title>
+  const hebrew = byName('ניתוח מערכות מידע');
+  const english = byName('House chores');
+  if (!hebrew || !english) throw new Error('a project label is missing');
+  if (hebrew.getAttribute('direction') !== 'rtl') throw new Error('a Hebrew name should read right to left');
+  if (!shown(hebrew).endsWith('…')) throw new Error(`a long Hebrew name should end in "…", got "${shown(hebrew)}"`);
+  if (english.getAttribute('direction')) throw new Error('an English name should keep the page direction');
+  const xs = labels.map((l) => Number(l.getAttribute('x')));
+  if (xs.some((x, i) => i > 0 && x - xs[i - 1] < 72)) throw new Error(`labels too close to fit their names: ${xs}`);
+});
+
+await step('the parts of a stacked column are drawn apart', () => {
+  const parts = q('.dash svg[aria-label="Open work by project"] rect');
+  if (!parts.length) throw new Error('no stacked parts');
+  const plain = parts.filter((r) => !r.classList.contains('stack-part') || !r.classList.contains('pick'));
+  if (plain.length) throw new Error(`${plain.length} part(s) without both "pick" and "stack-part"`);
+});
+
 await step('a tile lists its cards, untouched longest first', async () => {
   await click(q('.tile').find((t) => t.textContent.includes('Waiting')));
   const head = document.querySelector('.drill h3')?.textContent;
@@ -1739,7 +1763,7 @@ await step('with nothing in the last 12 weeks, the week charts say so', async ()
   Object.assign(state.insights, kept);
   await liveChange();
   for (const want of ['Nothing added or finished in the last 12 weeks.',
-    'No cards touched by agents or by you in the last 12 weeks.']) {
+    'Collecting since 2026-11-05. Changes by agents and by you appear as cards move.']) {
     if (!notes.includes(want)) throw new Error(`missing "${want}", got: ${notes.join(' | ')}`);
   }
   if (charts.includes('Finished and added per week') || charts.includes('Agent against you per week')) {
@@ -1774,6 +1798,18 @@ await step("a slow answer for another board never shows under this one", async (
   } finally {
     release();
     g.fetch = prev; dom.window.fetch = prev;
+  }
+});
+
+await step('closing the list gives focus back to what opened it', async () => {
+  const tile = q('.tile').find((t) => t.textContent.includes('Waiting'));
+  tile.focus();   // as a click or Tab would in a browser
+  await click(tile);
+  if (document.activeElement !== document.querySelector('.drill')) throw new Error('the list did not take focus');
+  await click(document.querySelector('.drill header button'));
+  if (document.querySelector('.drill')) throw new Error('✕ did not close the list');
+  if (document.activeElement !== tile) {
+    throw new Error(`focus went to ${document.activeElement?.className || document.activeElement?.tagName}`);
   }
 });
 

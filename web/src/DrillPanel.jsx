@@ -22,8 +22,17 @@ export function DrillPanel({ title, cards, notes, projects, onOpenCard, onClose 
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
-  // Keyboard and screen reader land on the new list; the page stays where it is.
-  useEffect(() => { box.current?.focus({ preventScroll: true }); }, [title]);
+  // Keyboard and screen reader land on the new list; the page stays where it is. What had focus
+  // before (the tile or bar that opened it) gets it back when the list closes.
+  const opener = useRef(null);
+  useEffect(() => {
+    const was = document.activeElement;
+    if (!box.current?.contains(was)) opener.current = was === document.body ? null : was;
+    box.current?.focus({ preventScroll: true });
+  }, [title]);
+  useEffect(() => () => {
+    if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
+  }, []);
 
   const colorOf = Object.fromEntries(projects.map((p) => [p.id, p.color]));
   // A list with notes ("Longest in Doing") is already in its own order; the rest go untouched-longest first.

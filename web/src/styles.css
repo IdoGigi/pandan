@@ -1219,6 +1219,8 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
 .chart-scroll { overflow-x: auto; }
 .chart { display: block; }
 .chart .pick { cursor: pointer; }
+/* A thin line between stacked parts, so a pale To do still stands apart from the panel and its neighbours. */
+.chart .stack-part { stroke: var(--panel); stroke-width: 1; }
 .chart .pick:hover, .chart .pick:focus-visible { outline: none; stroke: var(--text); stroke-width: 1.5; }
 .chart .pick[data-estimated] { opacity: 0.45; }
 .chart-axis { stroke: var(--line); }
@@ -1292,6 +1294,9 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
   /* The dashboard stacks; its card list rises from the bottom as a sheet. */
   .dash { flex-direction: column; padding: 12px; }
   .dash-main { width: 100%; }
+  /* Tiles two to a row, edge to edge; a long label wraps instead of widening its tile. */
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; }
+  .tile { min-width: 0; }
   .dash:has(.drill) { padding-bottom: 60vh; } /* the end of the page can still scroll out from under the sheet */
   .drill {
     position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 20;
