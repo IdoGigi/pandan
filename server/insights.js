@@ -87,19 +87,28 @@ const median = (xs) => {
   const m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
+/** Days to one decimal, as the dashboard shows them. */
+const tenths = (days) => Math.round(days * 10) / 10;
 
 /**
  * How long cards sat in each open column: from a real move (or creation) into
  * it to the next real move out, for moves out inside the window. A seeded
- * guess never starts or ends a stay, so estimates never become durations.
+ * guess never starts or ends a stay, so estimates never become durations. A
+ * stay goes on across an archive and restore, but the time put away is left out.
  */
 function timeInColumn(byCard, since) {
   const stays = Object.fromEntries(OPEN.map((col) => [col, []]));
   for (const [cardId, events] of byCard) {
     let col = null;
     let entered = null;
+    let archivedAt = null;
     for (const e of events) {
       if (e.estimated) { col = null; entered = null; continue; }
+      if (e.kind === 'archived') archivedAt = ms(e.at);
+      if (e.kind === 'restored') {
+        if (col && archivedAt !== null) entered += ms(e.at) - archivedAt;
+        archivedAt = null;
+      }
       if (e.kind === 'moved' && col && e.from_column === col && ms(e.at) >= since && stays[col]) {
         stays[col].push({ cardId, days: (ms(e.at) - entered) / DAY });
       }
@@ -111,10 +120,13 @@ function timeInColumn(byCard, since) {
   }
   return Object.fromEntries(OPEN.map((col) => {
     const list = stays[col].sort((a, b) => b.days - a.days);
+    // Each card once, at its longest stay — the first of its group, as the list is sorted.
+    const slowest = [...Map.groupBy(list, (s) => s.cardId).values()].slice(0, 10).map((g) => g[0]);
     return [col, {
-      median_days: list.length ? Math.round(median(list.map((s) => s.days)) * 10) / 10 : null,
+      median_days: list.length ? tenths(median(list.map((s) => s.days))) : null,
       moves: list.length,
-      longest: [...new Set(list.map((s) => s.cardId))].slice(0, 10),
+      longest: slowest.map((s) => s.cardId),
+      longest_days: slowest.map((s) => tenths(s.days)),
     }];
   }));
 }

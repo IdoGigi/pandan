@@ -213,7 +213,7 @@ api.get('/board', (req, res) => {
 
 /** The dashboard's numbers for one board. `tz` is the browser's getTimezoneOffset(). */
 api.get('/insights', (req, res) => {
-  const boardId = req.query.board_id === undefined ? defaultBoardId() : Number(req.query.board_id);
+  const boardId = req.query.board_id ? Number(req.query.board_id) : defaultBoardId();
   const tz = req.query.tz === undefined ? 0 : Number(req.query.tz);
   if (!Number.isInteger(tz) || Math.abs(tz) > 14 * 60) {
     return bad(res, 'tz must be whole minutes, as from getTimezoneOffset()');

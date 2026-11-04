@@ -83,7 +83,10 @@ test('another board stays out, a login is needed, and bad input is refused', asy
   assert.equal((await insights()).cards[stranger.id], undefined);
   assert.equal((await fetch(`${server.base}/api/insights?board_id=${boardId}`)).status, 401);
   assert.equal((await server.call('GET', `/insights?board_id=${boardId}&tz=abc`)).status, 400);
+  assert.equal((await server.call('GET', `/insights?board_id=${boardId}&tz=900`)).status, 400);
   assert.equal((await server.call('GET', '/insights?board_id=99999')).status, 404);
+  assert.equal((await server.call('GET', '/insights?board_id=')).body.board?.id, other.board_id,
+    'an empty board_id means the default board');
 });
 
 /** The Sunday that starts this UTC week, as a Date at 00:00 UTC. */
@@ -93,6 +96,10 @@ function thisSunday() {
   d.setUTCDate(d.getUTCDate() - d.getUTCDay());
   return d;
 }
+/** A day as YYYY-MM-DD, from epoch ms. */
+const iso = (t) => new Date(t).toISOString().slice(0, 10);
+/** The start of the week a card counts as finished in, if any. */
+const finishedIn = (data, id) => data.weeks.find((w) => w.finished.includes(id))?.start;
 
 test('weeks: 12 Sundays; added on creation; finished on the last move into Done', async () => {
   const shipped = await card('website', 'launch');
@@ -130,24 +137,41 @@ test('weeks follow the browser time zone', async () => {
   const saturdayNight = new Date(thisSunday().getTime() - 90 * 60000);
   sql(dbPath, `UPDATE card_events SET at = ? WHERE card_id = ? AND to_column = 'done'`,
       saturdayNight.toISOString().slice(0, 19).replace('T', ' '), late.id);
-  assert.ok((await insights(0)).weeks[10].finished.includes(late.id));
-  assert.ok((await insights(-120)).weeks[11].finished.includes(late.id));
+  // The week's start, not its index: from Saturday 22:00 UTC this week has
+  // already begun at UTC+2, so the indexes shift but the starts do not.
+  assert.equal(finishedIn(await insights(0), late.id), iso(thisSunday().getTime() - 7 * 86400000));
+  assert.equal(finishedIn(await insights(-120), late.id), iso(thisSunday().getTime()));
 });
+
+test('a card archived from Done still counts, and restoring it keeps its week', async () => {
+  const filed = await card('website', 'filed away');
+  await server.call('POST', `/cards/${filed.ref}/move`, { column_key: 'done' });
+  const threeWeeksAgo = new Date(thisSunday().getTime() - 20 * 86400000);
+  sql(dbPath, `UPDATE card_events SET at = ? WHERE card_id = ? AND to_column = 'done'`,
+      threeWeeksAgo.toISOString().slice(0, 19).replace('T', ' '), filed.id);
+  const finishWeek = iso(thisSunday().getTime() - 21 * 86400000);
+  await server.call('DELETE', `/cards/${filed.ref}`);
+  assert.equal(finishedIn(await insights(), filed.id), finishWeek, 'archived from Done still counts');
+  await server.call('POST', `/cards/${filed.ref}/restore`);
+  assert.equal(finishedIn(await insights(), filed.id), finishWeek, 'a restore is not a new finish');
+});
+
+/** Writes one back-dated history row, as the owner. */
+const addEvent = (id, kind, from, to, at, estimated = 0) => sql(dbPath,
+  `INSERT INTO card_events (card_id, kind, from_column, to_column, actor_kind, at, estimated)
+   VALUES (?, ?, ?, ?, 'owner', ?, ?)`, id, kind, from, to, at, estimated);
 
 test('median days per column use real moves only, and list the slowest cards', async () => {
   const slow = await card('hiring', 'slow');
   const quick = await card('hiring', 'quick');
   const guessed = await card('hiring', 'guessed');
   for (const c of [slow, quick, guessed]) sql(dbPath, 'DELETE FROM card_events WHERE card_id = ?', c.id);
-  const add = (id, kind, from, to, at, estimated = 0) => sql(dbPath,
-    `INSERT INTO card_events (card_id, kind, from_column, to_column, actor_kind, at, estimated)
-     VALUES (?, ?, ?, ?, 'owner', ?, ?)`, id, kind, from, to, at, estimated);
-  add(slow.id, 'moved', 'todo', 'doing', ago(10));
-  add(slow.id, 'moved', 'doing', 'review', ago(6));    // 4 days in doing
-  add(quick.id, 'moved', 'todo', 'doing', ago(5));
-  add(quick.id, 'moved', 'doing', 'review', ago(3));   // 2 days in doing
-  add(guessed.id, 'moved', 'todo', 'doing', ago(30), 1);
-  add(guessed.id, 'moved', 'doing', 'review', ago(1)); // starts from a guess: not measured
+  addEvent(slow.id, 'moved', 'todo', 'doing', ago(10));
+  addEvent(slow.id, 'moved', 'doing', 'review', ago(6));    // 4 days in doing
+  addEvent(quick.id, 'moved', 'todo', 'doing', ago(5));
+  addEvent(quick.id, 'moved', 'doing', 'review', ago(3));   // 2 days in doing
+  addEvent(guessed.id, 'moved', 'todo', 'doing', ago(30), 1);
+  addEvent(guessed.id, 'moved', 'doing', 'review', ago(1)); // starts from a guess: not measured
   // A seeded creation row: exact date, but no actor — it is not when collecting began.
   sql(dbPath, `INSERT INTO card_events (card_id, kind, at) VALUES (?, 'created', ?)`, guessed.id, ago(60));
 
@@ -155,10 +179,22 @@ test('median days per column use real moves only, and list the slowest cards', a
   assert.equal(t.doing.median_days, 3);
   assert.equal(t.doing.moves, 2);
   assert.deepEqual(t.doing.longest.slice(0, 2), [slow.id, quick.id]);
+  assert.deepEqual(t.doing.longest_days.slice(0, 2), [4, 2]);
   assert.deepEqual(Object.keys(t), ['todo', 'next', 'doing', 'waiting', 'review']);
   assert.equal(t.next.median_days, null);
   assert.match(history_since, /^\d{4}-\d{2}-\d{2}$/);
   assert.ok(history_since > daysAgoDate(60), 'seeded rows (no actor) do not count as collecting');
+});
+
+test('time spent archived is left out of a stay', async () => {
+  const paused = await card('hiring', 'paused');
+  sql(dbPath, 'DELETE FROM card_events WHERE card_id = ?', paused.id);
+  addEvent(paused.id, 'moved', 'todo', 'doing', ago(40));
+  addEvent(paused.id, 'archived', 'doing', null, ago(39.5)); // half a day in doing
+  addEvent(paused.id, 'restored', null, 'doing', ago(9.5));  // 30 days put away
+  addEvent(paused.id, 'moved', 'doing', 'review', ago(9));   // half a day more
+  const { doing } = (await insights()).time_in_column;
+  assert.equal(doing.longest_days[doing.longest.indexOf(paused.id)], 1);
 });
 
 test('agents: review left by agents, and agent against you per week', async () => {
