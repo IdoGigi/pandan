@@ -1234,9 +1234,11 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
   position: sticky; top: 0; flex: 0 0 340px; max-height: calc(100vh - 110px); overflow: auto;
   background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: var(--shadow);
 }
+/* The header, with its ✕, stays in view however long the list. */
 .drill header {
+  position: sticky; top: 0; z-index: 1;
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 10px 12px; border-bottom: 1px solid var(--line);
+  padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--panel);
 }
 .drill h3 { margin: 0; font-size: 13px; }
 .drill ul { list-style: none; margin: 0; padding: 4px 0; }
@@ -1290,6 +1292,7 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
   /* The dashboard stacks; its card list rises from the bottom as a sheet. */
   .dash { flex-direction: column; padding: 12px; }
   .dash-main { width: 100%; }
+  .dash:has(.drill) { padding-bottom: 60vh; } /* the end of the page can still scroll out from under the sheet */
   .drill {
     position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 20;
     max-height: 60vh; border-radius: 10px 10px 0 0;

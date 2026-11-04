@@ -1,12 +1,14 @@
 /**
  * Small hand-drawn charts for the dashboard — all upright, no library. Every
  * part a person can click is a button: it calls onPick(title, ids) with the
- * cards behind it, and says how many in its label for a screen reader.
+ * cards behind it, and says how many in its label for a screen reader. Each
+ * chart is a labelled group, so a screen reader names it too.
  */
 const H = 160;
 const TOP = 16;
 const BAR = 40;
 const GAP = 16;
+const MIN_BAR = 4; // the shortest bar drawn, so one that rounds to 0 can still be seen and clicked
 
 const plural = (n) => `${n} card${n === 1 ? '' : 's'}`;
 const shortName = (name, max = 9) => (name.length > max ? `${name.slice(0, max - 1)}…` : name);
@@ -46,7 +48,7 @@ export function StackedColumns({ projects, columns, labels, onPick }) {
   const width = GAP + projects.length * (BAR + GAP);
   return (
     <div className="chart-scroll">
-      <svg className="chart" width={width} height={H + 30} aria-label="Open work by project">
+      <svg className="chart" role="group" width={width} height={H + 30} aria-label="Open work by project">
         <line className="chart-axis" x1={0} x2={width} y1={H} y2={H} />
         {projects.map((p, i) => {
           const x = GAP + i * (BAR + GAP);
@@ -90,13 +92,16 @@ function ColumnKey({ columns, labels }) {
 
 /** Finished per week as bars, added per week as a line. Estimated weeks are lighter. */
 export function WeekBars({ weeks, onPick }) {
+  if (weeks.every((w) => !w.finished.length && !w.added.length)) {
+    return <p className="dash-empty">Nothing added or finished in the last {weeks.length} weeks.</p>;
+  }
   const max = Math.max(1, ...weeks.map((w) => Math.max(w.finished.length, w.added.length)));
   const y = (n) => H - (n / max) * (H - TOP);
   const mid = (i) => GAP + i * (BAR + GAP) + BAR / 2;
   const width = GAP + weeks.length * (BAR + GAP);
   return (
     <div className="chart-scroll">
-      <svg className="chart" width={width} height={H + 30} aria-label="Finished and added per week">
+      <svg className="chart" role="group" width={width} height={H + 30} aria-label="Finished and added per week">
         <line className="chart-axis" x1={0} x2={width} y1={H} y2={H} />
         {weeks.map((w, i) => (
           <g key={w.start}>
@@ -134,10 +139,12 @@ export function MedianColumns({ times, columns, labels, since, onPick }) {
   }
   const max = Math.max(0.1, ...known.map((col) => times[col].median_days));
   const y = (n) => H - (n / max) * (H - TOP);
+  // Under an hour or so rounds to 0d; that column still gets a bar.
+  const tall = (days) => Math.max(MIN_BAR, H - y(days));
   const width = GAP + columns.length * (BAR + GAP);
   return (
     <div className="chart-scroll">
-      <svg className="chart" width={width} height={H + 30} aria-label="Median days in each column">
+      <svg className="chart" role="group" width={width} height={H + 30} aria-label="Median days in each column">
         <line className="chart-axis" x1={0} x2={width} y1={H} y2={H} />
         {columns.map((col, i) => {
           const t = times[col];
@@ -146,11 +153,11 @@ export function MedianColumns({ times, columns, labels, since, onPick }) {
             <g key={col}>
               {t.median_days !== null && (
                 <>
-                  <rect x={x} y={y(t.median_days)} width={BAR} height={H - y(t.median_days)}
+                  <rect x={x} y={H - tall(t.median_days)} width={BAR} height={tall(t.median_days)}
                     style={{ fill: `var(--pipe-${col})` }}
                     {...pickable(`Longest in ${labels[col]}`, t.longest, onPick, Object.fromEntries(
                       t.longest.map((id, k) => [id, `${t.longest_days[k]}d in ${labels[col]}`])))} />
-                  <text className="chart-num" x={x + BAR / 2} y={y(t.median_days) - 4}>{t.median_days}d</text>
+                  <text className="chart-num" x={x + BAR / 2} y={H - tall(t.median_days) - 4}>{t.median_days}d</text>
                 </>
               )}
               <text className="chart-label" x={x + BAR / 2} y={H + 16}>{labels[col]}</text>
@@ -164,13 +171,16 @@ export function MedianColumns({ times, columns, labels, since, onPick }) {
 
 /** Cards an agent touched against cards you touched, side by side per week. */
 export function PairBars({ weeks, onPick }) {
+  if (weeks.every((w) => !w.agent.length && !w.you.length)) {
+    return <p className="dash-empty">No cards touched by agents or by you in the last {weeks.length} weeks.</p>;
+  }
   const max = Math.max(1, ...weeks.map((w) => Math.max(w.agent.length, w.you.length)));
   const y = (n) => H - (n / max) * (H - TOP);
   const half = BAR / 2 - 1;
   const width = GAP + weeks.length * (BAR + GAP);
   return (
     <div className="chart-scroll">
-      <svg className="chart" width={width} height={H + 30} aria-label="Agent against you per week">
+      <svg className="chart" role="group" width={width} height={H + 30} aria-label="Agent against you per week">
         <line className="chart-axis" x1={0} x2={width} y1={H} y2={H} />
         {weeks.map((w, i) => {
           const x = GAP + i * (BAR + GAP);

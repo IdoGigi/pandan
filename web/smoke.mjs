@@ -49,8 +49,8 @@ const state = {
       color: 'plain', flagged: 0, position: 1000, checks_total: 0, checks_done: 0,
       last_actor: 'Claude on laptop', last_actor_kind: 'agent' },
   ],
-  // What GET /insights says about board 1. The cards are the fake ones above (and the archived
-  // WRK-9); the lists are canned, so the steps can check order and counts.
+  // What GET /insights says (the fake answers for whichever board is asked). The cards are the
+  // fake ones above (and the archived WRK-9); the lists are canned, so the steps can check order and counts.
   insights: {
     board: { id: 1, name: 'Work', key: 'WRK' }, quiet_days: 7, history_since: '2026-11-05',
     stuck: { waiting: [12, 11], flagged: [10], overdue: [], quiet: [11] },
@@ -59,8 +59,11 @@ const state = {
     weeks: Array.from({ length: 12 }, (_, i) => ({
       start: new Date(Date.UTC(2026, 7, 16 + 7 * i)).toISOString().slice(0, 10),
       added: i === 11 ? [10, 12] : [], finished: i === 9 ? [77] : [], estimated: i === 9 })),
-    time_in_column: Object.fromEntries(['todo', 'next', 'doing', 'waiting', 'review']
-      .map((c) => [c, c === 'doing' ? { median_days: 2.5, moves: 3, longest: [12, 11], longest_days: [6.5, 1] } : { median_days: null, moves: 0, longest: [], longest_days: [] }])),
+    time_in_column: Object.fromEntries(['todo', 'next', 'doing', 'waiting', 'review'].map((c) => [c,
+      c === 'doing' ? { median_days: 2.5, moves: 3, longest: [12, 11], longest_days: [6.5, 1] }
+      // Under an hour rounds to 0 days; that bar must still show and click.
+      : c === 'review' ? { median_days: 0, moves: 1, longest: [13], longest_days: [0] }
+      : { median_days: null, moves: 0, longest: [], longest_days: [] }])),
     agents: { review_from_agents: [13], this_week: [13],
       weeks: Array.from({ length: 12 }, (_, i) => ({ start: '', agent: i === 11 ? [13] : [], you: i === 11 ? [10] : [] })) },
     cards: {
@@ -148,7 +151,12 @@ function fakeFetch(url, opts = {}) {
     return json({ deleted: true });
   }
   if (path.startsWith('/boards/')) return json({ id: 1, name: body.name || 'Work', key: body.key || 'WRK' });
-  if (path.startsWith('/insights')) return json(state.insights);
+  if (path.startsWith('/insights')) {
+    // A fresh copy for the board asked about, as the server would answer.
+    const id = Number((path.match(/board_id=(\d+)/) || [])[1]);
+    const copy = structuredClone(state.insights);
+    return json({ ...copy, board: { ...copy.board, id } });
+  }
   if (path.startsWith('/board')) {
     const id = Number((path.match(/board_id=(\d+)/) || [])[1] || 1);
     const board = state.boards.find((b) => b.id === id) || state.boards[0];
@@ -1620,12 +1628,28 @@ await step('the Dashboard view shows its three blocks', async () => {
   if (waiting?.querySelector('b').textContent !== '2') throw new Error('Waiting tile should count 2');
 });
 
+await step('each chart is a labelled group for a screen reader', () => {
+  const charts = q('.dash svg[aria-label]');
+  if (charts.length !== 4) throw new Error(`labelled charts: ${charts.length}`);
+  const bare = charts.filter((svg) => svg.getAttribute('role') !== 'group').map((svg) => svg.getAttribute('aria-label'));
+  if (bare.length) throw new Error(`no role="group" on: ${bare.join(', ')}`);
+});
+
 await step('a tile lists its cards, untouched longest first', async () => {
   await click(q('.tile').find((t) => t.textContent.includes('Waiting')));
   const head = document.querySelector('.drill h3')?.textContent;
   if (head !== 'Waiting · 2') throw new Error(`drill header: ${head}`);
   const refs = q('.drill .card-no').map((n) => n.textContent);
   if (refs.join() !== 'WRK-2,WRK-3') throw new Error(`order: ${refs}`);
+});
+
+await step('the open list takes focus, and its header stays in view', () => {
+  const drill = document.querySelector('.drill');
+  if (document.activeElement !== drill) {
+    throw new Error(`focus is on ${document.activeElement?.className || document.activeElement?.tagName}`);
+  }
+  const header = drill.querySelector('header');
+  if (dom.window.getComputedStyle(header).position !== 'sticky') throw new Error('the header scrolls away in a long list');
 });
 
 await step('a row opens the card editor, and Esc there closes only the editor', async () => {
@@ -1658,9 +1682,11 @@ await step('estimated weeks are marked, and archived cards cannot be opened', as
   const est = q('.dash rect[data-estimated]');
   if (est.length !== 1) throw new Error(`estimated bars: ${est.length}`);
   if (!document.querySelector('.est-note')) throw new Error('no estimate note');
+  document.querySelector('.drill')?.blur();
   await click(est[0]);
   const row = q('.drill-row')[0];
   if (!row?.disabled || !row.textContent.includes('archived')) throw new Error('archived row should be shown and disabled');
+  if (document.activeElement !== document.querySelector('.drill')) throw new Error('the list did not take focus for its new title');
 });
 
 await step('"Longest in" keeps the slowest first and says how long', async () => {
@@ -1671,6 +1697,83 @@ await step('"Longest in" keeps the slowest first and says how long', async () =>
   // The server says WRK-3 sat longest; sorting by last change would wrongly put WRK-2 (older change) first.
   if (JSON.stringify(rows) !== JSON.stringify([['WRK-3', '6.5d in Doing'], ['WRK-2', '1d in Doing']])) {
     throw new Error(`longest rows: ${JSON.stringify(rows)}`);
+  }
+});
+
+await step('a median of 0 days still has a bar you can see and click', async () => {
+  const bar = q('.dash .pick').find((p) => p.getAttribute('aria-label') === 'Longest in Review · 1 card');
+  if (!bar) throw new Error('no median bar for Review');
+  const height = Number(bar.getAttribute('height'));
+  if (!(height >= 4)) throw new Error(`the bar is ${height}px tall`);
+  await click(bar);
+  if (document.querySelector('.drill h3')?.textContent !== 'Longest in Review · 1') throw new Error('its list did not open');
+});
+
+/** The server's ping that something changed, as the live stream sends it. */
+const liveChange = async () => {
+  const stream = streams.find((x) => !x.closed);
+  await act(async () => { stream.emit('change', { revision: 3, source: 'PATCH /cards' }); });
+  await settle();
+};
+
+await step('a change from elsewhere re-reads the dashboard', async () => {
+  const count = () => q('.tile').find((t) => t.textContent.includes('Waiting'))?.querySelector('b').textContent;
+  if (count() !== '2') throw new Error(`Waiting starts at ${count()}`);
+  const kept = state.insights.stuck;
+  state.insights.stuck = { ...kept, waiting: [12] };
+  await liveChange();
+  const after = count();
+  state.insights.stuck = kept;
+  await liveChange();
+  if (after !== '1') throw new Error(`the Waiting tile reads ${after} after the change, expected 1`);
+  if (count() !== '2') throw new Error('the Waiting tile did not go back');
+});
+
+await step('with nothing in the last 12 weeks, the week charts say so', async () => {
+  const kept = { weeks: state.insights.weeks, agents: state.insights.agents };
+  state.insights.weeks = kept.weeks.map((w) => ({ ...w, added: [], finished: [], estimated: false }));
+  state.insights.agents = { ...kept.agents, weeks: kept.agents.weeks.map((w) => ({ ...w, agent: [], you: [] })) };
+  await liveChange();
+  const notes = q('.dash .dash-empty').map((p) => p.textContent);
+  const charts = q('.dash svg[aria-label]').map((svg) => svg.getAttribute('aria-label'));
+  Object.assign(state.insights, kept);
+  await liveChange();
+  for (const want of ['Nothing added or finished in the last 12 weeks.',
+    'No cards touched by agents or by you in the last 12 weeks.']) {
+    if (!notes.includes(want)) throw new Error(`missing "${want}", got: ${notes.join(' | ')}`);
+  }
+  if (charts.includes('Finished and added per week') || charts.includes('Agent against you per week')) {
+    throw new Error(`empty charts were still drawn: ${charts.join(', ')}`);
+  }
+});
+
+await step("a slow answer for another board never shows under this one", async () => {
+  let release = () => {};
+  const held = new Promise((r) => { release = r; });
+  const prev = g.fetch;
+  // Personal's numbers are held back until the test lets them through.
+  const slow = (url, opts = {}) => (/\/insights\?board_id=2&/.test(String(url))
+    ? held.then(() => prev(url, opts)) : prev(url, opts));
+  g.fetch = slow; dom.window.fetch = slow;
+  const select = container.querySelector('.board-select');
+  const pickBoard = async (id) => {
+    await act(async () => {
+      select.value = String(id);
+      select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    });
+    await settle();
+  };
+  try {
+    await pickBoard(2);
+    if (container.querySelector('.dash')) throw new Error("Work's numbers showed under Personal");
+    await pickBoard(1);
+    if (!container.querySelector('.dash')) throw new Error("Work's numbers did not come back");
+    await act(async () => { release(); });
+    await settle();
+    if (!container.querySelector('.dash')) throw new Error("Personal's late answer replaced Work's numbers");
+  } finally {
+    release();
+    g.fetch = prev; dom.window.fetch = prev;
   }
 });
 

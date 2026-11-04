@@ -16,14 +16,21 @@ export function Dashboard({ boardId, tick, onOpenCard, onError }) {
   // { title, ids, notes? } — notes (id → text) keep the given order, e.g. "Longest in Doing".
   const [pick, setPick] = useState(null);
 
-  const load = useCallback(() => {
-    if (!boardId) return;
-    api.insights(boardId).then(setData).catch((e) => onError(e.message));
-  }, [boardId, onError]);
-  useEffect(() => { load(); }, [load, tick]);
+  const close = useCallback(() => setPick(null), []);
+
+  // A late answer, for a board you have left or from before the latest change, is dropped.
+  useEffect(() => {
+    if (!boardId) return undefined;
+    let alive = true;
+    api.insights(boardId)
+      .then((d) => alive && setData(d))
+      .catch((e) => alive && onError(e.message));
+    return () => { alive = false; };
+  }, [boardId, tick, onError]);
   useEffect(() => { setPick(null); }, [boardId]);
 
-  if (!data) return <div className="center-note">Loading…</div>;
+  // Never one board's numbers under another's name while the new ones load.
+  if (!data || data.board.id !== boardId) return <div className="center-note">Loading…</div>;
   const show = (title, ids, notes) => setPick({ title, ids, notes });
 
   return (
@@ -69,7 +76,7 @@ export function Dashboard({ boardId, tick, onOpenCard, onError }) {
           notes={pick.notes}
           projects={data.projects}
           onOpenCard={onOpenCard}
-          onClose={() => setPick(null)}
+          onClose={close}
         />
       )}
     </div>
