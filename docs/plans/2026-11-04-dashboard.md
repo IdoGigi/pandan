@@ -625,6 +625,8 @@ test('median days per column use real moves only, and list the slowest cards', a
   add(quick.id, 'moved', 'doing', 'review', ago(3));   // 2 days in doing
   add(guessed.id, 'moved', 'todo', 'doing', ago(30), 1);
   add(guessed.id, 'moved', 'doing', 'review', ago(1)); // starts from a guess: not measured
+  // A seeded creation row: exact date, but no actor — it is not when collecting began.
+  sql(dbPath, `INSERT INTO card_events (card_id, kind, at) VALUES (?, 'created', ?)`, guessed.id, ago(60));
 
   const { time_in_column: t, history_since } = await insights();
   assert.equal(t.doing.median_days, 3);
@@ -633,6 +635,7 @@ test('median days per column use real moves only, and list the slowest cards', a
   assert.deepEqual(Object.keys(t), ['todo', 'next', 'doing', 'waiting', 'review']);
   assert.equal(t.next.median_days, null);
   assert.match(history_since, /^\d{4}-\d{2}-\d{2}$/);
+  assert.ok(history_since > daysAgoDate(60), 'seeded rows (no actor) do not count as collecting');
 });
 ```
 
@@ -682,7 +685,8 @@ function timeInColumn(byCard, since) {
 In `buildInsights`: `time_in_column: timeInColumn(byCard, Date.parse(\`${starts[0]}T00:00:00Z\`) + tz * 60000),` and
 
 ```js
-  const firstReal = history.filter((e) => !e.estimated).map((e) => e.at).sort()[0];
+  // Live rows always carry an actor; seeded ones never do (see recordEvent).
+  const firstReal = history.filter((e) => !e.estimated && e.actor_kind).map((e) => e.at).sort()[0];
   // …
     history_since: firstReal ? localDate(ms(firstReal), tz) : null,
 ```
