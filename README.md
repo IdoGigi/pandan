@@ -259,6 +259,7 @@ server/
   auth.js     password check, signed cookie, bearer token
   db.js       schema and migrations
   routes.js   the JSON API
+  insights.js the dashboard numbers, from cards and their move history
   mcp.js      the MCP server
   events.js   live updates over Server-Sent Events
 web/src/      the React board
