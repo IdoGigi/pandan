@@ -15,6 +15,8 @@ const MIN_BAR = 4; // the shortest bar drawn, so one that rounds to 0 can still 
 const MAX_BAR = 64; // wider than this a bar reads as a block
 const FALLBACK_WIDTH = 560; // without a ResizeObserver (jsdom) a chart is drawn this wide
 const MIN_WEEKS = 4;
+// The pale column fills, nearly the panel in light mode; their bars get a fine edge (.pale).
+export const PALE = new Set(['todo', 'next']);
 // A name whose first letter is Hebrew or Arabic reads right to left, as dir="auto" decides elsewhere.
 export const RTL_FIRST = /^[^\p{L}]*[\u0590-\u08FF]/u;
 
@@ -130,7 +132,7 @@ export function pickable(title, ids, onPick, notes) {
 /**
  * Upright bars, one per item, spread across `width`: the value above each and
  * the name under it. An item is { key, name, value, text, color, title, ids,
- * notes? }; one with no cards behind it draws no bar, and a null text no number.
+ * notes?, pale? }; one with no cards behind it draws no bar, and a null text no number.
  */
 export function Bars({ label, items, width, minSlot, onPick }) {
   const { slot, full, bar } = fit(items.length, width, minSlot);
@@ -146,8 +148,10 @@ export function Bars({ label, items, width, minSlot, onPick }) {
           return (
             <g key={it.key}>
               {tall > 0 && (
+                // The class goes after the spread, which would otherwise replace it with plain "pick".
                 <rect x={mid - bar / 2} y={H - tall} width={bar} height={tall}
-                  style={{ fill: it.color }} {...pickable(it.title, it.ids, onPick, it.notes)} />
+                  style={{ fill: it.color }} {...pickable(it.title, it.ids, onPick, it.notes)}
+                  className={it.pale ? 'pick pale' : 'pick'} />
               )}
               {it.text !== null && <text className="chart-num" x={mid} y={H - tall - 5}>{it.text}</text>}
               <text className="chart-label" x={mid} y={H + 16}>{it.name}</text>

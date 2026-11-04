@@ -3,7 +3,7 @@
  * the width of their panel. The shared parts, and how a click lists the cards
  * behind a bar, are in chartKit.jsx.
  */
-import { Bars, ColumnKey, fit, H, hasMedian, percent, pickable, RTL_FIRST, shortName, TOP } from './chartKit.jsx';
+import { Bars, ColumnKey, fit, H, hasMedian, PALE, percent, pickable, RTL_FIRST, shortName, TOP } from './chartKit.jsx';
 
 const PROJECT_SLOT = 64; // the narrowest a project's column gets: its bar plus room for a short name
 const LETTER = 7; // about one letter of an 11px name, so a slot knows how many fit
@@ -34,7 +34,7 @@ export function Tile({ label, hint, sub, ids, onPick }) {
 export function BoardNow({ columns, order, labels, width, onPick }) {
   const items = order.map((col) => ({
     key: col, name: labels[col], value: columns[col].length, text: String(columns[col].length),
-    color: `var(--pipe-${col})`, title: labels[col], ids: columns[col],
+    color: `var(--pipe-${col})`, title: labels[col], ids: columns[col], pale: PALE.has(col),
   }));
   return <Bars label="Board now" items={items} width={width} minSlot={COLUMN_SLOT} onPick={onPick} />;
 }
@@ -59,7 +59,7 @@ export function MedianColumns({ times, columns, labels, since, width, onPick }) 
     const has = hasMedian(t);
     return {
       key: col, name: labels[col], value: t.median_days, text: has ? `${t.median_days}d` : null,
-      color: `var(--pipe-${col})`, title: `Longest in ${labels[col]}`, ids: has ? t.longest : [],
+      color: `var(--pipe-${col})`, title: `Longest in ${labels[col]}`, ids: has ? t.longest : [], pale: PALE.has(col),
       notes: Object.fromEntries(t.longest.map((id, k) => [id, `${t.longest_days[k]}d in ${labels[col]}`])),
     };
   });
@@ -101,7 +101,8 @@ export function ProjectColumns({ projects, columns, labels, width, onPick }) {
                   // A thin panel-coloured edge keeps neighbouring parts apart; the class goes after the spread.
                   <rect key={part.col} x={mid - bar / 2} y={H - part.to} width={bar} height={part.to - part.from}
                     style={{ fill: `var(--pipe-${part.col})` }}
-                    {...pickable(`${labels[part.col]} · ${p.name}`, part.ids, onPick)} className="pick stack-part" />
+                    {...pickable(`${labels[part.col]} · ${p.name}`, part.ids, onPick)}
+                    className={`pick stack-part${PALE.has(part.col) ? ' pale' : ''}`} />
                 ))}
                 {totals[i] > 0 && <text className="chart-num" x={mid} y={H - stacks[i].at(-1).to - 5}>{totals[i]}</text>}
                 <text className="chart-label" x={mid} y={H + 16} direction={RTL_FIRST.test(p.name) ? 'rtl' : undefined}>

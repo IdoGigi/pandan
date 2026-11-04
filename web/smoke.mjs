@@ -1642,7 +1642,9 @@ const liveChange = async () => {
 };
 
 /* ---- dashboard helpers ---- */
-const control = (name) => container.querySelector(`.dash-control section[aria-label="${name}"]`);
+/** A Control list by its heading, which names it (aria-labelledby). */
+const control = (name) => q('.dash-control section[aria-labelledby]')
+  .find((el) => document.getElementById(el.getAttribute('aria-labelledby'))?.childNodes[0]?.textContent === name);
 const refsIn = (el) => [...el.querySelectorAll('.card-row .card-no')].map((n) => n.textContent);
 const rowOf = (el, ref) => [...el.querySelectorAll('.card-row')].find((r) => r.querySelector('.card-no').textContent === ref);
 const within = (el, label) => [...el.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === label);
@@ -1868,8 +1870,8 @@ await step("a project's done part lists its finished cards, archived ones too", 
   if (part.style.fill !== 'var(--pipe-done)') throw new Error(`the Done part is ${part.style.fill}`);
   await click(part);
   if (document.querySelector('.drill h3')?.textContent !== 'Done · House chores · 2') throw new Error('wrong list');
-  const rows = q('.drill .row-open').map((r) => [r.querySelector('.card-no').textContent,
-    r.querySelector('.row-col').textContent, r.disabled].join(':'));
+  const rows = q('.drill .card-row').map((r) => [r.querySelector('.card-no').textContent,
+    r.querySelector('.row-col').textContent, r.querySelector('.row-open').disabled].join(':'));
   if (rows.join() !== 'WRK-9:archived:true,WRK-5:Done:false') throw new Error(`rows: ${rows}`);
 });
 
@@ -1916,8 +1918,10 @@ await step('estimated weeks are marked, and archived cards cannot be opened', as
   if (!document.querySelector('.est-note')) throw new Error('no estimate note');
   document.querySelector('.drill')?.blur();
   await click(est[0]);
-  const row = q('.drill .row-open')[0];
-  if (!row?.disabled || !row.textContent.includes('archived')) throw new Error('archived row should be shown and disabled');
+  const row = q('.drill .card-row')[0];
+  if (!row?.querySelector('.row-open').disabled || row.querySelector('.row-col').textContent !== 'archived') {
+    throw new Error('archived row should be shown and disabled');
+  }
   if (document.activeElement !== document.querySelector('.drill')) throw new Error('the list did not take focus for its new title');
 });
 
@@ -1925,7 +1929,7 @@ await step('"Longest in" keeps the slowest first and says how long', async () =>
   const bar = q('.dash .pick').find((p) => p.getAttribute('aria-label') === 'Longest in Doing · 2 cards');
   if (!bar) throw new Error('no median bar for Doing');
   await click(bar);
-  const rows = q('.drill .row-open').map((r) => [r.querySelector('.card-no').textContent, r.querySelector('.row-age').textContent]);
+  const rows = q('.drill .card-row').map((r) => [r.querySelector('.card-no').textContent, r.querySelector('.row-age').textContent]);
   // The server says WRK-3 sat longest; sorting by last change would wrongly put WRK-2 (older change) first.
   if (JSON.stringify(rows) !== JSON.stringify([['WRK-3', '6.5d in Doing'], ['WRK-2', '1d in Doing']])) {
     throw new Error(`longest rows: ${JSON.stringify(rows)}`);
@@ -2273,7 +2277,8 @@ await step('Control: each card sits in the first list that claims it, each list 
     stuck: { waiting: [], flagged: [], overdue: [], quiet: [] },
     columns: { ...columns, doing: [11, 16], review: [13, 17] },
     totals: { ...totals, open: [...totals.open, 16, 17] },
-    cards: { ...cards, 16: fakeCard(16, 'doing', { updated_at: '2026-10-05 10:00:00' }),
+    cards: { ...cards, 10: { ...cards[10], created_at: new Date().toISOString().slice(0, 19).replace('T', ' ') },
+      16: fakeCard(16, 'doing', { updated_at: '2026-10-05 10:00:00' }),
       17: fakeCard(17, 'review', { updated_at: '2026-09-01 10:00:00' }) },
   }, async () => {
     if (empty('Needs attention') !== 'Nothing flagged, waiting, overdue or quiet') throw new Error(`Needs attention: ${empty('Needs attention')}`);
@@ -2284,7 +2289,7 @@ await step('Control: each card sits in the first list that claims it, each list 
     const oldest = control('Oldest open');
     if (refsIn(oldest).join() !== 'WRK-3,WRK-1') throw new Error(`Oldest open: ${refsIn(oldest)}`);
     const ages = [...oldest.querySelectorAll('.row-age')].map((t) => t.textContent);
-    if (!ages.every((a) => /^\d+d old$/.test(a))) throw new Error(`Oldest open says: ${ages}`);
+    if (!/^\d+d old$/.test(ages[0]) || ages[1] !== 'today') throw new Error(`Oldest open says: ${ages}`);
   });
   await withInsights({ columns: { ...columns, doing: [], review: [] } }, async () => {
     if (empty('In progress') !== 'Nothing in progress') throw new Error(`In progress: ${empty('In progress')}`);
@@ -2306,6 +2311,7 @@ await step('Up next: the first 5 of Next in board order, and Start moves one to 
     // The two left over are open cards like any other, so the oldest open list shows them.
     if (refsIn(control('Oldest open')).join() !== 'WRK-20,WRK-26') throw new Error(`Oldest open: ${refsIn(control('Oldest open'))}`);
     if (q('.dash-control .row-start').some((b) => !upNext.contains(b))) throw new Error('Start shows outside Up next');
+    if (upNext.querySelector('.row-act.step')) throw new Error('→ shows beside Start, which already moves the card to Doing');
     let reads = 0;
     await withFetch((url, opts, real) => {
       if (String(url).includes('/insights')) reads += 1;
@@ -2365,7 +2371,14 @@ await step('⋯ moves a card to any column; Esc closes the menu but not the card
   await click(bigNumber('Open'));
   const drill = document.querySelector('.drill');
   const more = within(drill, 'Move WRK-1 to another column');
-  await click(more);
+  const realFocus = dom.window.HTMLElement.prototype.focus;
+  const whileHidden = [];
+  dom.window.HTMLElement.prototype.focus = function focus(...args) {
+    if (this.closest('.row-menu')?.style.visibility === 'hidden') whileHidden.push(this.textContent);
+    return realFocus.apply(this, args);
+  };
+  try { await click(more); } finally { dom.window.HTMLElement.prototype.focus = realFocus; }
+  if (whileHidden.length) throw new Error(`focused while the menu was still hidden: ${whileHidden}`);
   const menu = document.querySelector('.row-menu');
   if (!menu || more.getAttribute('aria-expanded') !== 'true') throw new Error('the menu did not open');
   const items = [...menu.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent).join();
@@ -2384,6 +2397,7 @@ await step('⋯ moves a card to any column; Esc closes the menu but not the card
   await click(within(document.querySelector('.row-menu'), 'Move WRK-1 to Review'));
   expectSent('POST', '/cards/10/move', { column_key: 'review' });
   if (document.querySelector('.row-menu')) throw new Error('the menu stayed open after a pick');
+  if (document.activeElement !== more) throw new Error('a pick did not hand focus back to ⋯');
   // With the menu gone, Esc is the card list's again.
   await pressEsc();
   if (document.querySelector('.drill')) throw new Error('Esc no longer closes the card list');
@@ -2394,12 +2408,21 @@ await step('a quick action waits for its answer, and a refusal is shown', async 
   let release = () => {};
   const held = new Promise((r) => { release = r; });
   await withFetch((url, opts, real) => (/\/cards\/10\/move$/.test(String(url)) ? held.then(() => real(url, opts)) : real(url, opts)), async () => {
-    await click(within(row(), 'Move WRK-1 to Done'));
-    const busy = [...row().querySelectorAll('.row-actions button')].filter((b) => !b.disabled);
-    if (busy.length) throw new Error(`${busy.length} button(s) still on while the move runs`);
+    const done = within(row(), 'Move WRK-1 to Done');
+    done.focus();
+    await click(done);
+    const before = sent.length;
+    const buttons = [...row().querySelectorAll('.row-actions button')];
+    // aria-disabled, not disabled: a disabled button drops the keyboard focus to the page.
+    const on = buttons.filter((b) => b.getAttribute('aria-disabled') !== 'true').map((b) => b.getAttribute('aria-label'));
+    if (on.length) throw new Error(`still on while the move runs: ${on}`);
+    if (buttons.some((b) => b.disabled)) throw new Error('a busy button is disabled, which drops the focus');
+    await click(within(row(), 'Move WRK-1 to Waiting'));
+    await click(within(row(), 'Move WRK-1 to another column'));
+    if (sent.length !== before || document.querySelector('.row-menu')) throw new Error('a press while busy still did something');
     await act(async () => { release(); });
     await settle();
-    if (within(row(), 'Move WRK-1 to Done').disabled) throw new Error('the buttons stayed off after the answer');
+    if (within(row(), 'Move WRK-1 to Done').getAttribute('aria-disabled')) throw new Error('the buttons stayed off after the answer');
   }).finally(release);
   const refuse = (url, opts, real) => (/\/cards\/10\/move$/.test(String(url))
     ? Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ error: 'card not found' }) })
@@ -2417,11 +2440,18 @@ await step('a quick action waits for its answer, and a refusal is shown', async 
     await act(async () => { setNativeValue(field, 'One card'); });
     await act(async () => { form.requestSubmit(); });
     const before = sent.length;
+    // The next title, typed and entered while the first is on its way, waits in the field.
+    await act(async () => { setNativeValue(field, 'Two cards'); });
     await act(async () => { form.requestSubmit(); });
     if (!form.querySelector('button[type="submit"]').disabled) throw new Error('Add is on while adding');
+    // Meanwhile the person moved on to something else on the page.
+    const elsewhere = bigNumber('Open');
+    elsewhere.focus();
     await act(async () => { letGo(); });
     await settle();
     if (sent.length !== before + 1) throw new Error(`${sent.length - before} card(s) sent for one Enter while busy`);
+    if (field.value !== 'Two cards') throw new Error(`the title typed meanwhile now reads "${field.value}"`);
+    if (document.activeElement !== elsewhere) throw new Error('the add pulled focus back from elsewhere');
   }).finally(letGo);
 });
 
@@ -2437,10 +2467,55 @@ await step('a list longer than 8 shows 8, and "All N" opens the whole list', asy
     if (rows !== 8) throw new Error(`${rows} rows shown`);
     const all = [...list.querySelectorAll('button')].find((b) => b.textContent === 'All 11');
     if (!all) throw new Error('no "All 11"');
+    if (all.getAttribute('aria-label') !== 'All 11 in In progress') throw new Error(`"All 11" is labelled ${all.getAttribute('aria-label')}`);
     await click(all);
     if (document.querySelector('.drill h3')?.textContent !== 'In progress · 11') throw new Error('the whole list did not open');
   });
   await pressEsc();
+});
+
+await step('the ⋯ menu closes on a scroll, a resize, or Tab out of it', async () => {
+  await click(bigNumber('Open'));
+  const drill = document.querySelector('.drill');
+  const more = within(drill, 'Move WRK-1 to another column');
+  const opened = async () => { await click(more); if (!document.querySelector('.row-menu')) throw new Error('the menu did not open'); };
+  await opened();
+  await act(async () => { drill.dispatchEvent(new dom.window.Event('scroll')); });
+  if (document.querySelector('.row-menu')) throw new Error('a scroll left the menu open, now adrift from its row');
+  await opened();
+  await act(async () => { dom.window.dispatchEvent(new dom.window.Event('resize')); });
+  if (document.querySelector('.row-menu')) throw new Error('a resize left the menu open');
+  await opened();
+  await act(async () => { within(drill, 'Move WRK-2 to Done').focus(); });   // Tab on to the next row
+  if (document.querySelector('.row-menu')) throw new Error('Tab out of the menu left it open');
+  await pressEsc();
+});
+
+await step('a narrow row gives its title the first line; the rest goes under it', () => {
+  const rules = [...document.styleSheets].flatMap((sheet) => [...sheet.cssRules]);
+  const list = rules.find((r) => r.selectorText === '.card-list');
+  if (list?.style.getPropertyValue('container-type') !== 'inline-size') throw new Error('the lists are not measured for narrow rows');
+  const narrow = rules.find((r) => r.constructor.name === 'CSSContainerRule' && /max-width:\s*560px/.test(r.conditionText));
+  const inner = (sel) => [...(narrow?.cssRules ?? [])].find((r) => r.selectorText === sel)?.style;
+  if (inner('.row-open')?.getPropertyValue('flex-basis') !== '100%') throw new Error('a narrow row does not give the title its own line');
+  if (inner('.row-title')?.getPropertyValue('-webkit-line-clamp') !== '2') throw new Error('a narrow title is not let wrap to two lines');
+  // The open button holds just the number and title; tags, column and age sit beside it, to wrap under.
+  const row = q('.dash-control .card-row')[0];
+  const inButton = [...row.querySelector('.row-open').children].map((el) => el.className).join();
+  if (inButton !== 'card-no,row-title') throw new Error(`in the open button: ${inButton}`);
+  if (!row.querySelector(':scope > .row-meta .row-col')) throw new Error('the column is not beside the title');
+  // The title is sized to its text, so a Hebrew one sits by its number, not at the far end of the row.
+  const title = rules.find((r) => r.selectorText === '.row-title')?.style;
+  if (title?.getPropertyValue('flex-grow') !== '0') throw new Error(`.row-title grows: flex "${title?.getPropertyValue('flex')}"`);
+});
+
+await step('the pale columns have an edge, so To do and Next show on a white panel', () => {
+  const pale = (label) => q(`.dash svg[aria-label="${label}"] rect.pick`).filter((r) => r.classList.contains('pale'))
+    .map((r) => r.style.fill).join();
+  if (pale('Board now') !== 'var(--pipe-todo)') throw new Error(`Board now edged: ${pale('Board now')}`);   // Next is empty
+  if (pale('Projects') !== 'var(--pipe-todo)') throw new Error(`Projects edged: ${pale('Projects')}`);
+  const rule = [...document.styleSheets].flatMap((sheet) => [...sheet.cssRules]).find((r) => r.selectorText === '.chart .pale');
+  if (rule?.style.stroke !== 'var(--line-strong)') throw new Error('the edge has no stroke');
 });
 
 await step('the dashboard is remembered as the view', () => {

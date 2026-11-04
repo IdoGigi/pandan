@@ -1257,6 +1257,8 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
 .chart .pick { cursor: pointer; }
 /* A thin line between stacked parts, so a pale To do still stands apart from the panel and its neighbours. */
 .chart .stack-part { stroke: var(--panel); stroke-width: 1; }
+/* To do and Next are pale, nearly the panel in light mode: a fine edge keeps them in view. */
+.chart .pale { stroke: var(--line-strong); stroke-width: 1; }
 .chart .pick:hover, .chart .pick:focus-visible { outline: none; stroke: var(--text); stroke-width: 1.5; }
 .chart .pick[data-estimated] { opacity: 0.45; }
 .chart-axis { stroke: var(--line-strong); }
@@ -1270,6 +1272,7 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
 .chart-y-wrap > .chart { flex: 0 0 auto; }
 .chart-y-wrap > .chart-scroll { flex: 1 1 auto; min-width: 0; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.chart-legend .pipe-dot { box-shadow: inset 0 0 0 1px var(--line-strong); }
 .est-note { font-style: italic; }
 
 .drill {
@@ -1285,19 +1288,25 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
 .drill h3 { margin: 0; font-size: 13px; }
 
 /* A card in a list (Control or the card list): number and title open it, the buttons change it.
-   Where the row is too narrow for both, the buttons wrap under the title. */
-.card-list { list-style: none; margin: 0; padding: 4px 0; }
+   A wide row is one line. A narrow one (a phone, the card list, a half beside it) gives the
+   number and title the first line, the title wrapping to two, and puts the rest under them. */
+.card-list { list-style: none; margin: 0; padding: 4px 0; container-type: inline-size; }
 .dash-block .card-list { margin: 0 -10px; padding: 0; }
-.card-row { display: flex; flex-wrap: wrap; align-items: center; column-gap: 4px; padding-right: 6px; border-radius: 5px; }
-.card-row:hover { background: var(--head-bg); }
-.row-open {
-  flex: 1 1 260px; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 7px 4px 7px 10px;
-  border: 0; background: none; color: var(--text); font: inherit; font-size: 12.5px; text-align: start; cursor: pointer;
+.card-row {
+  display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px;
+  padding: 0 6px 0 10px; border-radius: 5px; font-size: 12.5px;
 }
-.drill .row-open { padding-left: 12px; }
+.drill .card-row { padding-left: 12px; }
+/* Never narrower than a readable title: the rest wraps to a line of its own first. */
+.row-open {
+  flex: 1 1 200px; min-width: 0; display: flex; align-items: baseline; gap: 8px; padding: 7px 0;
+  border: 0; background: none; color: var(--text); font: inherit; text-align: start; cursor: pointer;
+}
 .row-open:disabled { cursor: default; opacity: 0.6; }
-.row-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row-open .dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
+/* Sized to its own text, so a Hebrew title sits by its number, not at the far end of the row. */
+.row-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.row-meta .dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
 .row-col, .row-age { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .row-tag {
   flex: 0 0 auto; padding: 0 6px; border-radius: 9px; background: var(--hover);
@@ -1309,17 +1318,32 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
   display: inline-grid; place-items: center; width: 28px; height: 26px; padding: 0;
   border: 1px solid transparent; border-radius: 5px; background: none; color: var(--muted); font-size: 13px;
 }
-.row-act:hover:not(:disabled), .row-act:focus-visible { border-color: var(--line-strong); background: var(--panel); color: var(--text); }
-.row-act:disabled, .row-start:disabled { opacity: 0.4; cursor: default; }
+.row-act:focus-visible { border-color: var(--line-strong); background: var(--panel); color: var(--text); }
+/* Busy: aria-disabled, not disabled, so the button keeps keyboard focus while its request runs. */
+.row-act[aria-disabled='true'], .row-start[aria-disabled='true'] { opacity: 0.4; cursor: default; }
 .row-act.flagged { color: var(--flag); }
 .row-start { margin-right: 4px; white-space: nowrap; }
+/* Only a real pointer hovers; a tapped row on a phone must not stay tinted. */
+@media (hover: hover) {
+  .card-row:hover { background: var(--head-bg); }
+  .row-act:hover:not([aria-disabled='true']) { border-color: var(--line-strong); background: var(--panel); color: var(--text); }
+}
+@container (max-width: 560px) {
+  .card-row { padding-bottom: 6px; } /* on the row, so the second line's meta and buttons share a centre */
+  .row-open { flex-basis: 100%; padding-bottom: 2px; }
+  .row-title {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+    white-space: normal; overflow-wrap: anywhere;
+  }
+  .row-meta { flex: 1 1 auto; }
+}
 
 .dash-block h3 .list-count { margin-left: 6px; font-weight: 400; color: var(--muted); }
 .list-all { margin-top: 6px; }
 /* Quick add: project, column, title, Add, in one line that wraps on a phone. */
 .quick-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .quick-add .select { flex: 0 1 180px; width: auto; min-width: 0; }
-.quick-add .select[aria-label='Column'] { flex-basis: 96px; }
+.quick-add .quick-add-column { flex-basis: 96px; }
 .quick-add .input { flex: 1 1 220px; width: auto; min-width: 0; }
 
 /* ---------------- phone ----------------

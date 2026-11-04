@@ -1,4 +1,5 @@
-import { CardRow, daysSince } from './CardRow.jsx';
+import { useId } from 'react';
+import { ago, CardRow, daysSince } from './CardRow.jsx';
 import { QuickAdd } from './QuickAdd.jsx';
 
 const SHOWN = 8; // a longer list shows this many, and "All N" opens the rest in the card list
@@ -13,25 +14,26 @@ const IN_PROGRESS = ['doing', 'review'];
  * open. Up next and Oldest open claim only the five they show.
  */
 export function placeCards({ stuck, columns, totals, cards, projects }) {
-  const live = (ids, taken) => [...new Set(ids)].filter((id) => !taken.has(id))
+  // The live cards among `ids` that no earlier list has taken, each once.
+  const unclaimed = (ids, taken) => [...new Set(ids)].filter((id) => !taken.has(id))
     .map((id) => cards[id]).filter((c) => c && !c.archived);
 
-  const attention = live([...stuck.waiting, ...stuck.flagged, ...stuck.overdue, ...stuck.quiet], new Set())
+  const attention = unclaimed([...stuck.waiting, ...stuck.flagged, ...stuck.overdue, ...stuck.quiet], new Set())
     .sort(untouchedFirst);
   const taken = new Set(attention.map((c) => c.id));
 
-  const inProgress = live(IN_PROGRESS.flatMap((col) => columns[col]), taken)
+  const inProgress = unclaimed(IN_PROGRESS.flatMap((col) => columns[col]), taken)
     .sort((a, b) => IN_PROGRESS.indexOf(a.column_key) - IN_PROGRESS.indexOf(b.column_key) || untouchedFirst(a, b));
   const taken2 = new Set([...taken, ...inProgress.map((c) => c.id)]);
 
   // Board order: the projects as the board lists them, then each card's place in its column.
   const rank = new Map(projects.map((p, i) => [p.id, i]));
-  const upNext = live(columns.next, taken2)
+  const upNext = unclaimed(columns.next, taken2)
     .sort((a, b) => (rank.get(a.project_id) ?? Infinity) - (rank.get(b.project_id) ?? Infinity) || a.position - b.position)
     .slice(0, PICKS);
   const taken3 = new Set([...taken2, ...upNext.map((c) => c.id)]);
 
-  const oldest = live(totals.open, taken3)
+  const oldest = unclaimed(totals.open, taken3)
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
     .slice(0, PICKS);
 
@@ -50,9 +52,10 @@ function reasons(card, stuck) {
 
 /** A titled list of card rows; an empty one says so instead of hiding. */
 function CardList({ title, empty, rows, row, onPick }) {
+  const head = useId();
   return (
-    <section className="dash-block" aria-label={title}>
-      <h3>{title}{rows.length > 0 && <span className="list-count">{rows.length}</span>}</h3>
+    <section className="dash-block" aria-labelledby={head}>
+      <h3 id={head}>{title}{rows.length > 0 && <span className="list-count">{rows.length}</span>}</h3>
       {rows.length === 0 ? <p className="dash-empty">{empty}</p> : (
         <>
           <ul className="card-list">
@@ -62,7 +65,8 @@ function CardList({ title, empty, rows, row, onPick }) {
             ))}
           </ul>
           {rows.length > SHOWN && (
-            <button type="button" className="btn btn-xs list-all" onClick={() => onPick(title, rows.map((r) => r.card.id))}>
+            <button type="button" className="btn btn-xs list-all" aria-label={`All ${rows.length} in ${title}`}
+              onClick={() => onPick(title, rows.map((r) => r.card.id))}>
               All {rows.length}
             </button>
           )}
@@ -79,7 +83,6 @@ function CardList({ title, empty, rows, row, onPick }) {
 export function Control({ data, onPick, onOpenCard, onChanged, onError }) {
   const { attention, inProgress, upNext, oldest } = placeCards(data);
   const row = { colorOf: Object.fromEntries(data.projects.map((p) => [p.id, p.color])), onOpenCard, onChanged, onError };
-  const made = (c) => `${daysSince(c.created_at)}d old`;
   return (
     <section className="dash-half dash-control" aria-labelledby="dash-control-head">
       <h2 id="dash-control-head">Control</h2>
@@ -91,7 +94,7 @@ export function Control({ data, onPick, onOpenCard, onChanged, onError }) {
       <CardList title="Up next" empty="Next is empty" row={row} onPick={onPick}
         rows={upNext.map((card) => ({ card, start: true }))} />
       <CardList title="Oldest open" empty="Nothing else open" row={row} onPick={onPick}
-        rows={oldest.map((card) => ({ card, note: made(card) }))} />
+        rows={oldest.map((card) => ({ card, note: ago(card.created_at, true) }))} />
     </section>
   );
 }
