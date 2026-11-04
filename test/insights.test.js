@@ -26,6 +26,11 @@ async function card(project, title, extra = {}) {
   assert.equal(res.status, 201, JSON.stringify(res.body));
   return res.body;
 }
+/** Archives a card, so a test that counts on the archive fails at the cause if it did not happen. */
+async function archive(c) {
+  const res = await server.call('DELETE', `/cards/${c.ref}`);
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+}
 
 before(async () => {
   dir = tempDir();
@@ -160,6 +165,24 @@ test('a card archived from Done still counts, and restoring it keeps its week', 
   assert.equal(finishedIn(await insights(), filed.id), finishWeek, 'a restore is not a new finish');
 });
 
+test('a guessed finish of a card archived from Done counts in Done, but in no week', async () => {
+  const cleared = await card('website', 'cleared out', { column_key: 'done' });
+  await archive(cleared);
+  // History as seeding writes it for a card already archived from Done. Archiving
+  // stamped its last change, so the guessed finish falls on the archive day.
+  sql(dbPath, 'DELETE FROM card_events WHERE card_id = ?', cleared.id);
+  sql(dbPath, `INSERT INTO card_events (card_id, kind, at) VALUES (?, 'created', ?)`, cleared.id, ago(200));
+  sql(dbPath, `INSERT INTO card_events (card_id, kind, to_column, at, estimated) VALUES (?, 'moved', 'done', ?, 1)`,
+      cleared.id, ago(0));
+  sql(dbPath, `INSERT INTO card_events (card_id, kind, from_column, at) VALUES (?, 'archived', 'done', ?)`,
+      cleared.id, ago(0));
+
+  const data = await insights();
+  assert.ok(data.totals.done.includes(cleared.id));
+  assert.ok(data.projects.find((p) => p.name === 'website').by_column.done.includes(cleared.id));
+  assert.equal(finishedIn(data, cleared.id), undefined, 'its guessed finish is really the archive day');
+});
+
 /** Writes one back-dated history row, as the owner. */
 const addEvent = (id, kind, from, to, at, estimated = 0) => sql(dbPath,
   `INSERT INTO card_events (card_id, kind, from_column, to_column, actor_kind, at, estimated)
@@ -220,11 +243,6 @@ test('agents: review left by agents, and agent against you per week', async () =
 
 /** Ids in numeric order, to compare lists as sets. */
 const sorted = (list) => [...list].sort((a, b) => a - b);
-/** Archives a card, so a test that counts on the archive fails at the cause if it did not happen. */
-async function archive(c) {
-  const res = await server.call('DELETE', `/cards/${c.ref}`);
-  assert.equal(res.status, 200, JSON.stringify(res.body));
-}
 
 test('totals: open, in progress, and done with cards archived from Done', async () => {
   const todo = await card('website', 'totals todo');

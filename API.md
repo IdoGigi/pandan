@@ -257,7 +257,9 @@ The rules:
 - **Every number is a list of card ids.** Count the list for the number, and
   look each id up in `cards` to show the card. One call covers every number.
 - **Finished** is the week a card last moved into Done. A card moved back out
-  of Done no longer counts. A card archived from Done still does.
+  of Done no longer counts. A card archived from Done still counts if its finish
+  was recorded, not estimated: an estimate for an archived card is really the
+  day it was archived, so it counts in `totals` only.
 - **Done** in `totals` and `by_column` counts cards archived from Done, since
   they were finished, even when no week holds their finish. A card archived
   from any other column was dropped, so it counts nowhere. A restored card

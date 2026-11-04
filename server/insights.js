@@ -93,8 +93,10 @@ function ageOfOpen(open, now) {
 
 /**
  * Cards added and finished in each week. Each finished card counts in the week
- * it last moved into Done, so one moved back out stops counting. A week is
- * estimated when any of its finishes is.
+ * it last moved into Done, so one moved back out stops counting. An archived
+ * card counts only if that move was recorded: seeding guessed a finish from the
+ * card's last change, which for an archived card is the archive itself, so old
+ * finishes count in the totals only. A week is estimated when any of its finishes is.
  */
 function weekCounts({ starts, weekOf }, done, history, byCard) {
   const weeks = starts.map((start) => ({ start, added: [], finished: [], estimated: false }));
@@ -104,7 +106,8 @@ function weekCounts({ starts, weekOf }, done, history, byCard) {
   }
   for (const c of done) {
     const finish = lastInto(byCard.get(c.id) ?? [], 'done');
-    const w = finish && weekOf(finish.at);
+    if (!finish || (finish.estimated && c.archived_at)) continue;
+    const w = weekOf(finish.at);
     if (w === undefined) continue;
     weeks[w].finished.push(c.id);
     if (finish.estimated) weeks[w].estimated = true;
@@ -194,9 +197,9 @@ export function buildInsights(boardId, { tz = 0, now = Date.now() } = {}) {
   ).all(boardId);
   const live = cards.filter((c) => !c.archived_at);
   const open = live.filter((c) => c.column_key !== 'done');
-  // Finished work, for totals, projects and weeks: live Done cards, and ones archived
-  // from Done, which still count (archiving keeps the column). Cards archived from
-  // any other column were dropped, so count nowhere.
+  // Finished work: live Done cards, and ones archived from Done, which still count
+  // (archiving keeps the column); weekCounts says which of them count in a week.
+  // Cards archived from any other column were dropped, so count nowhere.
   const done = cards.filter((c) => c.column_key === 'done');
 
   // Each card's events in time order: lastInto and timeInColumn rely on it.
