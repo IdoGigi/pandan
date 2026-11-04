@@ -5,7 +5,7 @@
  */
 import { Bars, ColumnKey, fit, H, pickable, RTL_FIRST, scaleTo, shortName } from './chartKit.jsx';
 
-const PROJECT_SLOT = 72; // the narrowest a project's column gets: its bar plus room for the name
+const PROJECT_SLOT = 64; // the narrowest a project's column gets: its bar plus room for a short name
 const LETTER = 7; // about one letter of an 11px name, so a slot knows how many fit
 const COLUMN_SLOT = 48; // the narrowest a bar gets: room for "Waiting" under it, six to a phone
 

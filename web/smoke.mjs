@@ -89,10 +89,14 @@ const state = {
   },
 };
 
+/** Every write the fake API is sent, in order, so a step can check what a button sent. */
+const sent = [];
+
 function fakeFetch(url, opts = {}) {
   const path = String(url).replace('/api', '');
   const method = opts.method || 'GET';
   const body = opts.body ? JSON.parse(opts.body) : {};
+  if (method !== 'GET') sent.push({ method, path, body });
   const json = (data, status = 200) =>
     Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(data) });
 
@@ -1703,7 +1707,7 @@ await step('project names read in their own direction and have room to fit', () 
   if (shown(hebrew) !== 'ניתוח מערכות מידע') throw new Error(`a name that fits its wide slot was cut: "${shown(hebrew)}"`);
   if (english.getAttribute('direction')) throw new Error('an English name should keep the page direction');
   const xs = labels.map((l) => Number(l.getAttribute('x')));
-  if (xs.some((x, i) => i > 0 && x - xs[i - 1] < 72)) throw new Error(`labels too close to fit their names: ${xs}`);
+  if (xs.some((x, i) => i > 0 && x - xs[i - 1] < 64)) throw new Error(`labels too close to fit their names: ${xs}`);
 });
 
 await step('each project shows its share done, or — when it has no cards', () => {
@@ -1756,7 +1760,7 @@ await step('the open list takes focus, and its header stays in view', () => {
 });
 
 await step('a row opens the card editor, and Esc there closes only the editor', async () => {
-  await click(q('.drill-row')[0]);
+  await click(q('.drill .row-open')[0]);
   await settle();
   const editor = document.querySelector('.modal');
   if (!editor) throw new Error('card editor did not open');
@@ -1788,8 +1792,8 @@ await step("a project's done part lists its finished cards, archived ones too", 
   if (part.style.fill !== 'var(--pipe-done)') throw new Error(`the Done part is ${part.style.fill}`);
   await click(part);
   if (document.querySelector('.drill h3')?.textContent !== 'Done · House chores · 2') throw new Error('wrong list');
-  const rows = q('.drill-row').map((r) => [r.querySelector('.card-no').textContent,
-    r.querySelector('.drill-col').textContent, r.disabled].join(':'));
+  const rows = q('.drill .row-open').map((r) => [r.querySelector('.card-no').textContent,
+    r.querySelector('.row-col').textContent, r.disabled].join(':'));
   if (rows.join() !== 'WRK-9:archived:true,WRK-5:Done:false') throw new Error(`rows: ${rows}`);
 });
 
@@ -1836,7 +1840,7 @@ await step('estimated weeks are marked, and archived cards cannot be opened', as
   if (!document.querySelector('.est-note')) throw new Error('no estimate note');
   document.querySelector('.drill')?.blur();
   await click(est[0]);
-  const row = q('.drill-row')[0];
+  const row = q('.drill .row-open')[0];
   if (!row?.disabled || !row.textContent.includes('archived')) throw new Error('archived row should be shown and disabled');
   if (document.activeElement !== document.querySelector('.drill')) throw new Error('the list did not take focus for its new title');
 });
@@ -1845,7 +1849,7 @@ await step('"Longest in" keeps the slowest first and says how long', async () =>
   const bar = q('.dash .pick').find((p) => p.getAttribute('aria-label') === 'Longest in Doing · 2 cards');
   if (!bar) throw new Error('no median bar for Doing');
   await click(bar);
-  const rows = q('.drill-row').map((r) => [r.querySelector('.card-no').textContent, r.querySelector('.drill-age').textContent]);
+  const rows = q('.drill .row-open').map((r) => [r.querySelector('.card-no').textContent, r.querySelector('.row-age').textContent]);
   // The server says WRK-3 sat longest; sorting by last change would wrongly put WRK-2 (older change) first.
   if (JSON.stringify(rows) !== JSON.stringify([['WRK-3', '6.5d in Doing'], ['WRK-2', '1d in Doing']])) {
     throw new Error(`longest rows: ${JSON.stringify(rows)}`);
@@ -2044,9 +2048,9 @@ await step('each chart is drawn to the width of its panel, and scrolls inside it
       const weeks = widthOf('Added and finished per week');
       if (weeks !== width - 32) throw new Error(`at ${width}px the week chart is ${weeks}px wide`);
     }
-    // 100px is too narrow for 6 columns of 48px or 2 projects of 72px: they keep that and scroll.
+    // 100px is too narrow for 6 columns of 48px or 2 projects of 64px: they keep that and scroll.
     await resize(100);
-    if (sized(['Board now', 'Projects']) !== 'Board now=288, Projects=144') throw new Error(`at 100px: ${sized(bars)}`);
+    if (sized(['Board now', 'Projects']) !== 'Board now=288, Projects=128') throw new Error(`at 100px: ${sized(bars)}`);
     const scroller = container.querySelector('.dash svg[aria-label="Projects"]').parentElement;
     if (!scroller.classList.contains('chart-scroll')) throw new Error('the projects chart has nothing to scroll in');
     // In a narrow slot a long Hebrew name is cut, at its reading end.
@@ -2059,6 +2063,293 @@ await step('each chart is drawn to the width of its panel, and scrolls inside it
     await view('Board');
     await view('Dashboard');
   }
+});
+
+/* ---- the Control half ---- */
+const control = (name) => container.querySelector(`.dash-control section[aria-label="${name}"]`);
+const refsIn = (el) => [...el.querySelectorAll('.card-row .card-no')].map((n) => n.textContent);
+const rowOf = (el, ref) => [...el.querySelectorAll('.card-row')].find((r) => r.querySelector('.card-no').textContent === ref);
+const within = (el, label) => [...el.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === label);
+const bigNumber = (label) => q('.big-numbers .tile').find((t) => t.querySelector('span').textContent === label);
+const LABEL = { todo: 'To do', next: 'Next', doing: 'Doing', waiting: 'Waiting', review: 'Review', done: 'Done' };
+/** A card for the insights fixture, in House chores unless told otherwise. */
+const fakeCard = (id, column_key, extra = {}) => ({
+  id, ref: `WRK-${id}`, title: `card ${id}`, project_id: 1, column_key, flagged: 0, due_date: null,
+  updated_at: '2026-10-10 10:00:00', created_at: '2026-10-01 10:00:00', archived: false, position: 1000, ...extra,
+});
+/** Runs `fn` with these insights fields swapped in, then puts the fixture back. */
+const withInsights = async (patch, fn) => {
+  const kept = Object.fromEntries(Object.keys(patch).map((k) => [k, state.insights[k]]));
+  Object.assign(state.insights, patch);
+  await liveChange();
+  try { await fn(); } finally {
+    Object.assign(state.insights, kept);
+    await liveChange();
+  }
+};
+/** The last write the fake API had must be exactly this. */
+const expectSent = (method, path, body) => {
+  const got = sent.at(-1);
+  const flat = (o) => JSON.stringify(o, Object.keys(o ?? {}).sort());
+  if (got?.method !== method || got.path !== path || flat(got.body) !== flat(body)) {
+    throw new Error(`sent ${JSON.stringify(got)}, expected ${method} ${path} ${JSON.stringify(body)}`);
+  }
+};
+/** Swaps the fake API for `fake(url, opts, real)` while `fn` runs. */
+const withFetch = async (fake, fn) => {
+  const real = g.fetch;
+  const swapped = (url, opts = {}) => fake(url, opts, real);
+  g.fetch = swapped; dom.window.fetch = swapped;
+  try { await fn(); } finally { g.fetch = real; dom.window.fetch = real; }
+};
+const choose = (select, value) => act(async () => {
+  select.value = value;
+  select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+});
+const pressEsc = () => act(async () => { dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' })); });
+
+await step('quick add sends the card, then clears the title and keeps focus for the next', async () => {
+  const form = container.querySelector('.dash-control form.quick-add');
+  if (!form) throw new Error('no quick add');
+  const [project, column] = form.querySelectorAll('select');
+  const field = form.querySelector('input');
+  const add = form.querySelector('button[type="submit"]');
+  const options = (select) => [...select.options].map((o) => o.textContent).join();
+  if (options(project) !== 'House chores,ניתוח מערכות מידע') throw new Error(`projects: ${options(project)}`);
+  if (options(column) !== 'To do,Next,Doing' || column.value !== 'todo') throw new Error(`columns: ${options(column)} on ${column.value}`);
+  // A blank title adds nothing, by the button or by Enter.
+  const before = sent.length;
+  await act(async () => { setNativeValue(field, '   '); });
+  if (!add.disabled) throw new Error('Add is on for a blank title');
+  await act(async () => { form.requestSubmit(); });
+  if (sent.length !== before) throw new Error(`a blank title was sent: ${JSON.stringify(sent.at(-1))}`);
+  // Enter in the title, as a browser submits the form.
+  await choose(project, '4');
+  await choose(column, 'next');
+  await act(async () => { setNativeValue(field, 'Call the plumber'); });
+  field.focus();
+  await act(async () => { form.requestSubmit(); });
+  await settle();
+  expectSent('POST', '/cards', { project_id: 4, column_key: 'next', title: 'Call the plumber' });
+  if (field.value !== '') throw new Error(`the title still reads "${field.value}"`);
+  if (document.activeElement !== field) throw new Error('the title lost focus');
+  // And the next one straight after, with the button this time; a real click focuses the button.
+  await act(async () => { setNativeValue(field, 'Buy washers'); });
+  add.focus();
+  await click(add);
+  expectSent('POST', '/cards', { project_id: 4, column_key: 'next', title: 'Buy washers' });
+  if (field.value !== '' || document.activeElement !== field) throw new Error('the second add did not clear and keep focus');
+});
+
+await step('quick add remembers the last project per board, and falls back when it has gone', async () => {
+  if (dom.window.localStorage.getItem('kanban.quickAdd.1') !== '4') throw new Error('the project was not stored');
+  const project = () => container.querySelector('.dash-control form.quick-add select');
+  const reopen = async () => { await click(viewTab('Board')); await click(viewTab('Dashboard')); };
+  try {
+    await reopen();
+    if (project().value !== '4') throw new Error(`the last project was not picked again: ${project().value}`);
+    dom.window.localStorage.setItem('kanban.quickAdd.1', '99');   // a project since shelved
+    await reopen();
+    if (project().value !== '1') throw new Error(`a gone project should fall back to the first, got ${project().value}`);
+    // What is sent is what shows: the select alone would show the first project whatever it holds.
+    const form = container.querySelector('.dash-control form.quick-add');
+    await act(async () => { setNativeValue(form.querySelector('input'), 'Fix the gate'); });
+    await act(async () => { form.requestSubmit(); });
+    await settle();
+    expectSent('POST', '/cards', { project_id: 1, column_key: 'todo', title: 'Fix the gate' });
+  } finally {
+    dom.window.localStorage.removeItem('kanban.quickAdd.1');
+  }
+});
+
+await step('Control: each card sits in the first list that claims it, each list in its order', async () => {
+  const heads = q('.dash-control h3').map((h) => h.childNodes[0].textContent);
+  if (heads.join() !== 'In progress,Needs attention,Up next,Oldest open') throw new Error(`lists: ${heads}`);
+  // WRK-2 is in Doing but waiting and quiet too: Needs attention claims it, so In progress leaves it out.
+  if (refsIn(control('In progress')).join() !== 'WRK-4') throw new Error(`In progress: ${refsIn(control('In progress'))}`);
+  const attention = control('Needs attention');
+  if (refsIn(attention).join() !== 'WRK-2,WRK-3,WRK-1') throw new Error(`Needs attention: ${refsIn(attention)}`);
+  const tags = (ref) => [...rowOf(attention, ref).querySelectorAll('.row-tag')].map((t) => t.textContent).join(' + ');
+  if (!/^⏸ waiting \+ quiet \d+d$/.test(tags('WRK-2'))) throw new Error(`WRK-2 tags: ${tags('WRK-2')}`);
+  if (tags('WRK-1') !== '⚑ flagged') throw new Error(`WRK-1 tags: ${tags('WRK-1')}`);
+  const empty = (name) => control(name).querySelector('.dash-empty')?.textContent;
+  if (empty('Up next') !== 'Next is empty') throw new Error(`Up next: ${empty('Up next')}`);
+  if (empty('Oldest open') !== 'Nothing else open') throw new Error(`Oldest open: ${empty('Oldest open')}`);
+  // Nothing needs attention. In progress goes by column, then untouched longest first: WRK-17 has
+  // waited longest of all, but Review comes after Doing. The rest of the open cards go oldest first.
+  const { columns, cards, totals } = state.insights;
+  await withInsights({
+    stuck: { waiting: [], flagged: [], overdue: [], quiet: [] },
+    columns: { ...columns, doing: [11, 16], review: [13, 17] },
+    totals: { ...totals, open: [...totals.open, 16, 17] },
+    cards: { ...cards, 16: fakeCard(16, 'doing', { updated_at: '2026-10-05 10:00:00' }),
+      17: fakeCard(17, 'review', { updated_at: '2026-09-01 10:00:00' }) },
+  }, async () => {
+    if (empty('Needs attention') !== 'Nothing flagged, waiting, overdue or quiet') throw new Error(`Needs attention: ${empty('Needs attention')}`);
+    const inProgress = control('In progress');
+    if (refsIn(inProgress).join() !== 'WRK-16,WRK-2,WRK-17,WRK-4') throw new Error(`In progress: ${refsIn(inProgress)}`);
+    const cols = [...inProgress.querySelectorAll('.row-col')].map((t) => t.textContent).join();
+    if (cols !== 'Doing,Doing,Review,Review') throw new Error(`In progress columns: ${cols}`);
+    const oldest = control('Oldest open');
+    if (refsIn(oldest).join() !== 'WRK-3,WRK-1') throw new Error(`Oldest open: ${refsIn(oldest)}`);
+    const ages = [...oldest.querySelectorAll('.row-age')].map((t) => t.textContent);
+    if (!ages.every((a) => /^\d+d old$/.test(a))) throw new Error(`Oldest open says: ${ages}`);
+  });
+  await withInsights({ columns: { ...columns, doing: [], review: [] } }, async () => {
+    if (empty('In progress') !== 'Nothing in progress') throw new Error(`In progress: ${empty('In progress')}`);
+  });
+});
+
+await step('Up next: the first 5 of Next in board order, and Start moves one to Doing', async () => {
+  // [id, project, position]: House chores is first on the board, then the Hebrew project.
+  const next = [[20, 4, 1000], [21, 1, 3000], [22, 1, 1000], [23, 1, 2000], [24, 4, 500], [25, 1, 4000], [26, 4, 2000]];
+  const { columns, cards, totals } = state.insights;
+  await withInsights({
+    columns: { ...columns, next: next.map(([id]) => id) },
+    totals: { ...totals, open: [...totals.open, ...next.map(([id]) => id)] },
+    cards: { ...cards, ...Object.fromEntries(next.map(([id, project_id, position]) => [id,
+      fakeCard(id, 'next', { project_id, position, created_at: `2026-09-${id - 10} 10:00:00` })])) },
+  }, async () => {
+    const upNext = control('Up next');
+    if (refsIn(upNext).join() !== 'WRK-22,WRK-23,WRK-21,WRK-25,WRK-24') throw new Error(`Up next: ${refsIn(upNext)}`);
+    // The two left over are open cards like any other, so the oldest open list shows them.
+    if (refsIn(control('Oldest open')).join() !== 'WRK-20,WRK-26') throw new Error(`Oldest open: ${refsIn(control('Oldest open'))}`);
+    if (q('.dash-control .row-start').some((b) => !upNext.contains(b))) throw new Error('Start shows outside Up next');
+    let reads = 0;
+    await withFetch((url, opts, real) => {
+      if (String(url).includes('/insights')) reads += 1;
+      return real(url, opts);
+    }, () => click(within(upNext, 'Start WRK-22')));
+    expectSent('POST', '/cards/22/move', { column_key: 'doing' });
+    if (reads < 1) throw new Error('the dashboard did not read its numbers again after the move');
+  });
+});
+
+await step('→ moves a card one step on from every column, and from Waiting back to Doing', async () => {
+  const { cards, totals } = state.insights;
+  await withInsights({
+    totals: { ...totals, open: [10, 15, 11, 12, 13] },
+    cards: { ...cards, 15: fakeCard(15, 'next') },
+  }, async () => {
+    await click(bigNumber('Open'));
+    const drill = document.querySelector('.drill');
+    for (const [id, ref, to] of [[10, 'WRK-1', 'next'], [15, 'WRK-15', 'doing'], [11, 'WRK-2', 'review'],
+      [12, 'WRK-3', 'doing'], [13, 'WRK-4', 'done']]) {
+      const button = within(drill, `Move ${ref} on to ${LABEL[to]}`);
+      if (!button) throw new Error(`no → on ${ref} (${cards[id]?.column_key ?? 'next'})`);
+      // eslint-disable-next-line no-await-in-loop
+      await click(button);
+      expectSent('POST', `/cards/${id}/move`, { column_key: to });
+    }
+  });
+});
+
+await step('✓, ⚑ and ⏸ send their changes, and show only where they make sense', async () => {
+  await click(bigNumber('Open'));
+  const drill = document.querySelector('.drill');
+  await click(within(drill, 'Move WRK-1 to Done'));
+  expectSent('POST', '/cards/10/move', { column_key: 'done' });
+  await click(within(drill, 'Move WRK-1 to Waiting'));
+  expectSent('POST', '/cards/10/move', { column_key: 'waiting' });
+  await click(within(drill, 'Unflag WRK-1'));   // WRK-1 is flagged
+  expectSent('PATCH', '/cards/10', { flagged: false });
+  await click(within(drill, 'Flag WRK-2'));
+  expectSent('PATCH', '/cards/11', { flagged: true });
+  if (!within(drill, 'Flag WRK-2').title || !within(drill, 'Move WRK-2 to Done').title) throw new Error('an action has no tooltip');
+  // Waiting has no ⏸; it moves on and finishes as any other.
+  if (within(drill, 'Move WRK-3 to Waiting')) throw new Error('⏸ shows on a Waiting card');
+  if (!within(drill, 'Move WRK-3 on to Doing') || !within(drill, 'Move WRK-3 to Done')) throw new Error('→ or ✓ missing on Waiting');
+});
+
+await step('card list rows carry the actions; Done keeps ⚑ and ⋯, archived rows have none', async () => {
+  await click(bigNumber('Done'));
+  const drill = document.querySelector('.drill');
+  const labels = (ref) => [...rowOf(drill, ref).querySelectorAll('.row-actions button')].map((b) => b.getAttribute('aria-label'));
+  if (labels('WRK-5').join() !== 'Flag WRK-5,Move WRK-5 to another column') throw new Error(`Done row: ${labels('WRK-5')}`);
+  if (rowOf(drill, 'WRK-9').querySelector('.row-actions')) throw new Error('an archived row has actions');
+  if (!rowOf(drill, 'WRK-9').querySelector('.row-open').disabled) throw new Error('an archived row can be opened');
+});
+
+await step('⋯ moves a card to any column; Esc closes the menu but not the card list', async () => {
+  await click(bigNumber('Open'));
+  const drill = document.querySelector('.drill');
+  const more = within(drill, 'Move WRK-1 to another column');
+  await click(more);
+  const menu = document.querySelector('.row-menu');
+  if (!menu || more.getAttribute('aria-expanded') !== 'true') throw new Error('the menu did not open');
+  const items = [...menu.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent).join();
+  if (items !== 'Next,Doing,Waiting,Review,Done') throw new Error(`menu: ${items}`);
+  if (document.activeElement !== menu.querySelector('button')) throw new Error('the menu did not take focus');
+  await pressEsc();
+  if (document.querySelector('.row-menu')) throw new Error('Esc left the menu open');
+  if (!document.querySelector('.drill')) throw new Error('Esc in the menu closed the card list too');
+  if (document.activeElement !== more) throw new Error('focus did not go back to ⋯');
+  // A press anywhere else closes it too.
+  await click(more);
+  await act(async () => { document.body.dispatchEvent(new dom.window.Event('pointerdown', { bubbles: true })); });
+  if (document.querySelector('.row-menu')) throw new Error('a press outside left the menu open');
+  // A pick sends the card there.
+  await click(more);
+  await click(within(document.querySelector('.row-menu'), 'Move WRK-1 to Review'));
+  expectSent('POST', '/cards/10/move', { column_key: 'review' });
+  if (document.querySelector('.row-menu')) throw new Error('the menu stayed open after a pick');
+  // With the menu gone, Esc is the card list's again.
+  await pressEsc();
+  if (document.querySelector('.drill')) throw new Error('Esc no longer closes the card list');
+});
+
+await step('a quick action waits for its answer, and a refusal is shown', async () => {
+  const row = () => rowOf(control('Needs attention'), 'WRK-1');
+  let release = () => {};
+  const held = new Promise((r) => { release = r; });
+  await withFetch((url, opts, real) => (/\/cards\/10\/move$/.test(String(url)) ? held.then(() => real(url, opts)) : real(url, opts)), async () => {
+    await click(within(row(), 'Move WRK-1 to Done'));
+    const busy = [...row().querySelectorAll('.row-actions button')].filter((b) => !b.disabled);
+    if (busy.length) throw new Error(`${busy.length} button(s) still on while the move runs`);
+    await act(async () => { release(); });
+    await settle();
+    if (within(row(), 'Move WRK-1 to Done').disabled) throw new Error('the buttons stayed off after the answer');
+  }).finally(release);
+  const refuse = (url, opts, real) => (/\/cards\/10\/move$/.test(String(url))
+    ? Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ error: 'card not found' }) })
+    : real(url, opts));
+  await withFetch(refuse, () => click(within(row(), 'Move WRK-1 to Done')));
+  const shown = container.querySelector('.error')?.textContent;
+  if (shown !== 'card not found') throw new Error(`the error reads: ${shown}`);
+  // Quick add takes one card at a time: a second Enter while the first is on its way sends nothing.
+  let letGo = () => {};
+  const slow = new Promise((r) => { letGo = r; });
+  const form = container.querySelector('.dash-control form.quick-add');
+  const field = form.querySelector('input');
+  await withFetch((url, opts, real) => (String(url).endsWith('/cards') && opts.method === 'POST'
+    ? slow.then(() => real(url, opts)) : real(url, opts)), async () => {
+    await act(async () => { setNativeValue(field, 'One card'); });
+    await act(async () => { form.requestSubmit(); });
+    const before = sent.length;
+    await act(async () => { form.requestSubmit(); });
+    if (!form.querySelector('button[type="submit"]').disabled) throw new Error('Add is on while adding');
+    await act(async () => { letGo(); });
+    await settle();
+    if (sent.length !== before + 1) throw new Error(`${sent.length - before} card(s) sent for one Enter while busy`);
+  }).finally(letGo);
+});
+
+await step('a list longer than 8 shows 8, and "All N" opens the whole list', async () => {
+  const ids = Array.from({ length: 10 }, (_, i) => 30 + i);
+  const { columns, cards } = state.insights;
+  await withInsights({
+    columns: { ...columns, doing: ids },
+    cards: { ...cards, ...Object.fromEntries(ids.map((id) => [id, fakeCard(id, 'doing')])) },
+  }, async () => {
+    const list = control('In progress');
+    const rows = list.querySelectorAll('.card-row').length;
+    if (rows !== 8) throw new Error(`${rows} rows shown`);
+    const all = [...list.querySelectorAll('button')].find((b) => b.textContent === 'All 11');
+    if (!all) throw new Error('no "All 11"');
+    await click(all);
+    if (document.querySelector('.drill h3')?.textContent !== 'In progress · 11') throw new Error('the whole list did not open');
+  });
+  await pressEsc();
 });
 
 await step('the dashboard is remembered as the view', () => {

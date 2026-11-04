@@ -1282,16 +1282,44 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
   padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--panel);
 }
 .drill h3 { margin: 0; font-size: 13px; }
-.drill ul { list-style: none; margin: 0; padding: 4px 0; }
-.drill-row {
-  display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 12px;
+
+/* A card in a list (Control or the card list): number and title open it, the buttons change it.
+   Where the row is too narrow for both, the buttons wrap under the title. */
+.card-list { list-style: none; margin: 0; padding: 4px 0; }
+.dash-block .card-list { margin: 0 -10px; padding: 0; }
+.card-row { display: flex; flex-wrap: wrap; align-items: center; column-gap: 4px; padding-right: 6px; border-radius: 5px; }
+.card-row:hover { background: var(--head-bg); }
+.row-open {
+  flex: 1 1 260px; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 7px 4px 7px 10px;
   border: 0; background: none; color: var(--text); font: inherit; font-size: 12.5px; text-align: start; cursor: pointer;
 }
-.drill-row:hover:not(:disabled) { background: var(--head-bg); }
-.drill-row:disabled { cursor: default; opacity: 0.6; }
-.drill-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.drill-row .dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
-.drill-col, .drill-age { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.drill .row-open { padding-left: 12px; }
+.row-open:disabled { cursor: default; opacity: 0.6; }
+.row-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-open .dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
+.row-col, .row-age { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.row-tag {
+  flex: 0 0 auto; padding: 0 6px; border-radius: 9px; background: var(--hover);
+  font-size: 11px; line-height: 18px; color: var(--muted); white-space: nowrap;
+}
+.row-tag.flagged, .row-tag.overdue { color: var(--flag); }
+.row-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.row-act {
+  display: inline-grid; place-items: center; width: 28px; height: 26px; padding: 0;
+  border: 1px solid transparent; border-radius: 5px; background: none; color: var(--muted); font-size: 13px;
+}
+.row-act:hover:not(:disabled), .row-act:focus-visible { border-color: var(--line-strong); background: var(--panel); color: var(--text); }
+.row-act:disabled, .row-start:disabled { opacity: 0.4; cursor: default; }
+.row-act.flagged { color: var(--flag); }
+.row-start { margin-right: 4px; white-space: nowrap; }
+
+.dash-block h3 .list-count { margin-left: 6px; font-weight: 400; color: var(--muted); }
+.list-all { margin-top: 6px; }
+/* Quick add: project, column, title, Add, in one line that wraps on a phone. */
+.quick-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.quick-add .select { flex: 0 1 180px; width: auto; min-width: 0; }
+.quick-add .select[aria-label='Column'] { flex-basis: 96px; }
+.quick-add .input { flex: 1 1 220px; width: auto; min-width: 0; }
 
 /* ---------------- phone ----------------
    Every phone rule uses this one width. */
@@ -1355,4 +1383,6 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
      popup, text selection and drag stay out of the way. */
   .card { -webkit-touch-callout: none; -webkit-user-select: none; -webkit-user-drag: none; }
   .ctx-item { padding: 9px 6px; font-size: 14px; } /* rows a finger can hit */
+  .row-act { width: 36px; height: 36px; font-size: 15px; } /* card quick actions a finger can hit */
+  .row-start { min-height: 36px; }
 }
