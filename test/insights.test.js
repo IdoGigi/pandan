@@ -1,6 +1,10 @@
 /**
  * The dashboard's numbers. Every number is a list of card ids, so these tests
  * check exactly which cards land where, on back-dated rows.
+ *
+ * The tests share one server and run in file order, so each one sees the cards
+ * the earlier ones made. Assertions look at a test's own cards, apart from a
+ * few exact ones that hold only because of that order.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';

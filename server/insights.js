@@ -11,7 +11,10 @@ const OPEN = COLUMNS.filter((c) => c !== 'done');
 const IN_FLIGHT = ['doing', 'waiting', 'review'];
 const DAY = 86400000;
 
-/** SQLite's UTC text as epoch ms. */
+/**
+ * SQLite's UTC text as epoch ms. It assumes datetime text, `YYYY-MM-DD HH:MM:SS`,
+ * which every write path uses: datetime('now'), or a copy of such a value.
+ */
 const ms = (text) => Date.parse(`${text.replace(' ', 'T')}Z`);
 /** The local calendar date for a browser offset (getTimezoneOffset minutes). */
 const localDate = (t, tz) => new Date(t - tz * 60000).toISOString().slice(0, 10);
@@ -30,7 +33,9 @@ const shiftWeeks = (start, n) => new Date(Date.parse(`${start}T00:00:00Z`) + n *
 /**
  * The last WEEKS local weeks, oldest first and ending with this one; `since`,
  * the local midnight they start at, as epoch ms; and a lookup from a row's
- * time to its week's index (undefined outside them).
+ * time to its week's index (undefined outside them). `tz` is the browser's
+ * offset today, so near a daylight-saving change an event within an hour of
+ * local midnight can land in the neighbouring day — fine for weekly bars.
  */
 function calendar(now, tz) {
   const thisWeek = weekStart(now, tz);
@@ -44,8 +49,30 @@ function calendar(now, tz) {
 }
 
 /** The last event that put a card into `col`, by a move or by being made there. */
-const lastInto = (events, col) => [...events].reverse()
-  .find((e) => e.to_column === col && (e.kind === 'moved' || e.kind === 'created'));
+const lastInto = (events, col) =>
+  events.findLast((e) => e.to_column === col && (e.kind === 'moved' || e.kind === 'created'));
+
+/** What needs a look now: waiting, flagged, overdue by the local date, or gone quiet in flight. */
+function stuckNow(open, tz, now) {
+  const today = localDate(now, tz);
+  return {
+    waiting: ids(open.filter((c) => c.column_key === 'waiting')),
+    flagged: ids(open.filter((c) => c.flagged)),
+    overdue: ids(open.filter((c) => c.due_date && c.due_date < today)),
+    quiet: ids(open.filter((c) => IN_FLIGHT.includes(c.column_key) && ms(c.updated_at) <= now - QUIET_DAYS * DAY)),
+  };
+}
+
+/** Each active project's open cards by column, in the board's order, so the bars match the board. */
+function openByProject(boardId, open) {
+  return db.prepare(
+    'SELECT id, name, color FROM projects WHERE board_id = ? AND archived = 0 ORDER BY position'
+  ).all(boardId).map((p) => ({
+    ...p,
+    by_column: Object.fromEntries(OPEN.map((col) =>
+      [col, ids(open.filter((c) => c.project_id === p.id && c.column_key === col))])),
+  }));
+}
 
 /**
  * Cards added and finished in each week. A card is finished in the week it
@@ -140,6 +167,7 @@ export function buildInsights(boardId, { tz = 0, now = Date.now() } = {}) {
   const board = db.prepare('SELECT id, name, key FROM boards WHERE id = ?').get(boardId);
   if (!board) return null;
 
+  // Both queries leave out shelved (archived) projects, past weeks included, on purpose.
   const cards = db.prepare(
     `SELECT c.id, b.key || '-' || c.number AS ref, c.title, c.project_id, c.column_key, c.flagged,
             c.due_date, c.updated_at, c.archived_at, c.last_actor_kind
@@ -149,41 +177,27 @@ export function buildInsights(boardId, { tz = 0, now = Date.now() } = {}) {
   ).all(boardId);
   const live = cards.filter((c) => !c.archived_at);
   const open = live.filter((c) => c.column_key !== 'done');
-  const today = localDate(now, tz);
 
-  // `lastInto` relies on each card's events being in time order.
+  // Each card's events in time order: lastInto and timeInColumn rely on it.
   const history = db.prepare(
     `SELECT e.id, e.card_id, e.kind, e.from_column, e.to_column, e.actor_kind, e.at, e.estimated
        FROM card_events e JOIN cards c ON c.id = e.card_id JOIN projects p ON p.id = c.project_id
       WHERE p.board_id = ? AND p.archived = 0
       ORDER BY e.card_id, e.at, e.id`
   ).all(boardId);
-  const byCard = new Map();
-  for (const e of history) byCard.set(e.card_id, [...(byCard.get(e.card_id) ?? []), e]);
+  const byCard = Map.groupBy(history, (e) => e.card_id);
   const cal = calendar(now, tz);
   // Live rows always carry an actor; seeded ones never do (see recordEvent).
-  const firstReal = history.filter((e) => !e.estimated && e.actor_kind).map((e) => e.at).sort()[0];
+  const firstReal = history.filter((e) => !e.estimated && e.actor_kind)
+    .reduce((min, e) => (min !== null && min <= e.at ? min : e.at), null);
   const byWho = agentWeeks(cal, history);
-
-  const projects = db.prepare(
-    'SELECT id, name, color FROM projects WHERE board_id = ? AND archived = 0 ORDER BY position'
-  ).all(boardId).map((p) => ({
-    ...p,
-    by_column: Object.fromEntries(OPEN.map((col) =>
-      [col, ids(open.filter((c) => c.project_id === p.id && c.column_key === col))])),
-  }));
 
   return {
     board,
     quiet_days: QUIET_DAYS,
     history_since: firstReal ? localDate(ms(firstReal), tz) : null,
-    stuck: {
-      waiting: ids(open.filter((c) => c.column_key === 'waiting')),
-      flagged: ids(open.filter((c) => c.flagged)),
-      overdue: ids(open.filter((c) => c.due_date && c.due_date < today)),
-      quiet: ids(open.filter((c) => IN_FLIGHT.includes(c.column_key) && ms(c.updated_at) <= now - QUIET_DAYS * DAY)),
-    },
-    projects,
+    stuck: stuckNow(open, tz, now),
+    projects: openByProject(boardId, open),
     weeks: weekCounts(cal, cards, history, byCard),
     time_in_column: timeInColumn(byCard, cal.since),
     agents: {
