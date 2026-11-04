@@ -246,6 +246,33 @@ function backfillRefs() {
   }
 }
 
+/**
+ * Gives every card some history, so the dashboard's trends reach back before
+ * move history existed. Creation and archive dates are exact; for a card in
+ * Done, its last change stands in for the day it was finished, marked as an
+ * estimate. Only cards with no history are touched, so this runs on every
+ * start — and also covers cards an older version made after a rollback.
+ */
+function seedHistory() {
+  const seeded = inTransaction(() => {
+    const bare = db.prepare(
+      `SELECT id, column_key, created_at, updated_at, archived_at FROM cards c
+        WHERE NOT EXISTS (SELECT 1 FROM card_events e WHERE e.card_id = c.id) ORDER BY id`
+    ).all();
+    for (const card of bare) {
+      recordEvent({ cardId: card.id, kind: 'created', at: card.created_at });
+      if (card.column_key === 'done') {
+        recordEvent({ cardId: card.id, kind: 'moved', to: 'done', at: card.updated_at, estimated: 1 });
+      }
+      if (card.archived_at) {
+        recordEvent({ cardId: card.id, kind: 'archived', from: card.column_key, at: card.archived_at });
+      }
+    }
+    return bare.length;
+  });
+  if (seeded) console.log(`[db] seeded history for ${seeded} card(s)`);
+}
+
 const firstBoardId = ensureBoard();
 if (db.prepare('SELECT COUNT(*) AS n FROM boards').get().n === 1) {
   // Nothing to log on a fresh database; only worth a line when we adopted rows.
@@ -253,6 +280,7 @@ if (db.prepare('SELECT COUNT(*) AS n FROM boards').get().n === 1) {
   if (orphans > 0) console.log(`[db] ${orphans} project(s) on the default board`);
 }
 backfillRefs();
+seedHistory();
 
 export const COLUMNS = ['todo', 'next', 'doing', 'waiting', 'review', 'done'];
 export const CARD_COLORS = ['plain', 'lime', 'sky', 'amber', 'rose', 'violet'];
