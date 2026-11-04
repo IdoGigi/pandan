@@ -18,6 +18,51 @@ const localDate = (t, tz) => new Date(t - tz * 60000).toISOString().slice(0, 10)
 /** Numbers are lists of ids, so the UI can count them and show the cards behind them. */
 const ids = (list) => list.map((c) => c.id);
 
+/** The Sunday that starts the local week holding t, as YYYY-MM-DD. */
+function weekStart(t, tz) {
+  const local = new Date(t - tz * 60000);
+  local.setUTCDate(local.getUTCDate() - local.getUTCDay());
+  return local.toISOString().slice(0, 10);
+}
+/** The week `n` weeks on from the one starting `start` (back, for negative n). */
+const shiftWeeks = (start, n) => new Date(Date.parse(`${start}T00:00:00Z`) + n * 7 * DAY).toISOString().slice(0, 10);
+
+/**
+ * The last WEEKS local weeks, oldest first and ending with this one, and a
+ * lookup from a row's time to its week's index (undefined outside them).
+ */
+function calendar(now, tz) {
+  const thisWeek = weekStart(now, tz);
+  const starts = Array.from({ length: WEEKS }, (_, i) => shiftWeeks(thisWeek, i - (WEEKS - 1)));
+  const slot = new Map(starts.map((s, i) => [s, i]));
+  return { starts, weekOf: (at) => slot.get(weekStart(ms(at), tz)) };
+}
+
+/** The last event that put a card into `col`, by a move or by being made there. */
+const lastInto = (events, col) => [...events].reverse()
+  .find((e) => e.to_column === col && (e.kind === 'moved' || e.kind === 'created'));
+
+/**
+ * Cards added and finished in each week. A card is finished in the week it
+ * last moved into Done, so one moved back out stops counting and one archived
+ * from Done still counts. A week is estimated when any of its finishes is.
+ */
+function weekCounts({ starts, weekOf }, cards, history, byCard) {
+  const weeks = starts.map((start) => ({ start, added: [], finished: [], estimated: false }));
+  for (const e of history) {
+    const w = e.kind === 'created' ? weekOf(e.at) : undefined;
+    if (w !== undefined) weeks[w].added.push(e.card_id);
+  }
+  for (const c of cards.filter((x) => x.column_key === 'done')) {
+    const finish = lastInto(byCard.get(c.id) ?? [], 'done');
+    const w = finish && weekOf(finish.at);
+    if (w === undefined) continue;
+    weeks[w].finished.push(c.id);
+    if (finish.estimated) weeks[w].estimated = true;
+  }
+  return weeks;
+}
+
 /**
  * Everything the dashboard shows for one board, or null if there is no such
  * board. `tz` is the browser's getTimezoneOffset(), so "today" and the weeks
@@ -38,6 +83,17 @@ export function buildInsights(boardId, { tz = 0, now = Date.now() } = {}) {
   const open = live.filter((c) => c.column_key !== 'done');
   const today = localDate(now, tz);
 
+  // `lastInto` relies on each card's events being in time order.
+  const history = db.prepare(
+    `SELECT e.id, e.card_id, e.kind, e.from_column, e.to_column, e.actor_kind, e.at, e.estimated
+       FROM card_events e JOIN cards c ON c.id = e.card_id JOIN projects p ON p.id = c.project_id
+      WHERE p.board_id = ? AND p.archived = 0
+      ORDER BY e.card_id, e.at, e.id`
+  ).all(boardId);
+  const byCard = new Map();
+  for (const e of history) byCard.set(e.card_id, [...(byCard.get(e.card_id) ?? []), e]);
+  const cal = calendar(now, tz);
+
   const projects = db.prepare(
     'SELECT id, name, color FROM projects WHERE board_id = ? AND archived = 0 ORDER BY position'
   ).all(boardId).map((p) => ({
@@ -57,7 +113,7 @@ export function buildInsights(boardId, { tz = 0, now = Date.now() } = {}) {
       quiet: ids(open.filter((c) => IN_FLIGHT.includes(c.column_key) && ms(c.updated_at) <= now - QUIET_DAYS * DAY)),
     },
     projects,
-    weeks: [],
+    weeks: weekCounts(cal, cards, history, byCard),
     time_in_column: {},
     agents: { review_from_agents: [], this_week: [], weeks: [] },
     cards: Object.fromEntries(cards.map((c) => [c.id, {
