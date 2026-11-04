@@ -1642,9 +1642,9 @@ const liveChange = async () => {
 };
 
 /* ---- dashboard helpers ---- */
-/** A Control list by its heading, which names it (aria-labelledby). */
+/** A Control list by its name: what its aria-labelledby points at, which must be the title alone. */
 const control = (name) => q('.dash-control section[aria-labelledby]')
-  .find((el) => document.getElementById(el.getAttribute('aria-labelledby'))?.childNodes[0]?.textContent === name);
+  .find((el) => document.getElementById(el.getAttribute('aria-labelledby'))?.textContent === name);
 const refsIn = (el) => [...el.querySelectorAll('.card-row .card-no')].map((n) => n.textContent);
 const rowOf = (el, ref) => [...el.querySelectorAll('.card-row')].find((r) => r.querySelector('.card-no').textContent === ref);
 const within = (el, label) => [...el.querySelectorAll('button')].find((b) => b.getAttribute('aria-label') === label);
@@ -2417,6 +2417,10 @@ await step('a quick action waits for its answer, and a refusal is shown', async 
     const on = buttons.filter((b) => b.getAttribute('aria-disabled') !== 'true').map((b) => b.getAttribute('aria-label'));
     if (on.length) throw new Error(`still on while the move runs: ${on}`);
     if (buttons.some((b) => b.disabled)) throw new Error('a busy button is disabled, which drops the focus');
+    // A busy Start ▶ is a .btn too: its hover must not light it up as if it could be pressed.
+    const hover = [...document.styleSheets].flatMap((sheet) => [...sheet.cssRules])
+      .find((r) => /^\.row-start\[aria-disabled=["']true["']\]:hover$/.test(r.selectorText ?? ''));
+    if (!hover || hover.style.background === '') throw new Error('a busy Start ▶ still takes the .btn hover');
     await click(within(row(), 'Move WRK-1 to Waiting'));
     await click(within(row(), 'Move WRK-1 to another column'));
     if (sent.length !== before || document.querySelector('.row-menu')) throw new Error('a press while busy still did something');
@@ -2488,6 +2492,12 @@ await step('the ⋯ menu closes on a scroll, a resize, or Tab out of it', async 
   await opened();
   await act(async () => { within(drill, 'Move WRK-2 to Done').focus(); });   // Tab on to the next row
   if (document.querySelector('.row-menu')) throw new Error('Tab out of the menu left it open');
+  // And backwards: Shift+Tab onto its own ⋯ keeps it open, once more onto ⏸ closes it.
+  await opened();
+  await act(async () => { more.focus(); });
+  if (!document.querySelector('.row-menu')) throw new Error('Shift+Tab back onto ⋯ closed the menu');
+  await act(async () => { within(drill, 'Move WRK-1 to Waiting').focus(); });
+  if (document.querySelector('.row-menu')) throw new Error('Shift+Tab back past ⋯ left the menu open');
   await pressEsc();
 });
 

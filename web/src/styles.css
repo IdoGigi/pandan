@@ -1321,6 +1321,7 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
 .row-act:focus-visible { border-color: var(--line-strong); background: var(--panel); color: var(--text); }
 /* Busy: aria-disabled, not disabled, so the button keeps keyboard focus while its request runs. */
 .row-act[aria-disabled='true'], .row-start[aria-disabled='true'] { opacity: 0.4; cursor: default; }
+.row-start[aria-disabled='true']:hover { background: var(--panel); } /* busy: no .btn hover */
 .row-act.flagged { color: var(--flag); }
 .row-start { margin-right: 4px; white-space: nowrap; }
 /* Only a real pointer hovers; a tapped row on a phone must not stay tinted. */

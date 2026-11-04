@@ -55,7 +55,8 @@ function CardList({ title, empty, rows, row, onPick }) {
   const head = useId();
   return (
     <section className="dash-block" aria-labelledby={head}>
-      <h3 id={head}>{title}{rows.length > 0 && <span className="list-count">{rows.length}</span>}</h3>
+      {/* The name is the title alone; the count beside it would read "In progress3". */}
+      <h3><span id={head}>{title}</span>{rows.length > 0 && <span className="list-count">{rows.length}</span>}</h3>
       {rows.length === 0 ? <p className="dash-empty">{empty}</p> : (
         <>
           <ul className="card-list">

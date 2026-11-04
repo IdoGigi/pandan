@@ -17,8 +17,8 @@ export const ago = (at, old = false) => {
 
 /**
  * The columns a card can be sent to, under its ⋯ button. Fixed to the screen,
- * so a scrolled list never clips it; it closes on Esc, a press outside it, Tab
- * out of it, or any scroll. Its Esc listener is on the bubble phase, so the
+ * so a scrolled list never clips it; it closes on Esc, a press outside it, focus
+ * moving out of it (Tab either way), or any scroll. Its Esc listener is on the bubble phase, so the
  * card list's own capture-phase one sees the menu still open and leaves the list alone.
  */
 function MoveMenu({ card, anchor, onMove, onClose }) {
@@ -48,27 +48,27 @@ function MoveMenu({ card, anchor, onMove, onClose }) {
     };
     const onKey = (e) => { if (e.key === 'Escape') onClose(true); };
     const onScroll = () => onClose(false);
+    // Focus landing anywhere but the menu or its ⋯: Tab, or Shift+Tab back past ⋯. A pick never
+    // trips it, since a press that focuses lands inside the menu.
+    const onFocusIn = (e) => {
+      if (!box.current?.contains(e.target) && !anchor.current?.contains(e.target)) onClose(false);
+    };
     window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('focusin', onFocusIn, true);
     window.addEventListener('keydown', onKey);
     window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', onScroll);
     return () => {
       window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('focusin', onFocusIn, true);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', onScroll);
     };
   }, [anchor, onClose]);
 
-  // Tab out of it closes it. No new focus at all (a press on a browser that does not focus
-  // buttons) is left to the press handler, or a pick would close the menu before its click.
-  const onBlur = (e) => {
-    const to = e.relatedTarget;
-    if (to && !box.current.contains(to) && !anchor.current?.contains(to)) onClose(false);
-  };
-
   return (
-    <div ref={box} className="ctx row-menu" role="menu" aria-label={`Move ${card.ref} to`} onBlur={onBlur}
+    <div ref={box} className="ctx row-menu" role="menu" aria-label={`Move ${card.ref} to`}
       style={{ left: pos?.left ?? 0, top: pos?.top ?? 0, visibility: placed ? 'visible' : 'hidden' }}>
       <div className="ctx-label">Move to</div>
       {COLUMNS.filter((col) => col !== card.column_key).map((col) => (
