@@ -104,8 +104,8 @@ export function SettingsModal({
             <button className="btn" onClick={onChangeBoardKey}>Change key</button>
           </div>
           <p className="set-hint">
-            Cards here read {board?.key || 'KEY'}-1, {board?.key || 'KEY'}-2… That is what you
-            say to an agent.
+            A short name for this board. Cards are numbered in their project instead (CRC-3),
+            so changing it changes no card's ref.
           </p>
         </section>
 

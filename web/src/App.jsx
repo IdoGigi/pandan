@@ -221,8 +221,8 @@ export function App() {
     setDialog({
       kind: 'prompt',
       title: 'Board key',
-      message: `Cards on this board read ${current.key}-1, ${current.key}-2… A new key changes every one ` +
-        'of them; the numbers stay. 2 to 6 letters or digits, starting with a letter.',
+      message: 'A short name for this board. Cards are numbered in their project (CRC-3), so a new key ' +
+        'changes no card\'s ref. 2 to 6 letters or digits, starting with a letter.',
       initialValue: current.key,
       confirmLabel: 'Save',
       onConfirm: (key) => {
@@ -300,17 +300,24 @@ export function App() {
   const needle = raw.toLowerCase();
 
   /**
-   * "#54" or "WRK-54" looks up a card number on this board and nothing else. A
-   * bare number does both, so typing 24 finds card 24 and also "24 hour
-   * support". Numbers match on the start, so the right card shows up before you
-   * finish typing. "covid-19" stays a word search, since COVID is not this
-   * board's key.
+   * "#300" finds the card with id 300, as Jira items say "Source: kanban #300".
+   * "CRC-5" finds a card by its ref and "MB-223" by the board ref it had
+   * before, and nothing else; the number matches on the start, so the card shows
+   * up before you finish typing. A bare number does that for any key, old refs
+   * included, and words too, so 24 finds CRC-24, MB-24 and "24 hour support". "covid-19" stays a word
+   * search, since no card here has the key COVID.
    */
-  const boardKey = boards.find((b) => b.id === boardId)?.key;
-  const ref = /^#?(?:([a-z][a-z0-9]*)-)?(\d+)$/i.exec(raw);
-  const digits = ref && (!ref[1] || ref[1].toUpperCase() === boardKey) ? ref[2] : null;
-  const numberOnly = raw.startsWith('#') || Boolean(digits && ref[1]);
-  const byNumber = (card) => digits !== null && String(card.number).startsWith(digits);
+  const id = /^#(\d+)$/.exec(raw)?.[1];
+  const ref = /^#?([a-z][a-z0-9]*)-(\d+)$/i.exec(raw);
+  const startsWith = (cardRef, key, digits) => Boolean(cardRef) && cardRef.startsWith(`${key}-`)
+    && cardRef.slice(key.length + 1).startsWith(digits);
+  const refKey = ref && ref[1].toUpperCase();
+  const knownKey = Boolean(refKey) && cards.some((c) => c.ref?.startsWith(`${refKey}-`) || c.legacy_ref?.startsWith(`${refKey}-`));
+  const bare = /^\d+$/.test(raw) ? raw : null;
+  const numberOnly = raw.startsWith('#') || knownKey;
+  const byNumber = (card) => (id !== undefined && String(card.id) === id)
+    || (knownKey && (startsWith(card.ref, refKey, ref[2]) || startsWith(card.legacy_ref, refKey, ref[2])))
+    || (bare !== null && [card.ref, card.legacy_ref].some((r) => String(r ?? '').split('-')[1]?.startsWith(bare)));
 
   let visibleCards = cards;
   if (numberOnly) {
@@ -399,7 +406,7 @@ export function App() {
             <input dir="auto"
               className="search"
               value={search}
-              placeholder="Search cards or #12…"
+              placeholder="Search cards or a ref…"
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === 'Escape' && setSearch('')}
             />

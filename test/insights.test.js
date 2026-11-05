@@ -82,7 +82,9 @@ test('work by project, split by column, without shelved projects', async () => {
 test('the cards map covers every card on the board, archived ones marked', async () => {
   const data = await insights();
   const all = Object.values(data.cards);
-  assert.ok(all.every((c) => /^INS-\d+$/.test(c.ref)));
+  // Refs come from each project's key, not the board's; a new card has no old board ref.
+  assert.ok(all.every((c) => /^[A-Z]{2,5}-\d+$/.test(c.ref) && !c.ref.startsWith('INS-')));
+  assert.ok(all.every((c) => c.legacy_ref === null));
   assert.equal(all.filter((c) => c.archived).length, 1);
 });
 

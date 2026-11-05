@@ -45,11 +45,12 @@ const columnField = z.enum(COLUMNS).describe(
 );
 const colorField = z.enum(COLORS).describe('Card colour. "plain" is the default grey.');
 
-/** What a person reads off the board and says — "SCH-3" — or the card's numeric id. */
+/** What a person reads off the board and says — "CRC-3" — an old board ref, or the card's id. */
 const cardField = (what) => z.union([z.string().min(1), z.number().int()]).describe(
-  `${what} Use the card's reference as shown on the board, like "SCH-3". A bare number is the ` +
-  'card\'s internal id from get_board, not the number shown on the card: for "card 3" on the ' +
-  'School board, pass "SCH-3".'
+  `${what} Use the card's ref as shown on the board, like "CRC-3" (its project key and number). ` +
+  'An old board ref from before, like "MB-223", works too. A bare number, or "#300", is the ' +
+  'card\'s internal id from get_board, not the number shown on the card: for "card 3" in the ' +
+  'project with key CRC, pass "CRC-3".'
 );
 const cardPath = (cardId, rest = '') => `/cards/${encodeURIComponent(cardId)}${rest}`;
 
@@ -63,9 +64,11 @@ export function buildMcpServer(authorization) {
         'Pandan, a personal kanban board. There may be several boards, for example work and ' +
         'personal. On a board, rows are projects and columns are todo, next, doing, waiting, review and done. ' +
         'Call get_boards then get_board to see the projects and cards with their ids, then use the other ' +
-        'tools with those ids. Every card has a reference like "SCH-3": its board key and its number on ' +
-        'that board. It is shown on the card and it is what a person will say, so pass it straight to ' +
-        'any card tool as card_id. Cards carry an optional checklist and a flag for anything urgent. ' +
+        'tools with those ids. Every card has a ref like "CRC-3": its project\'s key and its number in ' +
+        'that project, kept for good even if the card moves. It is shown on the card and it is what a ' +
+        'person will say, so pass it straight to any card tool as card_id. Older cards also have the ' +
+        'board ref they had before ("MB-223", legacy_ref), which works as well, and "#300" is the card ' +
+        'with id 300. Cards carry an optional checklist and a flag for anything urgent. ' +
         'When you finish a card, move it to "review" if a person should check your work, or to ' +
         '"done" if it is plainly finished. You are allowed to use either.',
     }
@@ -74,8 +77,8 @@ export function buildMcpServer(authorization) {
   server.registerTool('get_boards', {
     title: 'List the boards',
     description:
-      'List every board with its id, name, key and how many projects it holds. The key is the start ' +
-      'of every card reference on that board, so SCH-3 is on the board with key SCH. Someone may keep work ' +
+      'List every board with its id, name, key and how many projects it holds. A board key is a short ' +
+      'name for the board; card refs start with their project\'s key instead. Someone may keep work ' +
       'and personal on separate boards, so check here first if you are not sure which one a ' +
       'project belongs to.',
     inputSchema: {},
@@ -98,8 +101,9 @@ export function buildMcpServer(authorization) {
   server.registerTool('get_board', {
     title: 'Get one board',
     description:
-      'Read every project and card on a board in one call. Returns the board key, project ids and ' +
-      'names, and each card with its ref (like "SCH-3"), id, project_id, column_key, title, notes, ' +
+      'Read every project and card on a board in one call. Returns the board key, project ids, names ' +
+      'and keys, and each card with its ref (like "CRC-3"), legacy_ref (its old board ref, or null), id, ' +
+      'project_id, column_key, title, notes, ' +
       'colour, flag and checklist progress. ' +
       'Leave board_id out for the first board. Start here so you have the ids the other tools need.',
     inputSchema: {
@@ -121,9 +125,14 @@ export function buildMcpServer(authorization) {
 
   server.registerTool('create_project', {
     title: 'Add a project',
-    description: 'Add a new project, which appears as a new row on the board.',
+    description:
+      'Add a new project, which appears as a new row on the board. It gets a key for good, which starts ' +
+      'the ref of every card made in it (CRC-1, CRC-2, ...).',
     inputSchema: {
       name: z.string().min(1).describe('The project name shown on the row.'),
+      key: z.string().optional().describe(
+        'Optional key, 2 to 5 letters like "CRC", unique across all boards and never a board key. ' +
+        'Leave it out and one is made from the name. It can never be changed.'),
       board_id: z.number().int().optional().describe('Which board. Defaults to the first one.'),
       color: z.string().optional().describe('Optional hex colour for the row dot, like "#4bb3d4".'),
     },

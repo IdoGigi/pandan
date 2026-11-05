@@ -41,15 +41,16 @@ const state = {
       created_at: '2026-08-01 09:00', last_used_at: '2026-09-01 09:30', revoked_at: null },
   ],
   cards: [
-    // Ids are global, numbers are per board — so they differ on purpose here.
-    { id: 10, number: 1, ref: 'WRK-1', project_id: 1, column_key: 'todo', title: 'Buy milk', notes: '', color: 'lime',
-      flagged: 0, position: 1000, checks_total: 2, checks_done: 1 },
-    { id: 11, number: 2, ref: 'WRK-2', project_id: 1, column_key: 'doing', title: 'Fix the sink', notes: 'call plumber',
+    // Ids are global and refs are per project, so they differ on purpose here. Older cards also
+    // keep the board ref they had before (legacy_ref); newer ones have none.
+    { id: 10, ref: 'WRK-1', legacy_ref: 'MB-41', project_id: 1, column_key: 'todo', title: 'Buy milk', notes: '',
+      color: 'lime', flagged: 0, position: 1000, checks_total: 2, checks_done: 1 },
+    { id: 11, ref: 'WRK-2', legacy_ref: 'MB-42', project_id: 1, column_key: 'doing', title: 'Fix the sink', notes: 'call plumber',
       color: 'plain', flagged: 1, position: 1000, checks_total: 0, checks_done: 0,
       due_date: '2020-01-01' },
-    { id: 12, number: 3, ref: 'WRK-3', project_id: 2, column_key: 'done', title: 'Sort donations',
+    { id: 12, ref: 'WRK-3', legacy_ref: null, project_id: 2, column_key: 'done', title: 'Sort donations',
       notes: 'covid-19 drive', color: 'sky', flagged: 0, position: 1000, checks_total: 0, checks_done: 0 },
-    { id: 13, number: 4, ref: 'WRK-4', project_id: 1, column_key: 'review', title: 'Written by an agent', notes: '',
+    { id: 13, ref: 'WRK-4', legacy_ref: null, project_id: 1, column_key: 'review', title: 'Written by an agent', notes: '',
       color: 'plain', flagged: 0, position: 1000, checks_total: 0, checks_done: 0,
       last_actor: 'Claude on laptop', last_actor_kind: 'agent' },
   ],
@@ -411,6 +412,10 @@ await step('every card shows its reference', () => {
   }
   const first = q('.card')[0].closest('[data-card]');
   if (!first) throw new Error('card wrapper missing');
+  // A card's old board ref is a tooltip on its ref; a card with none has no tooltip.
+  const tip = (ref) => q('.card-no').find((n) => n.textContent === ref)?.getAttribute('title');
+  if (tip('WRK-1') !== 'Old board ref: MB-41') throw new Error(`WRK-1 tooltip: ${tip('WRK-1')}`);
+  if (tip('WRK-3') !== null) throw new Error(`WRK-3 has no old ref, but its tooltip says ${tip('WRK-3')}`);
 });
 
 await step('a card being created has no number yet', async () => {
@@ -1123,9 +1128,9 @@ await step('search filters cards and hides empty rows', async () => {
   if (q('.card-title').length < 2) throw new Error('clearing search did not bring cards back');
 });
 
-await step('search finds a card by its number or its reference', async () => {
+await step('search finds a card by its ref, its old board ref, or #id', async () => {
   const box = container.querySelector('.search');
-  const target = state.cards[0];   // "Buy milk", id 10, WRK-1
+  const target = state.cards[0];   // "Buy milk", id 10, WRK-1, once MB-41
   const only = async (text) => {
     await act(async () => { setNativeValue(box, text); });
     await settle();
@@ -1135,19 +1140,29 @@ await step('search finds a card by its number or its reference', async () => {
     }
   };
 
-  // With a hash, or as a whole reference in any case: only that card.
-  await only(`#${target.number}`);
+  // "#NN" is the card id, as Jira items say "Source: kanban #NN". A ref or an old ref, in any
+  // case, with or without a hash: only that card.
+  await only(`#${target.id}`);
   await only(target.ref);
   await only(target.ref.toLowerCase());
   await only(`#${target.ref}`);
+  await only(target.legacy_ref);
+  await only(target.legacy_ref.toLowerCase());
 
-  // The id is not what the board shows, so it finds nothing.
-  await act(async () => { setNativeValue(box, `#${target.id}`); });
+  // "#1" is the card with id 1, and there is none: a hash never means a ref's number.
+  await act(async () => { setNativeValue(box, '#1'); });
   await settle();
-  if (q('.card-title').length !== 0) throw new Error(`#${target.id} is an id, not a number on this board`);
+  if (q('.card-title').length !== 0) throw new Error('#1 is an id, not WRK-1');
 
-  // A number with no hash still finds it.
-  await act(async () => { setNativeValue(box, String(target.number)); });
+  // A number with no hash finds an old ref's number too.
+  await act(async () => { setNativeValue(box, '41'); });
+  await settle();
+  if (!q('.card-title').map((n) => n.textContent).includes(target.title)) {
+    throw new Error('41 should find the card once known as MB-41');
+  }
+
+  // A number with no hash still finds the ref's number.
+  await act(async () => { setNativeValue(box, '1'); });
   await settle();
   if (!q('.card-title').map((n) => n.textContent).includes(target.title)) {
     throw new Error('a bare number should find the card too');
@@ -1158,7 +1173,7 @@ await step('search finds a card by its number or its reference', async () => {
   await settle();
   if (q('.card-title').length !== 0) throw new Error('PER-1 is on another board');
 
-  // A word with a dash and a number is still a word when it is not this board's key.
+  // A word with a dash and a number is still a word when no card here has that key.
   await act(async () => { setNativeValue(box, 'covid-19'); });
   await settle();
   if (!q('.card-title').map((n) => n.textContent).includes('Sort donations')) {
@@ -1181,10 +1196,10 @@ await step('search finds a card by its number or its reference', async () => {
   await settle();
 });
 
-await step('the search box says you can use a number', () => {
+await step('the search box says you can use a ref', () => {
   const box = container.querySelector('.search');
-  if (!box.getAttribute('placeholder').includes('#')) {
-    throw new Error('the placeholder should hint that numbers work');
+  if (!box.getAttribute('placeholder').includes('ref')) {
+    throw new Error('the placeholder should hint that refs work');
   }
 });
 
@@ -1367,7 +1382,8 @@ await step('settings shows the board key and can change it', async () => {
   await click([...panel.querySelectorAll('.btn')].find((b) => b.textContent === 'Change key'));
   const dlg = [...document.querySelectorAll('.modal-sm')].find((m) => m.textContent.includes('Board key'));
   if (!dlg) throw new Error('no key dialog');
-  if (!dlg.textContent.includes('WRK-1')) throw new Error('the dialog should say what references look like');
+  // A board key is for display: the dialog must not promise that it renames the cards.
+  if (!dlg.textContent.includes("changes no card's ref")) throw new Error('the dialog should say refs stay');
   const input = dlg.querySelector('input');
   if (input.value !== 'WRK') throw new Error(`the dialog should start from the key, got "${input.value}"`);
   await act(async () => { setNativeValue(input, 'job'); });

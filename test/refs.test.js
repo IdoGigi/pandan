@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { cleanKey, suggestKey, parseRef } from '../server/refs.js';
+import {
+  cleanKey, suggestKey, parseRef, cleanProjectKey, suggestProjectKey, parseCardId,
+} from '../server/refs.js';
 
 test('cleanKey takes a key in any case and stores it in capitals', () => {
   assert.equal(cleanKey('sch'), 'SCH');
@@ -61,4 +63,52 @@ test('parseRef refuses anything that is not a reference', () => {
   for (const bad of ['3', '282', 'SCH', 'SCH-', 'SCH-x', '-3', 'S-3', 'TOOLONG-3', 'SCH-3-4', '', null]) {
     assert.equal(parseRef(bad), null, `${bad} should not parse`);
   }
+});
+
+/* ---------------- project keys ---------------- */
+
+test('cleanProjectKey takes 2 to 5 letters in any case and stores them in capitals', () => {
+  assert.equal(cleanProjectKey('crc'), 'CRC');
+  assert.equal(cleanProjectKey(' Kip '), 'KIP');
+  assert.equal(cleanProjectKey('HR'), 'HR');
+  assert.equal(cleanProjectKey('PROTO'), 'PROTO');
+});
+
+test('cleanProjectKey refuses digits, one letter, six letters and anything else', () => {
+  for (const bad of ['C', 'TOOLNG', 'CR1', '1CR', 'C-R', 'קרקל', '', null, undefined]) {
+    assert.equal(cleanProjectKey(bad), undefined, `${bad} should be refused`);
+  }
+});
+
+test('suggestProjectKey uses initials for several words and three letters for one', () => {
+  assert.equal(suggestProjectKey('Kigali Irrigation Planner', []), 'KIP');
+  assert.equal(suggestProjectKey('Smart-city', []), 'SC');
+  assert.equal(suggestProjectKey('Website', []), 'WEB');
+  // Digits are not part of a project key, so "106" is skipped.
+  assert.equal(suggestProjectKey('106 Dashboard', []), 'DAS');
+});
+
+test('suggestProjectKey starts from PRJ when the name has too few Latin letters', () => {
+  assert.equal(suggestProjectKey('סימולציה', []), 'PRJ');
+  assert.equal(suggestProjectKey('A', []), 'PRJ');
+});
+
+test('suggestProjectKey swaps the end for a letter while the key is taken', () => {
+  assert.equal(suggestProjectKey('Caracal', ['CAR']), 'CARA');
+  assert.equal(suggestProjectKey('Caracal', ['CAR', 'CARA']), 'CARB');
+  const taken = ['PRJ', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((l) => `PRJ${l}`)];
+  assert.equal(suggestProjectKey('תכנון', taken), 'PRJAA');
+});
+
+test('suggestProjectKey always returns a valid project key', () => {
+  for (const name of ['a b c d e f g', 'x', '', 'Mehiron AI', 'Code-cal / CitiCode', 'ננ"ס']) {
+    assert.ok(cleanProjectKey(suggestProjectKey(name, ['MA', 'CCC'])), name);
+  }
+});
+
+test('parseCardId reads a card id, bare or after a hash', () => {
+  assert.equal(parseCardId('300'), 300);
+  assert.equal(parseCardId('#300'), 300);
+  assert.equal(parseCardId(' #7 '), 7);
+  for (const bad of ['MB-300', '#', '3.5', '-3', '', null]) assert.equal(parseCardId(bad), null, String(bad));
 });

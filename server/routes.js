@@ -4,50 +4,53 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   db, COLUMNS, CARD_COLORS, LINK_KINDS, nextPosition, safeUrl, defaultBoardId, cleanDate,
-  createBoard, takeNumber, renumber, inTransaction, recordEvent,
+  createBoard, createProject, takeCardRef, projectKeyIssue, boardKeyIssue, inTransaction, recordEvent,
 } from './db.js';
 import { createToken, requireOwner } from './auth.js';
-import { cleanKey, parseRef } from './refs.js';
+import { cleanKey, cleanProjectKey, parseRef, parseCardId } from './refs.js';
 import { buildInsights } from './insights.js';
 
 export const api = Router();
 
 const bad = (res, msg) => res.status(400).json({ error: msg });
+/** An error with a code from ERRORS.md: the code leads the message too, so an agent sees it. */
+const refused = (res, status, code, reason) => res.status(status).json({ code, error: `${code}: ${reason}` });
 const clean = (v, max = 500) => String(v ?? '').trim().slice(0, max);
 const NOW = "datetime('now')";
 
 /** Who is doing this — you, or one of your agent keys by name. */
 const actorOf = (req) => [req.actor?.name ?? 'you', req.actor?.kind ?? 'owner'];
 
-/** A card with its reference — its board key and its number there, like "SCH-3". */
-const CARD_SELECT = `SELECT c.*, b.key || '-' || c.number AS ref
-                       FROM cards c
-                       JOIN projects p ON p.id = c.project_id
-                       JOIN boards b ON b.id = p.board_id`;
+/** A card's ref, from its project key and its number there: "CRC-3". */
+const REF = "c.ref_key || '-' || c.ref_number";
+/** A card with its ref, and its old board ref (`legacy_ref`, a column) when it had one. */
+const CARD_SELECT = `SELECT c.*, ${REF} AS ref FROM cards c`;
 const cardById = (id) => db.prepare(`${CARD_SELECT} WHERE c.id = ?`).get(id);
 
-/** The card a URL names: by its reference such as "SCH-3", or by its id. */
+/**
+ * The card a URL names: by its id ("300" or "#300"), by its ref ("CRC-3"), or
+ * by the board ref it had before per-project refs ("MB-223").
+ */
 function findCard(param) {
+  const id = parseCardId(param);
+  if (id !== null) return cardById(id);
   const ref = parseRef(param);
-  if (ref) return db.prepare(`${CARD_SELECT} WHERE b.key = ? AND c.number = ?`).get(ref.key, ref.number);
-  return /^\d+$/.test(param) ? cardById(Number(param)) : undefined;
+  if (!ref) return undefined;
+  return db.prepare(`${CARD_SELECT} WHERE c.ref_key = ? AND c.ref_number = ?`).get(ref.key, ref.number)
+    ?? db.prepare(`${CARD_SELECT} WHERE c.legacy_ref = ?`).get(`${ref.key}-${ref.number}`);
 }
 
-const boardOfProject = (projectId) =>
-  db.prepare('SELECT board_id FROM projects WHERE id = ?').get(projectId)?.board_id;
-
-/** The number a card has in its new project: the same one, unless it changed board. */
-function numberIn(card, projectId) {
-  const toBoard = boardOfProject(projectId);
-  return toBoard === boardOfProject(card.project_id) ? card.number : takeNumber(toBoard);
-}
-
-/** A board key from a request: `{ key }` when it can be used, `{ error }` when not. */
+/**
+ * A board key from a request: `{ key }` when it can be used, `{ error }` (and
+ * `code`) when not. A board key is for display; it must not be a project key.
+ */
 function checkKey(value, boardId) {
   const key = cleanKey(value);
   if (!key) return { error: 'key must be 2 to 6 letters or digits, starting with a letter, like SCH' };
   const owner = db.prepare('SELECT id, name FROM boards WHERE key = ?').get(key);
   if (owner && owner.id !== boardId) return { error: `key ${key} is already used by the board "${owner.name}"` };
+  const clash = boardKeyIssue(key);
+  if (clash) return { code: clash.code, error: `${clash.code}: ${clash.reason}` };
   return { key };
 }
 
@@ -141,14 +144,14 @@ api.post('/boards', (req, res) => {
   let key;
   if (clean(req.body?.key, 20)) {
     const checked = checkKey(req.body.key, null);
-    if (checked.error) return bad(res, checked.error);
+    if (checked.error) return res.status(400).json({ code: checked.code, error: checked.error });
     key = checked.key;
   }
   const id = createBoard(name, key);
   res.status(201).json(db.prepare('SELECT * FROM boards WHERE id = ?').get(id));
 });
 
-/** A new key changes the reference of every card on the board; the numbers stay. */
+/** A board key is for display only: changing it changes no card's ref. */
 api.patch('/boards/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM boards WHERE id = ?').get(Number(req.params.id));
   if (!row) return res.status(404).json({ error: 'board not found' });
@@ -158,7 +161,7 @@ api.patch('/boards/:id', (req, res) => {
   let key = row.key;
   if (req.body?.key !== undefined) {
     const checked = checkKey(req.body.key, row.id);
-    if (checked.error) return bad(res, checked.error);
+    if (checked.error) return res.status(400).json({ code: checked.code, error: checked.error });
     key = checked.key;
   }
   db.prepare('UPDATE boards SET name = ?, position = ?, key = ? WHERE id = ?').run(name, position, key, row.id);
@@ -187,18 +190,17 @@ api.get('/board', (req, res) => {
   if (!board) return res.status(404).json({ error: 'board not found' });
 
   const projects = db.prepare(
-    `SELECT id, name, color, position, archived FROM projects
+    `SELECT id, name, key, color, position, archived FROM projects
       WHERE archived = 0 AND board_id = ? ORDER BY position`
   ).all(board.id);
   const cards = db.prepare(
-    `SELECT c.id, c.number, b.key || '-' || c.number AS ref,
+    `SELECT c.id, ${REF} AS ref, c.legacy_ref,
             c.project_id, c.column_key, c.title, c.notes, c.color, c.flagged, c.position,
             c.due_date, c.last_actor, c.last_actor_kind,
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id)                AS checks_total,
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id AND k.done = 1) AS checks_done
        FROM cards c
        JOIN projects p ON p.id = c.project_id
-       JOIN boards b ON b.id = p.board_id
       WHERE p.archived = 0 AND p.board_id = ? AND c.archived_at IS NULL
       ORDER BY c.position`
   ).all(board.id);
@@ -240,14 +242,12 @@ api.get('/projects/:id', (req, res) => {
   if (!project) return res.status(404).json({ error: 'project not found' });
 
   const cards = db.prepare(
-    `SELECT c.id, c.number, b.key || '-' || c.number AS ref,
+    `SELECT c.id, ${REF} AS ref, c.legacy_ref,
             c.column_key, c.title, c.notes, c.color, c.flagged, c.position,
             c.created_at, c.updated_at,
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id)                AS checks_total,
             (SELECT COUNT(*) FROM checks k WHERE k.card_id = c.id AND k.done = 1) AS checks_done
        FROM cards c
-       JOIN projects p ON p.id = c.project_id
-       JOIN boards b ON b.id = p.board_id
       WHERE c.project_id = ? AND c.archived_at IS NULL
       ORDER BY c.position`
   ).all(project.id);
@@ -291,6 +291,7 @@ api.get('/projects/:id', (req, res) => {
   });
 });
 
+/** Leave `key` out and one is made from the name. A project's key never changes. */
 api.post('/projects', (req, res) => {
   const name = clean(req.body?.name, 120);
   if (!name) return bad(res, 'name is required');
@@ -299,19 +300,26 @@ api.post('/projects', (req, res) => {
   if (!db.prepare('SELECT id FROM boards WHERE id = ?').get(boardId)) {
     return bad(res, 'board_id must be an existing board');
   }
-  const position = nextPosition('projects', 'archived = 0 AND board_id = ?', [boardId]);
-  const { lastInsertRowid } = db
-    .prepare(
-      `INSERT INTO projects (board_id, name, color, position, description, repo_url)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    .run(boardId, name, color, position, clean(req.body?.description, 5000), clean(req.body?.repo_url, 500));
-  res.status(201).json(db.prepare('SELECT * FROM projects WHERE id = ?').get(lastInsertRowid));
+  let key;
+  if (clean(req.body?.key, 20)) {
+    const problem = projectKeyIssue(clean(req.body.key, 20));
+    if (problem) return refused(res, 400, problem.code, problem.reason);
+    key = cleanProjectKey(req.body.key);
+  }
+  const id = createProject({
+    boardId, name, color, key,
+    description: clean(req.body?.description, 5000),
+    repoUrl: clean(req.body?.repo_url, 500),
+  });
+  res.status(201).json(db.prepare('SELECT * FROM projects WHERE id = ?').get(id));
 });
 
 api.patch('/projects/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM projects WHERE id = ?').get(Number(req.params.id));
   if (!row) return res.status(404).json({ error: 'project not found' });
+  if (req.body?.key !== undefined && cleanProjectKey(req.body.key) !== row.key) {
+    return refused(res, 400, 'PND-REF-008', `a project's key never changes; ${row.key} stays, so its cards keep their refs`);
+  }
   const name = req.body?.name === undefined ? row.name : clean(req.body.name, 120);
   if (!name) return bad(res, 'name cannot be empty');
   const color = req.body?.color === undefined ? row.color : clean(req.body.color, 20);
@@ -324,16 +332,11 @@ api.patch('/projects/:id', (req, res) => {
   const boardId = req.body?.board_id === undefined ? row.board_id : Number(req.body.board_id);
   const description = req.body?.description === undefined ? row.description : clean(req.body.description, 5000);
   const repoUrl = req.body?.repo_url === undefined ? row.repo_url : clean(req.body.repo_url, 500);
-  inTransaction(() => {
-    db.prepare(
-      `UPDATE projects SET name=?, color=?, position=?, archived=?, description=?, repo_url=?, board_id=?
-        WHERE id=?`
-    ).run(name, color, position, archived, description, repoUrl, boardId, row.id);
-    // Its cards go with it, archived ones too, and are numbered on the new board.
-    if (boardId !== row.board_id) {
-      renumber(db.prepare('SELECT id FROM cards WHERE project_id = ?').all(row.id).map((c) => c.id), boardId);
-    }
-  });
+  // Its cards go with it to another board, archived ones too, and keep their refs.
+  db.prepare(
+    `UPDATE projects SET name=?, color=?, position=?, archived=?, description=?, repo_url=?, board_id=?
+      WHERE id=?`
+  ).run(name, color, position, archived, description, repoUrl, boardId, row.id);
   res.json(db.prepare('SELECT * FROM projects WHERE id = ?').get(row.id));
 });
 
@@ -506,15 +509,14 @@ api.get('/cards', (req, res) => {
   where.push(archived ? 'c.archived_at IS NOT NULL' : 'c.archived_at IS NULL');
   const filter = where.length ? `AND ${where.join(' AND ')}` : '';
   res.json(db.prepare(
-    `SELECT c.*, b.key || '-' || c.number AS ref, p.name AS project_name FROM cards c
+    `SELECT c.*, ${REF} AS ref, p.name AS project_name FROM cards c
        JOIN projects p ON p.id = c.project_id
-       JOIN boards b ON b.id = p.board_id
       WHERE p.archived = 0 ${filter}
       ORDER BY ${archived ? 'c.archived_at DESC' : 'c.position'}`
   ).all(...params));
 });
 
-// Every /cards/:id route takes the card's reference ("SCH-3") as well as its id.
+// Every /cards/:id route takes the card's id ("300", "#300"), its ref ("CRC-3") or its old board ref ("MB-223").
 api.get('/cards/:id', (req, res) => {
   const card = findCard(req.params.id);
   if (!card) return res.status(404).json({ error: 'card not found' });
@@ -539,21 +541,35 @@ api.post('/cards', (req, res) => {
   if (due === undefined) return bad(res, 'due_date must look like 2026-09-15, or be empty');
 
   const position = nextPosition('cards', 'project_id = ? AND column_key = ?', [projectId, column]);
-  const cardId = inTransaction(() => {
-    const { lastInsertRowid } = db.prepare(
-      `INSERT INTO cards (project_id, column_key, title, notes, color, flagged, position, due_date, number)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      projectId, column, title,
-      clean(req.body?.notes, 4000),
-      clean(req.body?.color, 20) || 'plain',
-      req.body?.flagged ? 1 : 0,
-      position, due,
-      takeNumber(boardOfProject(projectId))
-    );
-    logEvent(req, lastInsertRowid, 'created', null, column);
-    return lastInsertRowid;
-  });
+  let cardId;
+  try {
+    cardId = inTransaction(() => {
+      const ref = takeCardRef(projectId);
+      const { lastInsertRowid } = db.prepare(
+        `INSERT INTO cards (project_id, column_key, title, notes, color, flagged, position, due_date, ref_key, ref_number)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        projectId, column, title,
+        clean(req.body?.notes, 4000),
+        clean(req.body?.color, 20) || 'plain',
+        req.body?.flagged ? 1 : 0,
+        position, due, ref.key, ref.number
+      );
+      logEvent(req, lastInsertRowid, 'created', null, column);
+      return lastInsertRowid;
+    });
+  } catch (err) {
+    // The database refuses a ref already in use. The counter only goes up, so the rows were edited by hand.
+    if (/UNIQUE constraint failed: cards\.ref_key/.test(err.message)) {
+      console.error('[error] PND-REF-006', err.message);
+      return refused(res, 409, 'PND-REF-006', 'that ref is already used by another card; nothing was saved');
+    }
+    if (err.message.startsWith('PND-REF-012')) {
+      console.error('[error]', err.message);
+      return refused(res, 500, 'PND-REF-012', 'the project has no key yet; restart the server so it gets one');
+    }
+    throw err;
+  }
   stamp(req, cardId);
   res.status(201).json(cardById(cardId));
 });
@@ -591,14 +607,14 @@ api.patch('/cards/:id', (req, res) => {
     db.prepare(
       `UPDATE cards
           SET project_id = ?, column_key = ?, title = ?, notes = ?, color = ?, flagged = ?,
-              position = ?, due_date = ?, number = ?, updated_at = ${NOW}
+              position = ?, due_date = ?, updated_at = ${NOW}
         WHERE id = ?`
     ).run(
       projectId, column, title,
       b.notes === undefined ? card.notes : clean(b.notes, 4000),
       b.color === undefined ? card.color : clean(b.color, 20),
       b.flagged === undefined ? card.flagged : (b.flagged ? 1 : 0),
-      position, due, numberIn(card, projectId), card.id
+      position, due, card.id
     );
     if (column !== card.column_key) logEvent(req, card.id, 'moved', card.column_key, column);
   });
@@ -638,9 +654,9 @@ api.post('/cards/:id/move', (req, res) => {
 
   inTransaction(() => {
     db.prepare(
-      `UPDATE cards SET project_id = ?, column_key = ?, position = ?, number = ?, updated_at = ${NOW}
+      `UPDATE cards SET project_id = ?, column_key = ?, position = ?, updated_at = ${NOW}
         WHERE id = ?`
-    ).run(projectId, column, position, numberIn(card, projectId), card.id);
+    ).run(projectId, column, position, card.id);
     if (column !== card.column_key) logEvent(req, card.id, 'moved', card.column_key, column);
   });
   stamp(req, card.id);

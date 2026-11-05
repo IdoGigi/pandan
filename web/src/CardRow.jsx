@@ -130,7 +130,7 @@ export function CardRow({ card, project, note, tags = [], start = false, onOpenC
     <li className="card-row">
       <button type="button" className="row-open" disabled={card.archived} onClick={() => onOpenCard(card.id)}
         title={card.archived ? 'Archived — restore it from the Archive to edit it' : 'Open this card'}>
-        <span className="card-no">{ref}</span>
+        <span className="card-no" title={card.legacy_ref ? `Old board ref: ${card.legacy_ref}` : undefined}>{ref}</span>
         <span className="row-title" dir="auto">{card.title}</span>
       </button>
       <span className="row-meta">
