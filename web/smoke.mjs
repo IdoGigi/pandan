@@ -57,7 +57,7 @@ const state = {
   // fake ones above (and the archived WRK-9); the lists are canned, so the steps can check order and counts.
   insights: {
     board: { id: 1, name: 'Work', key: 'WRK' }, quiet_days: 7, history_since: '2026-11-05',
-    stuck: { waiting: [12, 11], flagged: [10], overdue: [], quiet: [11] },
+    stuck: { waiting: [12], flagged: [10], overdue: [], quiet: [11] },
     // Done counts live Done (WRK-5) and cards archived from Done (WRK-9).
     totals: { open: [10, 11, 12, 13], in_progress: [11, 12, 13], done: [14, 77] },
     columns: { todo: [10], next: [], doing: [11], waiting: [12], review: [13], done: [14] },
@@ -70,7 +70,7 @@ const state = {
       { from_days: 14, to_days: 30, ids: [11] }, { from_days: 30, to_days: 90, ids: [] },
       { from_days: 90, to_days: null, ids: [13] }],
     weeks: WEEK_STARTS.map((start, i) => ({
-      start, added: i === 11 ? [10, 12] : [], finished: i === 9 ? [77] : [], estimated: i === 9 })),
+      start, added: i === 11 ? [10, 12] : [], finished: i === 9 ? [14] : [], estimated: i === 9 })),
     time_in_column: Object.fromEntries(['todo', 'next', 'doing', 'waiting', 'review'].map((c) => [c,
       c === 'doing' ? { median_days: 2.5, moves: 3, longest: [12, 11], longest_days: [6.5, 1] }
       // Under an hour rounds to 0 days; that bar must still show and click.
@@ -1700,15 +1700,16 @@ await step('the Dashboard has a Control half and an Insight half', async () => {
   const want = 'Board now,Projects,Added and finished per week,Age of open work,Agents,Median days in each column';
   if (panels.join() !== want) throw new Error(`insight panels: ${panels}`);
   const waiting = q('.tile').find((t) => t.textContent.includes('Waiting'));
-  if (waiting?.querySelector('b').textContent !== '2') throw new Error('Waiting tile should count 2');
+  if (waiting?.querySelector('b').textContent !== '1') throw new Error('Waiting tile should count 1');
 });
 
-await step('the big numbers: open, in progress, done with its share, and added in the last 4 weeks', async () => {
+await step('the big numbers: open, active, done with its share, and added in the last 4 weeks', async () => {
   const tiles = () => Object.fromEntries(q('.big-numbers .tile').map((t) => [t.querySelector('span').textContent, t]));
   const read = (t) => [t.querySelector('b').textContent, t.querySelector('small')?.textContent].filter(Boolean).join(' ');
   const shown = Object.entries(tiles()).map(([label, t]) => `${label}=${read(t)}`).join(' | ');
   // Done is 2 against 4 open; Overdue is 0, so it is left out; Gone quiet is 1, so it shows.
-  const want = 'Open=4 | In progress=3 | Done=2 33% of all work | Added, last 4 weeks=2 | Waiting=2 | Flagged=1 | Gone quiet=1';
+  // "Active", not "In progress": on the board that name is the Next, Doing and Waiting group.
+  const want = 'Open=4 | Active=3 | Done=2 33% of all work | Added, last 4 weeks=2 | Waiting=1 | Flagged=1 | Gone quiet=1';
   if (shown !== want) throw new Error(`big numbers: ${shown}`);
   // Each of the last 4 weeks counts, a card once however many weeks name it; the week before does not.
   const { weeks, totals } = state.insights;
@@ -1821,11 +1822,13 @@ await step('the parts of a stacked column are drawn apart', () => {
 });
 
 await step('a tile lists its cards, untouched longest first', async () => {
-  await click(q('.tile').find((t) => t.textContent.includes('Waiting')));
+  await click(q('.big-numbers .tile').find((t) => t.querySelector('span').textContent === 'Active'));
   const head = document.querySelector('.drill h3')?.textContent;
-  if (head !== 'Waiting · 2') throw new Error(`drill header: ${head}`);
+  if (head !== 'Active · 3') throw new Error(`drill header: ${head}`);
+  // The title is isolated, so a count after a Hebrew project name is not drawn inside it.
+  if (document.querySelector('.drill h3 bdi')?.textContent !== 'Active') throw new Error('the list title is not isolated from its count');
   const refs = q('.drill .card-no').map((n) => n.textContent);
-  if (refs.join() !== 'WRK-2,WRK-3') throw new Error(`order: ${refs}`);
+  if (refs.join() !== 'WRK-2,WRK-3,WRK-4') throw new Error(`order: ${refs}`);
 });
 
 await step('the open list takes focus, and its header stays in view', () => {
@@ -1912,15 +1915,17 @@ await step('the age of open work: 5 bars from calm to warm, each listing its car
   }
 });
 
-await step('estimated weeks are marked, and archived cards cannot be opened', async () => {
+await step('estimated weeks are marked, and an estimated week lists its cards', async () => {
   const est = q('.dash rect[data-estimated]');
   if (est.length !== 1) throw new Error(`estimated bars: ${est.length}`);
   if (!document.querySelector('.est-note')) throw new Error('no estimate note');
   document.querySelector('.drill')?.blur();
   await click(est[0]);
+  const head = document.querySelector('.drill h3')?.textContent ?? '';
+  if (!/^Finished · week of .+ \(estimated\) · 1$/.test(head)) throw new Error(`drill header: ${head}`);
   const row = q('.drill .card-row')[0];
-  if (!row?.querySelector('.row-open').disabled || row.querySelector('.row-col').textContent !== 'archived') {
-    throw new Error('archived row should be shown and disabled');
+  if (row?.querySelector('.card-no').textContent !== 'WRK-5' || row.querySelector('.row-open').disabled) {
+    throw new Error('the estimated week should list WRK-5, a live Done card');
   }
   if (document.activeElement !== document.querySelector('.drill')) throw new Error('the list did not take focus for its new title');
 });
@@ -1980,15 +1985,15 @@ await step('the week charts jump to the latest week only when there is something
 
 await step('a change from elsewhere re-reads the dashboard', async () => {
   const count = () => q('.tile').find((t) => t.textContent.includes('Waiting'))?.querySelector('b').textContent;
-  if (count() !== '2') throw new Error(`Waiting starts at ${count()}`);
+  if (count() !== '1') throw new Error(`Waiting starts at ${count()}`);
   const kept = state.insights.stuck;
-  state.insights.stuck = { ...kept, waiting: [12] };
+  state.insights.stuck = { ...kept, waiting: [12, 10] };
   await liveChange();
   const after = count();
   state.insights.stuck = kept;
   await liveChange();
-  if (after !== '1') throw new Error(`the Waiting tile reads ${after} after the change, expected 1`);
-  if (count() !== '2') throw new Error('the Waiting tile did not go back');
+  if (after !== '2') throw new Error(`the Waiting tile reads ${after} after the change, expected 2`);
+  if (count() !== '1') throw new Error('the Waiting tile did not go back');
 });
 
 await step('with nothing in the last 12 weeks, the week charts say so', async () => {
@@ -2259,18 +2264,26 @@ await step('quick add remembers the last project per board, and falls back when 
 
 await step('Control: each card sits in the first list that claims it, each list in its order', async () => {
   const heads = q('.dash-control h3').map((h) => h.childNodes[0].textContent);
-  if (heads.join() !== 'In progress,Needs attention,Up next,Oldest open') throw new Error(`lists: ${heads}`);
-  // WRK-2 is in Doing but waiting and quiet too: Needs attention claims it, so In progress leaves it out.
-  if (refsIn(control('In progress')).join() !== 'WRK-4') throw new Error(`In progress: ${refsIn(control('In progress'))}`);
-  const attention = control('Needs attention');
-  if (refsIn(attention).join() !== 'WRK-2,WRK-3,WRK-1') throw new Error(`Needs attention: ${refsIn(attention)}`);
-  const tags = (ref) => [...rowOf(attention, ref).querySelectorAll('.row-tag')].map((t) => t.textContent).join(' + ');
-  if (!/^⏸ waiting \+ quiet \d+d$/.test(tags('WRK-2'))) throw new Error(`WRK-2 tags: ${tags('WRK-2')}`);
+  if (heads.join() !== 'Working on,Needs attention,Up next,Oldest open') throw new Error(`lists: ${heads}`);
+  // WRK-2 is in Doing but gone quiet: Needs attention claims it, so Working on leaves it out.
+  if (refsIn(control('Working on')).join() !== 'WRK-4') throw new Error(`Working on: ${refsIn(control('Working on'))}`);
+  const attention = () => control('Needs attention');
+  if (refsIn(attention()).join() !== 'WRK-2,WRK-3,WRK-1') throw new Error(`Needs attention: ${refsIn(attention())}`);
+  const tags = (ref) => [...rowOf(attention(), ref).querySelectorAll('.row-tag')].map((t) => t.textContent).join(' + ');
+  if (!/^quiet \d+d$/.test(tags('WRK-2'))) throw new Error(`WRK-2 tags: ${tags('WRK-2')}`);
+  if (tags('WRK-3') !== '⏸ waiting') throw new Error(`WRK-3 tags: ${tags('WRK-3')}`);
   if (tags('WRK-1') !== '⚑ flagged') throw new Error(`WRK-1 tags: ${tags('WRK-1')}`);
+  // One card, two reasons: flagged and quiet, a tag each.
+  await withInsights({
+    stuck: { ...state.insights.stuck, flagged: [10, 11] },
+    cards: { ...state.insights.cards, 11: { ...state.insights.cards[11], flagged: 1 } },
+  }, () => {
+    if (!/^⚑ flagged \+ quiet \d+d$/.test(tags('WRK-2'))) throw new Error(`a flagged, quiet WRK-2 is tagged: ${tags('WRK-2')}`);
+  });
   const empty = (name) => control(name).querySelector('.dash-empty')?.textContent;
   if (empty('Up next') !== 'Next is empty') throw new Error(`Up next: ${empty('Up next')}`);
   if (empty('Oldest open') !== 'Nothing else open') throw new Error(`Oldest open: ${empty('Oldest open')}`);
-  // Nothing needs attention. In progress goes by column, then untouched longest first: WRK-17 has
+  // Nothing needs attention. Working on goes by column, then untouched longest first: WRK-17 has
   // waited longest of all, but Review comes after Doing. The rest of the open cards go oldest first.
   const { columns, cards, totals } = state.insights;
   await withInsights({
@@ -2282,17 +2295,17 @@ await step('Control: each card sits in the first list that claims it, each list 
       17: fakeCard(17, 'review', { updated_at: '2026-09-01 10:00:00' }) },
   }, async () => {
     if (empty('Needs attention') !== 'Nothing flagged, waiting, overdue or quiet') throw new Error(`Needs attention: ${empty('Needs attention')}`);
-    const inProgress = control('In progress');
-    if (refsIn(inProgress).join() !== 'WRK-16,WRK-2,WRK-17,WRK-4') throw new Error(`In progress: ${refsIn(inProgress)}`);
-    const cols = [...inProgress.querySelectorAll('.row-col')].map((t) => t.textContent).join();
-    if (cols !== 'Doing,Doing,Review,Review') throw new Error(`In progress columns: ${cols}`);
+    const workingOn = control('Working on');
+    if (refsIn(workingOn).join() !== 'WRK-16,WRK-2,WRK-17,WRK-4') throw new Error(`Working on: ${refsIn(workingOn)}`);
+    const cols = [...workingOn.querySelectorAll('.row-col')].map((t) => t.textContent).join();
+    if (cols !== 'Doing,Doing,Review,Review') throw new Error(`Working on columns: ${cols}`);
     const oldest = control('Oldest open');
     if (refsIn(oldest).join() !== 'WRK-3,WRK-1') throw new Error(`Oldest open: ${refsIn(oldest)}`);
     const ages = [...oldest.querySelectorAll('.row-age')].map((t) => t.textContent);
     if (!/^\d+d old$/.test(ages[0]) || ages[1] !== 'today') throw new Error(`Oldest open says: ${ages}`);
   });
   await withInsights({ columns: { ...columns, doing: [], review: [] } }, async () => {
-    if (empty('In progress') !== 'Nothing in progress') throw new Error(`In progress: ${empty('In progress')}`);
+    if (empty('Working on') !== 'Nothing else in Doing or Review') throw new Error(`Working on: ${empty('Working on')}`);
   });
 });
 
@@ -2383,6 +2396,9 @@ await step('⋯ moves a card to any column; Esc closes the menu but not the card
   if (!menu || more.getAttribute('aria-expanded') !== 'true') throw new Error('the menu did not open');
   const items = [...menu.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent).join();
   if (items !== 'Next,Doing,Waiting,Review,Done') throw new Error(`menu: ${items}`);
+  const label = dom.window.getComputedStyle(menu.querySelector('.ctx-label'));
+  if (parseFloat(label.borderTopWidth) > 0 && label.borderTopStyle !== 'none') throw new Error('a stray line above the menu label');
+  if (parseFloat(label.marginTop) > 0) throw new Error(`the menu label has a ${label.marginTop} gap above it`);
   if (document.activeElement !== menu.querySelector('button')) throw new Error('the menu did not take focus');
   await pressEsc();
   if (document.querySelector('.row-menu')) throw new Error('Esc left the menu open');
@@ -2466,14 +2482,14 @@ await step('a list longer than 8 shows 8, and "All N" opens the whole list', asy
     columns: { ...columns, doing: ids },
     cards: { ...cards, ...Object.fromEntries(ids.map((id) => [id, fakeCard(id, 'doing')])) },
   }, async () => {
-    const list = control('In progress');
+    const list = control('Working on');
     const rows = list.querySelectorAll('.card-row').length;
     if (rows !== 8) throw new Error(`${rows} rows shown`);
     const all = [...list.querySelectorAll('button')].find((b) => b.textContent === 'All 11');
     if (!all) throw new Error('no "All 11"');
-    if (all.getAttribute('aria-label') !== 'All 11 in In progress') throw new Error(`"All 11" is labelled ${all.getAttribute('aria-label')}`);
+    if (all.getAttribute('aria-label') !== 'All 11 in Working on') throw new Error(`"All 11" is labelled ${all.getAttribute('aria-label')}`);
     await click(all);
-    if (document.querySelector('.drill h3')?.textContent !== 'In progress · 11') throw new Error('the whole list did not open');
+    if (document.querySelector('.drill h3')?.textContent !== 'Working on · 11') throw new Error('the whole list did not open');
   });
   await pressEsc();
 });

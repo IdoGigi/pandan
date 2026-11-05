@@ -6,14 +6,14 @@ const SHOWN = 8; // a longer list shows this many, and "All N" opens the rest in
 const PICKS = 5; // Up next and Oldest open show this many
 
 const untouchedFirst = (a, b) => a.updated_at.localeCompare(b.updated_at);
-const IN_PROGRESS = ['doing', 'review'];
+const WORKING = ['doing', 'review'];
 
 /**
  * Sorts the open cards into the four lists. Each card goes to the first list
- * that claims it, in this order: Needs attention, In progress, Up next, Oldest
+ * that claims it, in this order: Needs attention, Working on, Up next, Oldest
  * open. Up next and Oldest open claim only the five they show.
  */
-export function placeCards({ stuck, columns, totals, cards, projects }) {
+function placeCards({ stuck, columns, totals, cards, projects }) {
   // The live cards among `ids` that no earlier list has taken, each once.
   const unclaimed = (ids, taken) => [...new Set(ids)].filter((id) => !taken.has(id))
     .map((id) => cards[id]).filter((c) => c && !c.archived);
@@ -22,9 +22,9 @@ export function placeCards({ stuck, columns, totals, cards, projects }) {
     .sort(untouchedFirst);
   const taken = new Set(attention.map((c) => c.id));
 
-  const inProgress = unclaimed(IN_PROGRESS.flatMap((col) => columns[col]), taken)
-    .sort((a, b) => IN_PROGRESS.indexOf(a.column_key) - IN_PROGRESS.indexOf(b.column_key) || untouchedFirst(a, b));
-  const taken2 = new Set([...taken, ...inProgress.map((c) => c.id)]);
+  const workingOn = unclaimed(WORKING.flatMap((col) => columns[col]), taken)
+    .sort((a, b) => WORKING.indexOf(a.column_key) - WORKING.indexOf(b.column_key) || untouchedFirst(a, b));
+  const taken2 = new Set([...taken, ...workingOn.map((c) => c.id)]);
 
   // Board order: the projects as the board lists them, then each card's place in its column.
   const rank = new Map(projects.map((p, i) => [p.id, i]));
@@ -37,7 +37,7 @@ export function placeCards({ stuck, columns, totals, cards, projects }) {
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
     .slice(0, PICKS);
 
-  return { attention, inProgress, upNext, oldest };
+  return { attention, workingOn, upNext, oldest };
 }
 
 /** One small tag per reason a card needs attention. */
@@ -55,7 +55,7 @@ function CardList({ title, empty, rows, row, onPick }) {
   const head = useId();
   return (
     <section className="dash-block" aria-labelledby={head}>
-      {/* The name is the title alone; the count beside it would read "In progress3". */}
+      {/* The name is the title alone; the count beside it would read "Working on3". */}
       <h3><span id={head}>{title}</span>{rows.length > 0 && <span className="list-count">{rows.length}</span>}</h3>
       {rows.length === 0 ? <p className="dash-empty">{empty}</p> : (
         <>
@@ -82,14 +82,15 @@ function CardList({ title, empty, rows, row, onPick }) {
  * quick actions on every row, and a line to add new ones.
  */
 export function Control({ data, onPick, onOpenCard, onChanged, onError }) {
-  const { attention, inProgress, upNext, oldest } = placeCards(data);
+  const { attention, workingOn, upNext, oldest } = placeCards(data);
   const row = { colorOf: Object.fromEntries(data.projects.map((p) => [p.id, p.color])), onOpenCard, onChanged, onError };
   return (
     <section className="dash-half dash-control" aria-labelledby="dash-control-head">
       <h2 id="dash-control-head">Control</h2>
       <QuickAdd boardId={data.board.id} projects={data.projects} onAdded={onChanged} onError={onError} />
-      <CardList title="In progress" empty="Nothing in progress" row={row} onPick={onPick}
-        rows={inProgress.map((card) => ({ card }))} />
+      {/* Not "In progress": the board's In progress group and the Active number each mean other columns. */}
+      <CardList title="Working on" empty="Nothing else in Doing or Review" row={row} onPick={onPick}
+        rows={workingOn.map((card) => ({ card }))} />
       <CardList title="Needs attention" empty="Nothing flagged, waiting, overdue or quiet" row={row} onPick={onPick}
         rows={attention.map((card) => ({ card, tags: reasons(card, data.stuck) }))} />
       <CardList title="Up next" empty="Next is empty" row={row} onPick={onPick}

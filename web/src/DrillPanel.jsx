@@ -34,7 +34,8 @@ export function DrillPanel({ title, cards, notes, projects, onOpenCard, onChange
   return (
     <aside className="drill" aria-label={title} tabIndex={-1} ref={box}>
       <header>
-        <h3>{title} · {cards.length}</h3>
+        {/* Isolated, so a count after a Hebrew project name is not drawn inside it. */}
+        <h3><bdi>{title}</bdi> · {cards.length}</h3>
         <button className="btn btn-ghost" onClick={onClose} aria-label="Close the list">✕</button>
       </header>
       <ul className="card-list">

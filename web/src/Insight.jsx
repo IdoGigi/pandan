@@ -43,7 +43,8 @@ function BigNumbers({ data, onPick }) {
     <div className="big-numbers">
       <div className="tiles">
         <Tile label="Open" ids={totals.open} onPick={onPick} />
-        <Tile label="In progress" hint="In Doing, Waiting or Review" ids={totals.in_progress} onPick={onPick} />
+        {/* "Active", not "In progress": on the board that name is the Next, Doing and Waiting group. */}
+        <Tile label="Active" hint="In Doing, Waiting or Review" ids={totals.in_progress} onPick={onPick} />
         <Tile label="Done" hint="In Done, or archived from Done" sub={share} ids={totals.done} onPick={onPick} />
       </div>
       <div className="tiles">
