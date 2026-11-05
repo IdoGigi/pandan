@@ -77,7 +77,7 @@ open board only and updates live, like the board.
 
 - **Quick add.** Pick a project and a column (To do, Next or Doing), type a
   title and press Enter. The field stays ready for the next card.
-- **In progress.** The cards in Doing and Review.
+- **Working on.** The cards in Doing and Review.
 - **Needs attention.** Cards that are waiting, flagged, overdue, or gone quiet
   (no change for 7 days or more in Doing, Waiting or Review). Each one is
   tagged with the reason.
@@ -98,7 +98,7 @@ open board only and updates live, like the board.
 
 **Insight** (right): every chart is upright and fills its panel.
 
-- **Big numbers.** Open, In progress, Done (with its share of all work), Added
+- **Big numbers.** Open, Active (in Doing, Waiting or Review), Done (with its share of all work), Added
   in the last 4 weeks, Waiting and Flagged. Overdue and Gone quiet appear when
   there are any.
 - **Board now.** The cards in each column.

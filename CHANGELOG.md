@@ -14,7 +14,7 @@ updates live, like the board.
   - **Quick add.** A card from the dashboard: pick the project and the column,
     then type and press Enter.
   - **Four lists.**
-    - The lists are In progress, Needs attention (waiting, flagged, overdue or
+    - The lists are Working on, Needs attention (waiting, flagged, overdue or
       gone quiet, each card tagged with why), Up next (with **Start ▶**) and
       Oldest open.
     - A card shows up in only one of them.
@@ -25,7 +25,7 @@ updates live, like the board.
     - ⏸ moves it to Waiting;
     - ⋯ moves it to any column.
 - **Insight: see how it is going.**
-  - **Big numbers.** Open, In progress, Done (with its share of all work),
+  - **Big numbers.** Open, Active (in Doing, Waiting or Review), Done (with its share of all work),
     Added in the last 4 weeks, Waiting and Flagged. Overdue and Gone quiet
     appear when above 0.
   - **Charts.** Board now by column; projects stacked by column with done on
