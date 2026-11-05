@@ -2535,6 +2535,33 @@ await step('a narrow row gives its title the first line; the rest goes under it'
   if (title?.getPropertyValue('flex-grow') !== '0') throw new Error(`.row-title grows: flex "${title?.getPropertyValue('flex')}"`);
 });
 
+await step('every row names its project beside its colour, in the lists and the card list', async () => {
+  const { columns, totals, cards } = state.insights;
+  // One card in the Hebrew project, so a right-to-left name is checked as well.
+  await withInsights({
+    columns: { ...columns, doing: [11, 18] },
+    totals: { ...totals, open: [...totals.open, 18], in_progress: [...totals.in_progress, 18] },
+    cards: { ...cards, 18: fakeCard(18, 'doing', { project_id: 4 }) },
+  }, async () => {
+    const want = (ref) => (ref === 'WRK-18' ? 'ניתוח מערכות מידע' : 'House chores');
+    const check = (rows, where) => {
+      if (!rows.some((r) => r.querySelector('.card-no').textContent === 'WRK-18')) throw new Error(`${where}: no WRK-18`);
+      for (const r of rows) {
+        const ref = r.querySelector('.card-no').textContent;
+        const p = r.querySelector(':scope > .row-meta .row-project');
+        if (!p?.querySelector('.dot')) throw new Error(`${where}: ${ref} has no project dot`);
+        // Isolated, so a Hebrew name does not pull the column and age into its own direction.
+        const name = p.querySelector('bdi')?.textContent;
+        if (name !== want(ref)) throw new Error(`${where}: ${ref} names its project "${name}"`);
+      }
+    };
+    check(q('.dash-control .card-row'), 'Control');
+    await click(bigNumber('Active'));
+    check(q('.drill .card-row'), 'card list');
+  });
+  await pressEsc();
+});
+
 await step('the pale columns have an edge, so To do and Next show on a white panel', () => {
   const pale = (label) => q(`.dash svg[aria-label="${label}"] rect.pick`).filter((r) => r.classList.contains('pale'))
     .map((r) => r.style.fill).join();

@@ -27,7 +27,7 @@ export function DrillPanel({ title, cards, notes, projects, onOpenCard, onChange
     if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
   }, []);
 
-  const colorOf = Object.fromEntries(projects.map((p) => [p.id, p.color]));
+  const projectOf = Object.fromEntries(projects.map((p) => [p.id, p]));
   // A list with notes ("Longest in Doing") is already in its own order; the rest go untouched-longest first.
   const sorted = notes ? cards : [...cards].sort((a, b) => a.updated_at.localeCompare(b.updated_at));
 
@@ -40,7 +40,7 @@ export function DrillPanel({ title, cards, notes, projects, onOpenCard, onChange
       </header>
       <ul className="card-list">
         {sorted.map((c) => (
-          <CardRow key={c.id} card={c} color={colorOf[c.project_id]} note={notes?.[c.id]}
+          <CardRow key={c.id} card={c} project={projectOf[c.project_id]} note={notes?.[c.id]}
             onOpenCard={onOpenCard} onChanged={onChanged} onError={onError} />
         ))}
       </ul>

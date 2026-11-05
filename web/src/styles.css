@@ -1307,6 +1307,10 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
 .row-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
 .row-meta .dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
+/* In the text colour, so it stands apart from the grey column and age; a long name is cut
+   short, so it never takes the row from the title. */
+.row-project { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 160px; }
+.row-project bdi { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-col, .row-age { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .row-tag {
   flex: 0 0 auto; padding: 0 6px; border-radius: 9px; background: var(--hover);

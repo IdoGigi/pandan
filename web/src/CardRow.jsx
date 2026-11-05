@@ -92,7 +92,7 @@ function MoveMenu({ card, anchor, onMove, onClose }) {
  * stay focusable, so a keyboard user keeps their place, and a second press does
  * nothing.
  */
-export function CardRow({ card, color, note, tags = [], start = false, onOpenCard, onChanged, onError }) {
+export function CardRow({ card, project, note, tags = [], start = false, onOpenCard, onChanged, onError }) {
   const [busy, setBusy] = useState(false);
   const [menu, setMenu] = useState(false);
   const inFlight = useRef(false);
@@ -135,7 +135,11 @@ export function CardRow({ card, color, note, tags = [], start = false, onOpenCar
       </button>
       <span className="row-meta">
         {tags.map((t) => <span key={t.key} className={`row-tag ${t.key}`}>{t.text}</span>)}
-        <i className="dot" style={{ background: color ?? 'var(--muted)' }} />
+        {/* bdi: a Hebrew name keeps its own direction without pulling the column and age into it. */}
+        <span className="row-project" title={project?.name}>
+          <i className="dot" style={{ background: project?.color ?? 'var(--muted)' }} />
+          <bdi>{project?.name}</bdi>
+        </span>
         <span className="row-col">{card.archived ? 'archived' : COLUMN_LABELS[col]}</span>
         <span className="row-age">{note ?? ago(card.updated_at)}</span>
       </span>
