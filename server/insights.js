@@ -93,10 +93,12 @@ function ageOfOpen(open, now) {
 
 /**
  * Cards added and finished in each week. Each finished card counts in the week
- * it last moved into Done, so one moved back out stops counting. An archived
- * card counts only if that move was recorded: seeding guessed a finish from the
- * card's last change, which for an archived card is the archive itself, so old
- * finishes count in the totals only. A week is estimated when any of its finishes is.
+ * it last moved into Done, so one moved back out stops counting. A guessed
+ * finish that falls on the card's archive day counts in no week: seeding took it
+ * from the card's last change, which for a card already archived was the archive
+ * itself (one datetime('now') stamps both), so old finishes count in the totals
+ * only. A guess made before a later archive keeps its week. A week is estimated
+ * when any of its finishes is.
  */
 function weekCounts({ starts, weekOf }, done, history, byCard) {
   const weeks = starts.map((start) => ({ start, added: [], finished: [], estimated: false }));
@@ -105,8 +107,10 @@ function weekCounts({ starts, weekOf }, done, history, byCard) {
     if (w !== undefined) weeks[w].added.push(e.card_id);
   }
   for (const c of done) {
-    const finish = lastInto(byCard.get(c.id) ?? [], 'done');
-    if (!finish || (finish.estimated && c.archived_at)) continue;
+    const events = byCard.get(c.id) ?? [];
+    const finish = lastInto(events, 'done');
+    const guessIsArchive = finish?.estimated && events.some((e) => e.kind === 'archived' && e.at === finish.at);
+    if (!finish || guessIsArchive) continue;
     const w = weekOf(finish.at);
     if (w === undefined) continue;
     weeks[w].finished.push(c.id);

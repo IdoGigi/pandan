@@ -165,22 +165,54 @@ test('a card archived from Done still counts, and restoring it keeps its week', 
   assert.equal(finishedIn(await insights(), filed.id), finishWeek, 'a restore is not a new finish');
 });
 
+/**
+ * Rewrites a Done card's history as seeding writes it: made long ago, a guessed
+ * finish at `finish`, and archived from Done at `archivedAt` if it already was.
+ */
+function seededHistory(id, finish, archivedAt = null) {
+  sql(dbPath, 'DELETE FROM card_events WHERE card_id = ?', id);
+  sql(dbPath, `INSERT INTO card_events (card_id, kind, at) VALUES (?, 'created', ?)`, id, ago(200));
+  sql(dbPath, `INSERT INTO card_events (card_id, kind, to_column, at, estimated) VALUES (?, 'moved', 'done', ?, 1)`,
+      id, finish);
+  if (archivedAt) {
+    sql(dbPath, `INSERT INTO card_events (card_id, kind, from_column, at) VALUES (?, 'archived', 'done', ?)`,
+        id, archivedAt);
+  }
+}
+
 test('a guessed finish of a card archived from Done counts in Done, but in no week', async () => {
   const cleared = await card('website', 'cleared out', { column_key: 'done' });
   await archive(cleared);
-  // History as seeding writes it for a card already archived from Done. Archiving
-  // stamped its last change, so the guessed finish falls on the archive day.
-  sql(dbPath, 'DELETE FROM card_events WHERE card_id = ?', cleared.id);
-  sql(dbPath, `INSERT INTO card_events (card_id, kind, at) VALUES (?, 'created', ?)`, cleared.id, ago(200));
-  sql(dbPath, `INSERT INTO card_events (card_id, kind, to_column, at, estimated) VALUES (?, 'moved', 'done', ?, 1)`,
-      cleared.id, ago(0));
-  sql(dbPath, `INSERT INTO card_events (card_id, kind, from_column, at) VALUES (?, 'archived', 'done', ?)`,
-      cleared.id, ago(0));
+  // Archiving stamped the card's last change, so seeding guessed its finish on the archive day.
+  const archivedAt = ago(0);
+  seededHistory(cleared.id, archivedAt, archivedAt);
 
   const data = await insights();
   assert.ok(data.totals.done.includes(cleared.id));
   assert.ok(data.projects.find((p) => p.name === 'website').by_column.done.includes(cleared.id));
   assert.equal(finishedIn(data, cleared.id), undefined, 'its guessed finish is really the archive day');
+});
+
+test('a guessed finish keeps its week when the card is archived later', async () => {
+  const kept = await card('website', 'finished long ago', { column_key: 'done' });
+  const threeWeeksAgo = new Date(thisSunday().getTime() - 20 * 86400000);
+  seededHistory(kept.id, threeWeeksAgo.toISOString().slice(0, 19).replace('T', ' '));
+  const finishWeek = iso(thisSunday().getTime() - 21 * 86400000);
+  assert.equal(finishedIn(await insights(), kept.id), finishWeek);
+  await archive(kept);
+  assert.equal(finishedIn(await insights(), kept.id), finishWeek, 'archiving does not shrink a past week');
+});
+
+test('restoring a card archived before seeding does not bring its guessed finish back', async () => {
+  const cleared = await card('website', 'cleared and back', { column_key: 'done' });
+  await archive(cleared);
+  const archivedAt = ago(0);
+  seededHistory(cleared.id, archivedAt, archivedAt);
+  assert.equal((await server.call('POST', `/cards/${cleared.ref}/restore`)).status, 200);
+
+  const data = await insights();
+  assert.ok(data.columns.done.includes(cleared.id), 'it is live in Done again');
+  assert.equal(finishedIn(data, cleared.id), undefined, 'its guessed finish is still the archive day');
 });
 
 /** Writes one back-dated history row, as the owner. */
