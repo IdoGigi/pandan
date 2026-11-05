@@ -193,9 +193,9 @@ export function buildInsights(boardId, { tz = 0, now = Date.now() } = {}) {
 
   // Both queries leave out shelved (archived) projects, past weeks included, on purpose.
   const cards = db.prepare(
-    `SELECT c.id, b.key || '-' || c.number AS ref, c.title, c.project_id, c.column_key, c.flagged,
-            c.due_date, c.created_at, c.updated_at, c.archived_at, c.last_actor_kind, c.position
-       FROM cards c JOIN projects p ON p.id = c.project_id JOIN boards b ON b.id = p.board_id
+    `SELECT c.id, c.ref_key || '-' || c.ref_number AS ref, c.legacy_ref, c.title, c.project_id, c.column_key,
+            c.flagged, c.due_date, c.created_at, c.updated_at, c.archived_at, c.last_actor_kind, c.position
+       FROM cards c JOIN projects p ON p.id = c.project_id
       WHERE p.board_id = ? AND p.archived = 0
       ORDER BY c.id`
   ).all(boardId);
@@ -242,7 +242,7 @@ export function buildInsights(boardId, { tz = 0, now = Date.now() } = {}) {
       weeks: byWho,
     },
     cards: Object.fromEntries(cards.map((c) => [c.id, {
-      id: c.id, ref: c.ref, title: c.title, project_id: c.project_id, column_key: c.column_key,
+      id: c.id, ref: c.ref, legacy_ref: c.legacy_ref, title: c.title, project_id: c.project_id, column_key: c.column_key,
       flagged: c.flagged, due_date: c.due_date, created_at: c.created_at, updated_at: c.updated_at,
       archived: Boolean(c.archived_at), last_actor_kind: c.last_actor_kind, position: c.position,
     }])),

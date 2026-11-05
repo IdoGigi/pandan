@@ -61,7 +61,7 @@ function CardList({ title, empty, rows, row, onPick }) {
         <>
           <ul className="card-list">
             {rows.slice(0, SHOWN).map((r) => (
-              <CardRow key={r.card.id} {...r} color={row.colorOf[r.card.project_id]}
+              <CardRow key={r.card.id} {...r} project={row.projectOf[r.card.project_id]}
                 onOpenCard={row.onOpenCard} onChanged={row.onChanged} onError={row.onError} />
             ))}
           </ul>
@@ -83,7 +83,7 @@ function CardList({ title, empty, rows, row, onPick }) {
  */
 export function Control({ data, onPick, onOpenCard, onChanged, onError }) {
   const { attention, workingOn, upNext, oldest } = placeCards(data);
-  const row = { colorOf: Object.fromEntries(data.projects.map((p) => [p.id, p.color])), onOpenCard, onChanged, onError };
+  const row = { projectOf: Object.fromEntries(data.projects.map((p) => [p.id, p])), onOpenCard, onChanged, onError };
   return (
     <section className="dash-half dash-control" aria-labelledby="dash-control-head">
       <h2 id="dash-control-head">Control</h2>

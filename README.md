@@ -42,13 +42,16 @@ else; say who or what in the card's notes.
 not a gate — an agent can still move a card straight to `Done` when the work
 plainly needs no checking. The point is that it can tell you which is which.
 
-Every card shows its reference: the board's key and the card's number on that
-board, so a School board counts `SCH-1`, `SCH-2`… from its first card. That
-reference is what you say to an agent — "archive SCH-23", "move SCH-17 to
+Every card shows its ref: its project's key and the card's number in that
+project, so a project with the key `CRC` counts `CRC-1`, `CRC-2`… from its first
+card. That ref is what you say to an agent — "archive CRC-23", "move CRC-17 to
 done" — and it is the `card_id` the API and the MCP tools take, so what you
-read off the board is what you pass along. A board makes its key from its name;
-change it under Settings. A card moved to another board takes that board's next
-number, and a number is never handed out twice.
+read off the board is what you pass along. A project gets its key when it is
+made, from its name unless you give one, and keeps it for good. A ref never
+changes, even when the card moves to another project or board, and a number is
+never handed out twice. Cards numbered per board before keep that ref too
+(`MB-223`, shown when you hover over the ref), and `#300` finds the card with
+id 300. Board keys are for display.
 
 Cards carry a label colour, a due date, a flag, notes and a checklist. Late
 cards go red. Right-click one to recolour it, and name a colour to turn it into

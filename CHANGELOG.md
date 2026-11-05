@@ -4,6 +4,30 @@ Newest first. Versions follow `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+### Card refs per project
+
+Cards are numbered in their project, not on their board: `CRC-1`, `CRC-2`…
+
+- **Project keys.** Every project has a key of 2 to 5 capital letters, unique
+  across all boards. It is made from the name unless you give one
+  (`POST /projects`, MCP `create_project`), and it never changes. A deleted
+  project's key is never given out again.
+- **A ref is for good.** A card keeps its ref when it moves to another project
+  or board, and when its project moves to another board. A number is never
+  given out twice, even after the card is archived or deleted. The database
+  enforces both: two cards cannot share a ref, and a ref cannot change.
+- **Old refs still work.** Each existing card keeps the board ref it had
+  (`MB-223`) as `legacy_ref`: the API, the MCP tools and the board's search
+  find the card by it, and it shows when you hover over the ref. `#300` (and
+  `300`) is the card with id 300.
+- **Board keys** are for display only. Changing one changes no ref, and a
+  board key cannot be a project key.
+- **Upgrading.** The first start keys every project and numbers its cards,
+  oldest first. Keys can be chosen ahead in `project-keys.json` beside the
+  database. `scripts/undo-project-refs.mjs` takes a database back.
+- **Error codes.** New errors carry a code (`PND-REF-001`…), listed in
+  `ERRORS.md`.
+
 ### Dashboard
 
 A third view, **Board | Notes | Dashboard**, for running the open board. It has
@@ -68,6 +92,9 @@ updates live, like the board.
   project panel counts them in its bar.
 
 ### Card numbers per board
+
+Replaced by **Card refs per project** above; these board refs live on as each
+card's `legacy_ref`.
 
 Cards were numbered across all boards, so a new board started at #274. Now
 every board counts from 1, and a card is known by its board's key and its

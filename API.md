@@ -33,21 +33,37 @@ export KEY="Authorization: Bearer YOUR_PASSWORD"
 - `position` orders cards inside a column. Lower comes first. You rarely set it
   by hand — use the move endpoint with an `index`.
 
-## Card references
+## Card refs
 
-Each board has a **key**, such as `WRK`, and numbers its cards from 1. A card's
-**reference** is the two together — `WRK-7` — and it is what the board shows.
+Each project has a **key**, such as `CRC`, and numbers its cards from 1. A card's
+**ref** is the two together — `CRC-7` — and it is what the board shows.
 
-- Every `/cards/:id…` route takes the reference, in any case, or the card's
-  numeric `id`: `/cards/WRK-7`, `/cards/wrk-7` and `/cards/52` can all be the
-  same card. A bare number is always the `id`.
-- Cards come back with `number` (7) and `ref` (`"WRK-7"`) next to `id`.
-- A key is 2 to 6 letters or digits, starting with a letter, and no two boards
-  share one. Leave it out when making a board and one is made from the name.
-- A new key changes the reference of every card on the board; the numbers stay.
-- A card that moves to a project on another board, or with its project, takes
-  that board's next number. Numbers are never reused on a board, so the old
-  reference points at nothing — unless its key is later given to another board.
+- **Lookup.** Every `/cards/:id…` route (and every MCP card tool) takes:
+  - the ref, in any case, with or without a `#`: `CRC-7`, `crc-7`, `#CRC-7`;
+  - the old board ref a card had before refs were per project: `MB-223`;
+  - the card's `id`, bare or after a `#`: `52`, `#52`. A bare number, or `#`
+    and a number, is always the `id`, never a ref's number.
+- **Response.** Cards come back with `ref` (`"CRC-7"`) and `legacy_ref` (the old
+  board ref, like `"MB-223"`, or `null` for a card made since) next to `id`.
+  `ref_key` and `ref_number` hold the two parts.
+- **For good.** A ref never changes. A card moved to another project, or to
+  another board, keeps it; so does every card of a project moved to another
+  board. The database refuses a change (`PND-REF-007`).
+- **Never twice.** Each key's counter only goes up, so a number is never given
+  out again, even after the card is archived or deleted. The database refuses
+  two cards with one ref, even made at the same moment.
+- **Project keys.** 2 to 5 capital letters, unique across all boards, and never
+  a board key or the start of an old board ref. Leave `key` out when making a
+  project and one is made from its name. A key never changes, and a deleted
+  project's key is never given out again. See `ERRORS.md` for the codes.
+- **Board keys** (2 to 6 letters or digits, unique) are for display only. A new
+  board key changes no ref, and it may not be a project key.
+- **Upgrading.** The first start after the upgrade keys every project, numbers
+  each project's cards from 1, oldest first, and keeps each card's board ref
+  as `legacy_ref`. To choose the keys yourself, put `project-keys.json` beside
+  the database first: `{ "2": "CRC", "10": "SMC" }`, project id to key. A
+  broken file stops the start and saves nothing (`PND-REF-005`).
+  `scripts/undo-project-refs.mjs` takes a database back, for an emergency.
 
 ## Boards
 
@@ -71,10 +87,10 @@ curl -s -H "$KEY" "$KB/board?board_id=1"
 {
   "columns": ["todo", "next", "doing", "waiting", "review", "done"],
   "board": { "id": 1, "name": "Work", "key": "WRK" },
-  "projects": [{ "id": 1, "name": "House chores", "color": "#c3d117", "position": 1000 }],
+  "projects": [{ "id": 1, "name": "House chores", "key": "HC", "color": "#c3d117", "position": 1000 }],
   "cards": [
     {
-      "id": 52, "number": 7, "ref": "WRK-7", "project_id": 1, "column_key": "todo",
+      "id": 52, "ref": "HC-7", "legacy_ref": "WRK-7", "project_id": 1, "column_key": "todo",
       "title": "Buy milk", "notes": "", "color": "lime", "flagged": 0,
       "position": 1000, "checks_total": 2, "checks_done": 1
     }
@@ -93,8 +109,8 @@ curl -s -H "$KEY" "$KB/board?board_id=1"
 | DELETE | `/links/:id` | Remove a link or contact |
 | POST | `/projects/:id/updates` | `{ "text" }` — add a dated entry to the log |
 | DELETE | `/updates/:id` | Remove a log entry |
-| POST | `/projects` | `{ "name", "board_id?", "color?", "description?", "repo_url?" }` |
-| PATCH | `/projects/:id` | Any of `name`, `color`, `description`, `repo_url`, `board_id`, `position`, `archived` |
+| POST | `/projects` | `{ "name", "key?", "board_id?", "color?", "description?", "repo_url?" }`. Leave `key` out to get one from the name |
+| PATCH | `/projects/:id` | Any of `name`, `color`, `description`, `repo_url`, `board_id`, `position`, `archived`. `key` cannot change (`PND-REF-008`) |
 | DELETE | `/projects/:id` | Also deletes that project's cards |
 
 ```bash
@@ -107,7 +123,7 @@ curl -s -H "$KEY" -H 'Content-Type: application/json' \
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/cards` | Filter with `?project_id=1&column=todo` |
-| GET | `/cards/:id` | `:id` is the reference (`WRK-7`) or the id. Includes the `checklist` array |
+| GET | `/cards/:id` | `:id` is the ref (`CRC-7`), the old board ref (`MB-223`) or the id (`52`, `#52`). Includes the `checklist` array |
 | POST | `/cards` | `{ "project_id", "title", "column_key?", "notes?", "color?", "flagged?", "due_date?" }` |
 | PATCH | `/cards/:id` | Any field. Changing project/column without a `position` sends it to the end |
 | POST | `/cards/:id/move` | `{ "column_key?", "project_id?", "index?" }` |
@@ -140,14 +156,14 @@ leave it out to drop it at the bottom:
 
 ```bash
 curl -s -H "$KEY" -H 'Content-Type: application/json' \
-  -d '{"column_key":"doing","index":0}' $KB/cards/WRK-7/move
+  -d '{"column_key":"doing","index":0}' $KB/cards/HC-7/move
 ```
 
 Move it to another project too:
 
 ```bash
 curl -s -H "$KEY" -H 'Content-Type: application/json' \
-  -d '{"project_id":2,"column_key":"next"}' $KB/cards/WRK-7/move
+  -d '{"project_id":2,"column_key":"next"}' $KB/cards/HC-7/move
 ```
 
 ## Sticky notes
@@ -179,7 +195,7 @@ The board view shows the progress as `done/total` on the card.
 
 ```bash
 curl -s -H "$KEY" -H 'Content-Type: application/json' \
-  -d '{"text":"call the plumber"}' $KB/cards/WRK-7/checks
+  -d '{"text":"call the plumber"}' $KB/cards/HC-7/checks
 
 curl -s -X PATCH -H "$KEY" -H 'Content-Type: application/json' \
   -d '{"done":true}' $KB/checks/3
@@ -229,7 +245,7 @@ curl -s -H "$KEY" "$KB/insights?board_id=4&tz=-120"
     "weeks": [{ "start": "2026-11-01", "agent": [283], "you": [279, 283] }]
   },
   "cards": {
-    "274": { "id": 274, "ref": "SCH-1", "title": "Read chapter 3", "project_id": 23,
+    "274": { "id": 274, "ref": "OPT-1", "legacy_ref": "SCH-1", "title": "Read chapter 3", "project_id": 23,
              "column_key": "todo", "flagged": 0, "due_date": null, "created_at": "2026-08-18 18:02:11",
              "updated_at": "2026-10-02 09:14:00", "archived": false, "last_actor_kind": "owner",
              "position": 3000 }
@@ -406,8 +422,10 @@ Keep the password in an environment variable, never in the file:
 | `add_check` | Add a checklist item to a card |
 | `update_check` | Tick, untick, or reword a checklist item |
 
-Every card tool takes the card's reference (`WRK-7`) as `card_id`, so an agent
-can act on what you read off the board. The numeric id works too.
+Every card tool takes the card's ref (`CRC-7`) as `card_id`, so an agent can act
+on what you read off the board. The old board ref (`MB-223`) and the id (`52`
+or `#52`) work too, and every card comes back with `ref` and `legacy_ref`.
+`create_project` takes an optional `key`.
 
 Each tool carries its own description and typed arguments, so an agent can read
 `tools/list` and work out what to do without any extra prompting. Bad input is
