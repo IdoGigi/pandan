@@ -1194,17 +1194,42 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
   text-align: start;
 }
 
-/* ---------------- dashboard ---------------- */
+/* ---------------- dashboard ----------------
+   Two halves share the width: Control (cards to act on) on the left, Insight
+   (numbers and charts) on the right. The card list opens beside them. */
 
 .dash { flex: 1 1 auto; display: flex; align-items: flex-start; gap: 16px; padding: 18px; overflow: auto; }
-.dash-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.dash-main {
+  flex: 1 1 auto; min-width: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px;
+  align-items: start; align-content: start; /* a short page never stretches the stacked halves apart */
+}
+/* Narrower than this the halves stack, Control first. */
+@media (max-width: 1100px) {
+  .dash-main { grid-template-columns: minmax(0, 1fr); }
+}
+.dash-half { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.dash-half > h2 {
+  margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
+}
 .dash-block {
+  min-width: 0; /* a chart wider than its block scrolls inside it, never widens the page */
   background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
   padding: 14px 16px; box-shadow: var(--shadow);
 }
-.dash-block h2 { margin: 0 0 10px; font-size: 14px; }
-.dash-block h3 { margin: 16px 0 6px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.dash-block h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+.dash-block .tiles { margin-bottom: 12px; }
 .dash-empty { margin: 6px 0; font-size: 12.5px; color: var(--muted); }
+.dash-note { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+/* Two blocks side by side, stacking when there is no room for both. */
+.dash-pair {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 16px; align-items: start;
+}
+/* Agents and time in column, before either has anything to draw: one slim line. */
+.dash-collecting {
+  margin: 0; padding: 10px 16px; border: 1px dashed var(--line-strong); border-radius: 6px;
+  font-size: 12.5px; color: var(--muted);
+}
 
 .tiles { display: flex; flex-wrap: wrap; gap: 10px; }
 .tile {
@@ -1214,23 +1239,40 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
   text-align: start; /* a button centres its text; a wrapped label should line up with its number */
 }
 .tile b { font-size: 22px; color: var(--text); font-variant-numeric: tabular-nums; }
+.tile small { font-size: 12px; color: var(--muted); }
 .tile:not(:disabled):hover, .tile:focus-visible { border-color: var(--sky); }
 .tile:disabled { cursor: default; opacity: 0.6; }
+/* The big numbers on top, in two rows; the tiles in a row share its width, and wrap
+   rather than cramp when the half is narrow (the card list open beside it). */
+.big-numbers { display: flex; flex-direction: column; gap: 10px; }
+.big-numbers .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
+.big-numbers .tile {
+  min-width: 0; padding: 14px 16px; background: var(--panel); box-shadow: var(--shadow); font-size: 13px;
+}
+.big-numbers .tile b { font-size: 32px; line-height: 1.15; font-weight: 600; font-variant-numeric: normal; }
+.big-numbers .tile span { color: var(--text); }
 
 .chart-scroll { overflow-x: auto; }
 .chart { display: block; }
 .chart .pick { cursor: pointer; }
 /* A thin line between stacked parts, so a pale To do still stands apart from the panel and its neighbours. */
 .chart .stack-part { stroke: var(--panel); stroke-width: 1; }
+/* To do and Next are pale, nearly the panel in light mode: a fine edge keeps them in view. */
+.chart .pale { stroke: var(--line-strong); stroke-width: 1; }
 .chart .pick:hover, .chart .pick:focus-visible { outline: none; stroke: var(--text); stroke-width: 1.5; }
 .chart .pick[data-estimated] { opacity: 0.45; }
-.chart-axis { stroke: var(--line); }
+.chart-axis { stroke: var(--line-strong); }
+.chart-grid { stroke: var(--line); }
 .chart-label { font-size: 11px; fill: var(--muted); text-anchor: middle; }
-.chart-num { font-size: 11px; font-weight: 600; fill: var(--text); text-anchor: middle; }
-.chart-line { fill: none; stroke: var(--amber); stroke-width: 2; }
-.chart-dot { fill: var(--amber); }
+.chart-share { font-size: 11px; font-weight: 600; fill: var(--text); text-anchor: middle; }
+.chart-num { font-size: 12px; font-weight: 600; fill: var(--text); text-anchor: middle; }
+.chart-tick { font-size: 11px; fill: var(--muted); text-anchor: end; font-variant-numeric: tabular-nums; }
+/* The y-axis numbers stay put while the weeks beside them scroll. */
+.chart-y-wrap { display: flex; }
+.chart-y-wrap > .chart { flex: 0 0 auto; }
+.chart-y-wrap > .chart-scroll { flex: 1 1 auto; min-width: 0; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; color: var(--muted); }
-.key-line { display: inline-block; width: 14px; height: 2px; margin-right: 5px; vertical-align: 3px; background: var(--amber); }
+.chart-legend .pipe-dot { box-shadow: inset 0 0 0 1px var(--line-strong); }
 .est-note { font-style: italic; }
 
 .drill {
@@ -1244,16 +1286,68 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
   padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--panel);
 }
 .drill h3 { margin: 0; font-size: 13px; }
-.drill ul { list-style: none; margin: 0; padding: 4px 0; }
-.drill-row {
-  display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 12px;
-  border: 0; background: none; color: var(--text); font: inherit; font-size: 12.5px; text-align: start; cursor: pointer;
+
+/* A card in a list (Control or the card list): number and title open it, the buttons change it.
+   A wide row is one line. A narrow one (a phone, the card list, a half beside it) gives the
+   number and title the first line, the title wrapping to two, and puts the rest under them. */
+.card-list { list-style: none; margin: 0; padding: 4px 0; container-type: inline-size; }
+.dash-block .card-list { margin: 0 -10px; padding: 0; }
+.card-row {
+  display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px;
+  padding: 0 6px 0 10px; border-radius: 5px; font-size: 12.5px;
 }
-.drill-row:hover:not(:disabled) { background: var(--head-bg); }
-.drill-row:disabled { cursor: default; opacity: 0.6; }
-.drill-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.drill-row .dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
-.drill-col, .drill-age { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.drill .card-row { padding-left: 12px; }
+/* Never narrower than a readable title: the rest wraps to a line of its own first. */
+.row-open {
+  flex: 1 1 200px; min-width: 0; display: flex; align-items: baseline; gap: 8px; padding: 7px 0;
+  border: 0; background: none; color: var(--text); font: inherit; text-align: start; cursor: pointer;
+}
+.row-open:disabled { cursor: default; opacity: 0.6; }
+/* Sized to its own text, so a Hebrew title sits by its number, not at the far end of the row. */
+.row-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.row-meta .dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
+.row-col, .row-age { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.row-tag {
+  flex: 0 0 auto; padding: 0 6px; border-radius: 9px; background: var(--hover);
+  font-size: 11px; line-height: 18px; color: var(--muted); white-space: nowrap;
+}
+.row-tag.flagged, .row-tag.overdue { color: var(--flag); }
+.row-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.row-act {
+  display: inline-grid; place-items: center; width: 28px; height: 26px; padding: 0;
+  border: 1px solid transparent; border-radius: 5px; background: none; color: var(--muted); font-size: 13px;
+}
+.row-act:focus-visible { border-color: var(--line-strong); background: var(--panel); color: var(--text); }
+/* Busy: aria-disabled, not disabled, so the button keeps keyboard focus while its request runs. */
+.row-act[aria-disabled='true'], .row-start[aria-disabled='true'] { opacity: 0.4; cursor: default; }
+.row-start[aria-disabled='true']:hover { background: var(--panel); } /* busy: no .btn hover */
+/* The ⋯ menu opens with its label: no divider above it, as .ctx-label draws between sections. */
+.row-menu .ctx-label { margin-top: 0; border-top: 0; }
+.row-act.flagged { color: var(--flag); }
+.row-start { margin-right: 4px; white-space: nowrap; }
+/* Only a real pointer hovers; a tapped row on a phone must not stay tinted. */
+@media (hover: hover) {
+  .card-row:hover { background: var(--head-bg); }
+  .row-act:hover:not([aria-disabled='true']) { border-color: var(--line-strong); background: var(--panel); color: var(--text); }
+}
+@container (max-width: 560px) {
+  .card-row { padding-bottom: 6px; } /* on the row, so the second line's meta and buttons share a centre */
+  .row-open { flex-basis: 100%; padding-bottom: 2px; }
+  .row-title {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+    white-space: normal; overflow-wrap: anywhere;
+  }
+  .row-meta { flex: 1 1 auto; }
+}
+
+.dash-block h3 .list-count { margin-left: 6px; font-weight: 400; color: var(--muted); }
+.list-all { margin-top: 6px; }
+/* Quick add: project, column, title, Add, in one line that wraps on a phone. */
+.quick-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.quick-add .select { flex: 0 1 180px; width: auto; min-width: 0; }
+.quick-add .quick-add-column { flex-basis: 96px; }
+.quick-add .input { flex: 1 1 220px; width: auto; min-width: 0; }
 
 /* ---------------- phone ----------------
    Every phone rule uses this one width. */
@@ -1295,9 +1389,13 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
   /* The dashboard stacks; its card list rises from the bottom as a sheet. */
   .dash { flex-direction: column; padding: 12px; }
   .dash-main { width: 100%; }
-  /* Tiles two to a row, edge to edge; a long label wraps instead of widening its tile. */
+  /* Tiles two to a row, edge to edge; a long label wraps instead of widening its tile. The big
+     numbers' two rows run on as one grid, two to a row. */
   .tiles { display: grid; grid-template-columns: 1fr 1fr; }
   .tile { min-width: 0; }
+  .big-numbers { display: grid; grid-template-columns: 1fr 1fr; }
+  .big-numbers .tiles { display: contents; }
+  .big-numbers .tile b { font-size: 26px; }
   .dash:has(.drill) { padding-bottom: 60vh; } /* the end of the page can still scroll out from under the sheet */
   .drill {
     position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 20;
@@ -1313,4 +1411,6 @@ input:not([type]), input[type='text'], input[type='search'], input[type='url'], 
      popup, text selection and drag stay out of the way. */
   .card { -webkit-touch-callout: none; -webkit-user-select: none; -webkit-user-drag: none; }
   .ctx-item { padding: 9px 6px; font-size: 14px; } /* rows a finger can hit */
+  .row-act { width: 36px; height: 36px; font-size: 15px; } /* card quick actions a finger can hit */
+  .row-start { min-height: 36px; }
 }

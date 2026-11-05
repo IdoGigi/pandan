@@ -1,21 +1,14 @@
 import { useEffect, useRef } from 'react';
-import { COLUMN_LABELS } from './Board.jsx';
+import { CardRow } from './CardRow.jsx';
 
-const DAY = 86400000;
-/** "9d" since a SQLite UTC time; "today" under a day. */
-function age(updatedAt) {
-  const days = Math.floor((Date.now() - Date.parse(`${updatedAt.replace(' ', 'T')}Z`)) / DAY);
-  return days < 1 ? 'today' : `${days}d`;
-}
-
-/** The cards behind a number on the dashboard, untouched longest first. */
-export function DrillPanel({ title, cards, notes, projects, onOpenCard, onClose }) {
+/** The cards behind a number on the dashboard, untouched longest first, each with its quick actions. */
+export function DrillPanel({ title, cards, notes, projects, onOpenCard, onChanged, onError, onClose }) {
   const box = useRef(null);
 
   useEffect(() => {
-    // Esc belongs to the card editor while it is open over the dashboard.
+    // Esc belongs to the card editor while it is open over the dashboard, and to a row's ⋯ menu.
     const onKey = (e) => {
-      if (e.key === 'Escape' && !document.querySelector('.overlay')) onClose();
+      if (e.key === 'Escape' && !document.querySelector('.overlay, .row-menu')) onClose();
     };
     // Capture runs before the editor's own listener closes it, whatever order they were added in.
     window.addEventListener('keydown', onKey, true);
@@ -41,25 +34,14 @@ export function DrillPanel({ title, cards, notes, projects, onOpenCard, onClose 
   return (
     <aside className="drill" aria-label={title} tabIndex={-1} ref={box}>
       <header>
-        <h3>{title} · {cards.length}</h3>
+        {/* Isolated, so a count after a Hebrew project name is not drawn inside it. */}
+        <h3><bdi>{title}</bdi> · {cards.length}</h3>
         <button className="btn btn-ghost" onClick={onClose} aria-label="Close the list">✕</button>
       </header>
-      <ul>
+      <ul className="card-list">
         {sorted.map((c) => (
-          <li key={c.id}>
-            <button
-              className="drill-row"
-              disabled={c.archived}
-              onClick={() => onOpenCard(c.id)}
-              title={c.archived ? 'Archived — restore it from the Archive to edit it' : 'Open this card'}
-            >
-              <span className="card-no">{c.ref}</span>
-              <span className="drill-title" dir="auto">{c.title}</span>
-              <i className="dot" style={{ background: colorOf[c.project_id] ?? 'var(--muted)' }} />
-              <span className="drill-col">{c.archived ? 'archived' : COLUMN_LABELS[c.column_key]}</span>
-              <span className="drill-age">{notes?.[c.id] ?? age(c.updated_at)}</span>
-            </button>
-          </li>
+          <CardRow key={c.id} card={c} color={colorOf[c.project_id]} note={notes?.[c.id]}
+            onOpenCard={onOpenCard} onChanged={onChanged} onError={onError} />
         ))}
       </ul>
     </aside>

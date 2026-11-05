@@ -1,100 +1,115 @@
 /**
- * Small hand-drawn charts for the dashboard — all upright, no library. Every
- * part a person can click is a button: it calls onPick(title, ids, notes) with
- * the cards behind it (notes, when given, say something per card and keep their
- * order), and says how many in its label for a screen reader. Each
- * chart is a labelled group, so a screen reader names it too.
+ * The dashboard's charts of the board as it stands, all upright and drawn to
+ * the width of their panel. The shared parts, and how a click lists the cards
+ * behind a bar, are in chartKit.jsx.
  */
-import { useEffect, useRef } from 'react';
+import { Bars, ColumnKey, fit, H, hasMedian, PALE, percent, pickable, RTL_FIRST, shortName, TOP } from './chartKit.jsx';
 
-const H = 160;
-const TOP = 16;
-const BAR = 40;
-const GAP = 16;
-const MIN_BAR = 4; // the shortest bar drawn, so one that rounds to 0 can still be seen and clicked
-const SLOT = 72; // each project's share of "Open work by project": its bar plus room for the name
-const NAME_MAX = 10; // about as many letters as fit in a slot at 11px, the "…" included
-// A name whose first letter is Hebrew or Arabic reads right to left, as dir="auto" decides elsewhere.
-const RTL_FIRST = /^[^\p{L}]*[\u0590-\u08FF]/u;
+const PROJECT_SLOT = 64; // the narrowest a project's column gets: its bar plus room for a short name
+const LETTER = 7; // about one letter of an 11px name, so a slot knows how many fit
+const MIN_PART = 3; // the thinnest part of a project's column, so one card beside a hundred can be seen and clicked
+const COLUMN_SLOT = 48; // the narrowest a bar gets: room for "Waiting" under it, six to a phone
 
-const plural = (n) => `${n} card${n === 1 ? '' : 's'}`;
-const shortName = (name, max = NAME_MAX) => (name.length > max ? `${name.slice(0, max - 1)}…` : name);
-const weekLabel = (start) => new Date(`${start}T00:00:00Z`)
-  .toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' });
+// The server's five age ranges, in order, calm to warm as cards get older.
+const AGES = [
+  { name: '< 1 wk', title: 'Open under 1 week', color: 'var(--sky)' },
+  { name: '1–2 wk', title: 'Open 1–2 weeks', color: 'var(--lime)' },
+  { name: '2–4 wk', title: 'Open 2–4 weeks', color: 'var(--amber)' },
+  { name: '1–3 mo', title: 'Open 1–3 months', color: 'var(--rose)' },
+  { name: '3+ mo', title: 'Open over 3 months', color: 'var(--flag)' },
+];
 
-/**
- * A chart of weeks opens on the latest ones, at its right end, however narrow
- * the screen. It moves there again only for a new week or when it is drawn
- * after being empty, not on every live change, so older weeks you scrolled
- * back to stay in view.
- */
-function useLatestInView(weeks, empty) {
-  const box = useRef(null);
-  const latest = weeks.at(-1)?.start;
-  useEffect(() => {
-    if (box.current) box.current.scrollLeft = box.current.scrollWidth;
-  }, [latest, empty]);
-  return box;
-}
-
-/** Props that make an SVG shape a button for `ids`. Empty ones are not clickable. */
-function pickable(title, ids, onPick, notes) {
-  const go = () => { if (ids.length) onPick(title, ids, notes); };
-  return {
-    className: 'pick',
-    role: 'button',
-    tabIndex: ids.length ? 0 : -1,
-    'aria-label': `${title} · ${plural(ids.length)}`,
-    onClick: go,
-    onKeyDown: (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
-    },
-  };
-}
-
-/** A big number for a list of cards. */
-export function Tile({ label, hint, ids, onPick }) {
+/** A big number for a list of cards; `sub` says one more thing about it. */
+export function Tile({ label, hint, sub, ids, onPick }) {
   return (
     <button className="tile" disabled={!ids.length} title={hint} onClick={() => onPick(label, ids)}>
       <b>{ids.length}</b>
       <span>{label}</span>
+      {sub && <small>{sub}</small>}
     </button>
   );
 }
 
-/** One upright column per project, stacked by board column. */
-export function StackedColumns({ projects, columns, labels, onPick }) {
+/** Live cards in each column, To do to Done. */
+export function BoardNow({ columns, order, labels, width, onPick }) {
+  const items = order.map((col) => ({
+    key: col, name: labels[col], value: columns[col].length, text: String(columns[col].length),
+    color: `var(--pipe-${col})`, title: labels[col], ids: columns[col], pale: PALE.has(col),
+  }));
+  return <Bars label="Board now" items={items} width={width} minSlot={COLUMN_SLOT} onPick={onPick} />;
+}
+
+/** Open cards by how long ago they were made. */
+export function AgeBars({ age, width, onPick }) {
+  const items = age.map((range, i) => ({
+    key: range.from_days, name: AGES[i].name, value: range.ids.length, text: String(range.ids.length),
+    color: AGES[i].color, title: AGES[i].title, ids: range.ids,
+  }));
+  return <Bars label="Age of open work" items={items} width={width} minSlot={COLUMN_SLOT} onPick={onPick} />;
+}
+
+/** Median days per column, one upright bar each; a click lists the slowest cards. */
+export function MedianColumns({ times, columns, labels, since, width, onPick }) {
+  const known = columns.filter((col) => hasMedian(times[col]));
+  if (!known.length) {
+    return <p className="dash-empty">Collecting since {since ?? 'today'}. Medians appear once cards move between columns.</p>;
+  }
+  const items = columns.map((col) => {
+    const t = times[col];
+    const has = hasMedian(t);
+    return {
+      key: col, name: labels[col], value: t.median_days, text: has ? `${t.median_days}d` : null,
+      color: `var(--pipe-${col})`, title: `Longest in ${labels[col]}`, ids: has ? t.longest : [], pale: PALE.has(col),
+      notes: Object.fromEntries(t.longest.map((id, k) => [id, `${t.longest_days[k]}d in ${labels[col]}`])),
+    };
+  });
+  return <Bars label="Median days in each column" items={items} width={width} minSlot={COLUMN_SLOT} onPick={onPick} />;
+}
+
+/**
+ * Each column's part of a project, stacked from the bottom in board order, in
+ * pixels above the axis: [from, to). A part with cards is never thinner than
+ * MIN_PART; `unit` (pixels a card) leaves room for that, so the tallest stack still fits.
+ */
+const stack = (project, columns, unit) => columns.reduce((parts, col) => {
+  const ids = project.by_column[col];
+  const from = parts.at(-1)?.to ?? 0;
+  return [...parts, { col, ids, from, to: from + (ids.length ? Math.max(MIN_PART, ids.length * unit) : 0) }];
+}, []);
+
+/**
+ * One upright column per project: its open work stacked from the bottom, done
+ * on top, the total above and the share done under its name.
+ */
+export function ProjectColumns({ projects, columns, labels, width, onPick }) {
   const totals = projects.map((p) => columns.reduce((n, col) => n + p.by_column[col].length, 0));
-  const max = Math.max(1, ...totals);
-  const y = (n) => H - (n / max) * (H - TOP);
-  const width = projects.length * SLOT;
+  const unit = (H - TOP - MIN_PART * columns.length) / Math.max(1, ...totals);
+  const stacks = projects.map((p) => stack(p, columns, unit));
+  const { slot, full, bar } = fit(projects.length, width, PROJECT_SLOT);
+  const letters = Math.floor(slot / LETTER); // the "…" included
   return (
     <>
       <div className="chart-scroll">
-        <svg className="chart" role="group" width={width} height={H + 30} aria-label="Open work by project">
-          <line className="chart-axis" x1={0} x2={width} y1={H} y2={H} />
+        <svg className="chart" role="group" width={full} height={H + 36} aria-label="Projects">
+          <line className="chart-axis" x1={0} x2={full} y1={H} y2={H} />
           {projects.map((p, i) => {
-            const x = i * SLOT + (SLOT - BAR) / 2;
-            let below = 0;
+            const mid = slot * (i + 0.5);
+            const done = p.by_column.done.length;
             return (
               <g key={p.id}>
-                {columns.map((col) => {
-                  const list = p.by_column[col];
-                  if (!list.length) return null;
-                  const top = y(below + list.length);
-                  const height = y(below) - top;
-                  below += list.length;
-                  return (
-                    // A thin panel-coloured edge keeps neighbouring parts apart; the class goes after the spread.
-                    <rect key={col} x={x} y={top} width={BAR} height={height}
-                      style={{ fill: `var(--pipe-${col})` }} {...pickable(`${labels[col]} · ${p.name}`, list, onPick)}
-                      className="pick stack-part" />
-                  );
-                })}
-                {totals[i] > 0 && <text className="chart-num" x={x + BAR / 2} y={y(totals[i]) - 4}>{totals[i]}</text>}
-                <text className="chart-label" x={x + BAR / 2} y={H + 16}
-                  direction={RTL_FIRST.test(p.name) ? 'rtl' : undefined}>
-                  {shortName(p.name)}<title>{p.name}</title>
+                {stacks[i].filter((part) => part.ids.length).map((part) => (
+                  // A thin panel-coloured edge keeps neighbouring parts apart; the class goes after the spread.
+                  <rect key={part.col} x={mid - bar / 2} y={H - part.to} width={bar} height={part.to - part.from}
+                    style={{ fill: `var(--pipe-${part.col})` }}
+                    {...pickable(`${labels[part.col]} · ${p.name}`, part.ids, onPick)}
+                    className={`pick stack-part${PALE.has(part.col) ? ' pale' : ''}`} />
+                ))}
+                {totals[i] > 0 && <text className="chart-num" x={mid} y={H - stacks[i].at(-1).to - 5}>{totals[i]}</text>}
+                <text className="chart-label" x={mid} y={H + 16} direction={RTL_FIRST.test(p.name) ? 'rtl' : undefined}>
+                  {shortName(p.name, letters)}<title>{p.name}</title>
+                </text>
+                <text className="chart-share" x={mid} y={H + 31}>
+                  {totals[i] ? `${percent(done, totals[i])} done` : '—'}
                 </text>
               </g>
             );
@@ -102,144 +117,6 @@ export function StackedColumns({ projects, columns, labels, onPick }) {
         </svg>
       </div>
       <ColumnKey columns={columns} labels={labels} />
-    </>
-  );
-}
-
-/** Which blue is which column, under the stacked columns. */
-function ColumnKey({ columns, labels }) {
-  return (
-    <div className="chart-legend">
-      {columns.map((col) => (
-        <span key={col}><i className={`pipe-dot pipe-${col}`} />{labels[col]}</span>
-      ))}
-    </div>
-  );
-}
-
-/** Finished per week as bars, added per week as a line. Estimated weeks are lighter. */
-export function WeekBars({ weeks, onPick }) {
-  const empty = weeks.every((w) => !w.finished.length && !w.added.length);
-  const scroller = useLatestInView(weeks, empty);
-  if (empty) {
-    return <p className="dash-empty">Nothing added or finished in the last {weeks.length} weeks.</p>;
-  }
-  const max = Math.max(1, ...weeks.map((w) => Math.max(w.finished.length, w.added.length)));
-  const y = (n) => H - (n / max) * (H - TOP);
-  const mid = (i) => GAP + i * (BAR + GAP) + BAR / 2;
-  const width = GAP + weeks.length * (BAR + GAP);
-  return (
-    <>
-      <div className="chart-scroll" ref={scroller}>
-        <svg className="chart" role="group" width={width} height={H + 30} aria-label="Finished and added per week">
-          <line className="chart-axis" x1={0} x2={width} y1={H} y2={H} />
-          {weeks.map((w, i) => (
-            <g key={w.start}>
-              {w.finished.length > 0 && (
-                <rect x={mid(i) - BAR / 2} y={y(w.finished.length)} width={BAR} height={H - y(w.finished.length)}
-                  style={{ fill: 'var(--pipe-done)' }} data-estimated={w.estimated ? '' : undefined}
-                  {...pickable(`Finished · week of ${weekLabel(w.start)}${w.estimated ? ' (estimated)' : ''}`, w.finished, onPick)} />
-              )}
-              <text className="chart-label" x={mid(i)} y={H + 16}>{weekLabel(w.start)}</text>
-            </g>
-          ))}
-          <polyline className="chart-line" points={weeks.map((w, i) => `${mid(i)},${y(w.added.length)}`).join(' ')} />
-          {weeks.map((w, i) => w.added.length > 0 && (
-            // The class goes after the spread, which would otherwise replace it with plain "pick".
-            <circle key={w.start} cx={mid(i)} cy={y(w.added.length)} r={5}
-              {...pickable(`Added · week of ${weekLabel(w.start)}`, w.added, onPick)} className="pick chart-dot" />
-          ))}
-        </svg>
-      </div>
-      <div className="chart-legend">
-        <span><i className="pipe-dot pipe-done" />finished</span>
-        <span><i className="key-line" />added</span>
-        {weeks.some((w) => w.estimated) && (
-          <span className="est-note">Lighter bars are estimates: a card's last change stands in for when it was finished.</span>
-        )}
-      </div>
-    </>
-  );
-}
-
-/** Median days per column, one upright bar each; a click lists the slowest cards. */
-export function MedianColumns({ times, columns, labels, since, onPick }) {
-  const known = columns.filter((col) => times[col]?.median_days !== null && times[col]?.median_days !== undefined);
-  if (!known.length) {
-    return <p className="dash-empty">Collecting since {since ?? 'today'}. Medians appear once cards move between columns.</p>;
-  }
-  const max = Math.max(0.1, ...known.map((col) => times[col].median_days));
-  const y = (n) => H - (n / max) * (H - TOP);
-  // Under an hour or so rounds to 0d; that column still gets a bar.
-  const tall = (days) => Math.max(MIN_BAR, H - y(days));
-  const width = GAP + columns.length * (BAR + GAP);
-  return (
-    <div className="chart-scroll">
-      <svg className="chart" role="group" width={width} height={H + 30} aria-label="Median days in each column">
-        <line className="chart-axis" x1={0} x2={width} y1={H} y2={H} />
-        {columns.map((col, i) => {
-          const t = times[col];
-          const x = GAP + i * (BAR + GAP);
-          return (
-            <g key={col}>
-              {t.median_days !== null && (
-                <>
-                  <rect x={x} y={H - tall(t.median_days)} width={BAR} height={tall(t.median_days)}
-                    style={{ fill: `var(--pipe-${col})` }}
-                    {...pickable(`Longest in ${labels[col]}`, t.longest, onPick, Object.fromEntries(
-                      t.longest.map((id, k) => [id, `${t.longest_days[k]}d in ${labels[col]}`])))} />
-                  <text className="chart-num" x={x + BAR / 2} y={H - tall(t.median_days) - 4}>{t.median_days}d</text>
-                </>
-              )}
-              <text className="chart-label" x={x + BAR / 2} y={H + 16}>{labels[col]}</text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
-
-/** Cards an agent touched against cards you touched, side by side per week. */
-export function PairBars({ weeks, since, onPick }) {
-  const empty = weeks.every((w) => !w.agent.length && !w.you.length);
-  const scroller = useLatestInView(weeks, empty);
-  // Seeded history has no "who", so an empty chart means nothing collected yet, not nobody working.
-  if (empty) {
-    return <p className="dash-empty">Collecting since {since ?? 'today'}. Changes by agents and by you appear as cards move.</p>;
-  }
-  const max = Math.max(1, ...weeks.map((w) => Math.max(w.agent.length, w.you.length)));
-  const y = (n) => H - (n / max) * (H - TOP);
-  const half = BAR / 2 - 1;
-  const width = GAP + weeks.length * (BAR + GAP);
-  return (
-    <>
-      <div className="chart-scroll" ref={scroller}>
-        <svg className="chart" role="group" width={width} height={H + 30} aria-label="Agent against you per week">
-          <line className="chart-axis" x1={0} x2={width} y1={H} y2={H} />
-          {weeks.map((w, i) => {
-            const x = GAP + i * (BAR + GAP);
-            const label = weekLabel(w.start);
-            return (
-              <g key={w.start}>
-                {w.agent.length > 0 && (
-                  <rect x={x} y={y(w.agent.length)} width={half} height={H - y(w.agent.length)}
-                    style={{ fill: 'var(--sky)' }} {...pickable(`Agents · week of ${label}`, w.agent, onPick)} />
-                )}
-                {w.you.length > 0 && (
-                  <rect x={x + half + 2} y={y(w.you.length)} width={half} height={H - y(w.you.length)}
-                    style={{ fill: 'var(--muted)' }} {...pickable(`You · week of ${label}`, w.you, onPick)} />
-                )}
-                <text className="chart-label" x={x + BAR / 2} y={H + 16}>{label}</text>
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-      <div className="chart-legend">
-        <span><i className="pipe-dot" style={{ background: 'var(--sky)' }} />agents</span>
-        <span><i className="pipe-dot" style={{ background: 'var(--muted)' }} />you</span>
-      </div>
     </>
   );
 }

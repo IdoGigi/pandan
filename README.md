@@ -69,25 +69,59 @@ cards takes the same room as one with five.
 
 ## The dashboard
 
-The third view in the top bar, **Board | Notes | Dashboard**, shows the open
-board in numbers and updates live, like the board. It has three blocks:
+The third view in the top bar, **Board | Notes | Dashboard**, has two halves:
+one to act on your tasks and one to see how the board is doing. It shows the
+open board only and updates live, like the board.
 
-- **Stuck now.** Cards in Waiting, flagged, overdue, or gone quiet (no change
-  for 7 days or more in Doing, Waiting or Review), and each project's open
-  work as one stacked column.
-- **Getting done.** Cards finished and added per week over the last 12 weeks,
-  and the median days a card spends in each column.
-- **Agents.** Cards agents left in Review, cards they touched this week, and
-  their work against yours, week by week.
+**Control** (left): work you can act on from the dashboard.
 
-Click any number to list the cards behind it, and click a card in the list to
-open it.
+- **Quick add.** Pick a project and a column (To do, Next or Doing), type a
+  title and press Enter. The field stays ready for the next card.
+- **Working on.** The cards in Doing and Review.
+- **Needs attention.** Cards that are waiting, flagged, overdue, or gone quiet
+  (no change for 7 days or more in Doing, Waiting or Review). Each one is
+  tagged with the reason.
+- **Up next.** The first five cards in Next. **Start ▶** moves one to Doing.
+- **Oldest open.** The five open cards made longest ago.
+- **Rules for the lists:**
+  - A card shows up in only one list.
+  - A list longer than 8 cards shows the rest under "All N".
+- **Row buttons.** Every row has these, and so does every card list a chart
+  opens:
+  - **→** moves the card one step on (To do → Next → Doing → Review → Done;
+    Waiting goes back to Doing);
+  - **✓** marks it done;
+  - **⚑** flags or unflags it;
+  - **⏸** moves it to Waiting;
+  - **⋯** moves it to any column;
+  - clicking the title opens the card.
+
+**Insight** (right): every chart is upright and fills its panel.
+
+- **Big numbers.** Open, Active (in Doing, Waiting or Review), Done (with its share of all work), Added
+  in the last 4 weeks, Waiting and Flagged. Overdue and Gone quiet appear when
+  there are any.
+- **Board now.** The cards in each column.
+- **Projects.** Each project's open work by column, with what is done stacked
+  on top and its share done underneath.
+- **Added and finished per week.**
+- **Age of open work.** Open cards grouped by how long ago they were made.
+- **Agents and time in column.** One line until there is data, then the cards
+  agents touched against yours each week, and the median days a card spends in
+  each column.
+
+Click any number, bar or part of a column to list the cards behind it.
 
 The numbers come from a move history that Pandan keeps from this version on.
 On the first start it fills in the past from the dates your cards already
-have. A finish date from before the upgrade is a guess, so those weeks are
-drawn lighter and marked as estimates. The medians use real moves only, so they
-start empty.
+have:
+
+- **Finish dates from before the upgrade are guesses.** Cards still in Done
+  count in the week of their last change, drawn lighter and marked as
+  estimates.
+- **Cards already archived from Done count in Done only, not in a week.** Their
+  last change is the day they were archived, not the day they were finished.
+- **The medians use real moves only,** so they start empty.
 
 An agent's work counts as an agent's only when it connects with its own
 [agent key](#connect-an-agent). An agent that uses your password counts as you.

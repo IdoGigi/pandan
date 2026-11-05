@@ -13,25 +13,9 @@ import { TokensModal } from './TokensModal.jsx';
 import { ArchiveModal } from './ArchiveModal.jsx';
 import { NoteBoard } from './NoteBoard.jsx';
 import { Dashboard } from './Dashboard.jsx';
+import { readSetting, writeSetting } from './settings.js';
 
 const PROJECT_COLORS = ['#c3d117', '#4bb3d4', '#f0b429', '#e2725b', '#9b8ec4', '#57a773'];
-
-/** View settings live in the browser. Reading them can throw, so never trust it. */
-function readSetting(key, fallback) {
-  try {
-    const raw = localStorage.getItem(`kanban.${key}`);
-    return raw === null ? fallback : JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
-}
-function writeSetting(key, value) {
-  try {
-    localStorage.setItem(`kanban.${key}`, JSON.stringify(value));
-  } catch {
-    /* private window, or storage blocked — the board still works */
-  }
-}
 
 export function App() {
   const [authed, setAuthed] = useState(null); // null = still checking
